@@ -8,7 +8,7 @@ const getHighlighter = () => {
     if (!highlighterPromise) {
         highlighterPromise = createHighlighter({
             themes: ['github-light'],
-            langs: ['text', 'javascript', 'typescript'],
+            langs: ['text', 'javascript', 'typescript', 'llvm'],
         });
     }
     return highlighterPromise;
@@ -22,8 +22,9 @@ const CodeNode = ({ data }: NodeProps) => {
             try {
                 const highlighter = await getHighlighter();
                 const code = data.label as string;
+                const lang = (data.language as string) || 'text';
                 const highlighted = highlighter.codeToHtml(code, {
-                    lang: 'text',
+                    lang,
                     theme: 'github-light',
                 });
                 setHtml(highlighted);

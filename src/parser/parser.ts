@@ -1,27 +1,13 @@
 import * as ohm from 'ohm-js';
 import mermaidGrammar from './mermaid.ohm?raw';
+import type { GraphData, GraphNode, GraphEdge } from '../types/graph';
 
 const grammar = ohm.grammar(mermaidGrammar);
 
-export interface MermaidNode {
-    id: string;
-    label: string;
-    type?: 'round' | 'square' | 'curly';
-}
-
-export interface MermaidEdge {
-    id: string;
-    source: string;
-    target: string;
-    label?: string;
-    type?: 'arrow' | 'line';
-}
-
-export interface MermaidGraph {
-    direction: string;
-    nodes: MermaidNode[];
-    edges: MermaidEdge[];
-}
+// Re-export specific types if needed, or just use GraphData aliases
+export type MermaidNode = GraphNode;
+export type MermaidEdge = GraphEdge;
+export type MermaidGraph = GraphData;
 
 const semantics = grammar.createSemantics();
 

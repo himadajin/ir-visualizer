@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
 import { type Node, type Edge, useNodesState, useEdgesState } from '@xyflow/react';
-import type { MermaidGraph } from '../parser/parser';
+import type { GraphData } from '../types/graph';
 import { getLayoutedElements } from '../utils/layout';
 import { createReactFlowNode, createReactFlowEdge } from '../utils/converter';
 
 // Helper to generate a topology signature
-const getTopologySignature = (graph: MermaidGraph) => {
+const getTopologySignature = (graph: GraphData) => {
     const nodeIds = graph.nodes.map(n => n.id).sort().join(',');
     const edgeIds = graph.edges.map(e => `${e.source}-${e.target}`).sort().join(',');
     return `${graph.direction}|${nodeIds}|${edgeIds}`;
@@ -16,9 +16,9 @@ export const useGraphData = () => {
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [lastSignature, setLastSignature] = useState<string>('');
 
-    const [currentGraph, setCurrentGraph] = useState<MermaidGraph | null>(null);
+    const [currentGraph, setCurrentGraph] = useState<GraphData | null>(null);
 
-    const updateGraph = useCallback((graph: MermaidGraph) => {
+    const updateGraph = useCallback((graph: GraphData) => {
         setCurrentGraph(graph);
         const signature = getTopologySignature(graph);
 

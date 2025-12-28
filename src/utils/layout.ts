@@ -1,10 +1,10 @@
 import dagre from 'dagre';
 import { type Node, type Edge } from '@xyflow/react';
-import type { MermaidGraph } from '../parser/parser';
+import type { GraphData } from '../types/graph';
 import { calculateNodeDimensions, createReactFlowNode, createReactFlowEdge } from './converter';
 
 export const getLayoutedElements = (
-    graph: MermaidGraph,
+    graph: GraphData,
     options: { direction: string } = { direction: 'TD' }
 ): { nodes: Node[]; edges: Edge[] } => {
     const dagreGraph = new dagre.graphlib.Graph();

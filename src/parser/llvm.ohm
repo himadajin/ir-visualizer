@@ -1,0 +1,44 @@
+LLVM {
+  Module = Function+
+  
+  Function = "define" Type ident "(" Params? ")" "{" BasicBlock+ "}"
+
+  BasicBlock = Label? Instruction* Terminator
+  
+  Label = (ident | digit+) ":"
+  
+  Instruction = 
+    | AssignInstruction
+    | StoreInstruction
+    | CallInstruction
+    | GenericInstruction
+    
+  AssignInstruction = "%" digit+ "=" invoke_op
+  StoreInstruction = "store" invoke_op
+  CallInstruction = ("call" | "tail call") invoke_op
+
+  // A catch-all for instructions that are not terminators
+  // use `~` to ensure we don't consume terminators or start of next block or function
+  GenericInstruction = ~Terminator ~"}" ~Label (~"\n" any)+
+  
+  Terminator = 
+    | BrCond
+    | BrUncond
+    | Ret
+    
+  BrCond = "br" Type Value "," "label" Value "," "label" Value
+  BrUncond = "br" "label" Value
+  Ret = "ret" Type Value
+  
+  // Lexical rules
+  ident = (letter | "@" | "%") (letter | digit | "_" | ".")*
+  Type = (letter | digit | "[" | "]" | "x" | "*")+
+  Value = (ident | digit+)
+  Params = Param ("," Param)*
+  Param = Type Value?
+  
+  invoke_op = (~"\n" any)+
+
+  space += comment
+  comment = ";" (~"\n" any)*
+}

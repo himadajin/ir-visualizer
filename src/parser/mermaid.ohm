@@ -1,0 +1,41 @@
+Mermaid {
+  Graph = Header Statement*
+
+  Header = ("graph" | "flowchart") Direction separator+
+
+  Direction = "TB" | "TD" | "BT" | "RL" | "LR"
+
+  Statement = 
+    | Edge
+    | NodeDeclaration
+    | comment
+    | separator
+
+  NodeDeclaration = NodeId NodeLabel? separator*
+  
+  Edge = Node Link Node separator*
+
+  Node = NodeId NodeLabel?
+
+  Link = 
+    | "-->" ("|" text "|")? -- arrowWithLabel
+    | "---" ("|" text "|")? -- lineWithLabel
+    | "--" text "-->" -- arrowWithTextMiddle
+    | "--" text "---" -- lineWithTextMiddle
+    
+  NodeId = alnum+
+
+  NodeLabel = 
+    | "[" text "]"  -- square
+    | "(" text ")"  -- round
+    | "{" text "}"  -- curly
+    | "[\"" text "\"]" -- squareQuote
+    
+  text = (~"]" ~")" ~"}" ~"|" ~"\n" ~"\r" any)*
+
+  comment = "%%" (~"\n" any)*
+
+  separator = "\n" | ";" | "\r"
+
+  space := " " | "\t"
+}

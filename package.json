@@ -19,7 +19,8 @@
     "dagre": "^0.8.5",
     "ohm-js": "^17.3.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "shiki": "^3.20.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

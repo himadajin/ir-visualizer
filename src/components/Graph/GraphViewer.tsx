@@ -1,6 +1,11 @@
 import React from 'react';
 import { ReactFlow, Controls, Background, type Node, type Edge, type OnNodesChange, type OnEdgesChange } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import CustomBezierEdge from './CustomBezierEdge';
+
+const edgeTypes = {
+    customBezier: CustomBezierEdge,
+};
 
 interface GraphViewerProps {
     nodes: Node[];
@@ -17,6 +22,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({ nodes, edges, onNodesC
                 edges={edges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
+                edgeTypes={edgeTypes}
                 nodesDraggable={true}
                 panActivationKeyCode={null}
                 fitView

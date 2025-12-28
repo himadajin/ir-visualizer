@@ -27,6 +27,6 @@ export const createReactFlowEdge = (edge: MermaidEdge): Edge => {
         target: edge.target,
         label: edge.label,
         animated: false,
-        type: 'bezier',
+        type: 'customBezier',
     };
 };

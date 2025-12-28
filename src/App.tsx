@@ -17,7 +17,7 @@ const MIN_WIDTH = 200; // min px
 
 function App() {
   const [code, setCode] = useState(DEFAULT_CODE);
-  const { nodes, edges, onNodesChange, onEdgesChange, updateGraph } = useGraphData();
+  const { nodes, edges, onNodesChange, onEdgesChange, updateGraph, resetLayout } = useGraphData();
   const [error, setError] = useState<string | null>(null);
 
   // Resizing state
@@ -111,6 +111,7 @@ function App() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onResetLayout={resetLayout}
           />
           {error && (
             <Snackbar open={true} autoHideDuration={6000}>

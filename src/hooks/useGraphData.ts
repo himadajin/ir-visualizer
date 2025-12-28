@@ -16,7 +16,10 @@ export const useGraphData = () => {
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [lastSignature, setLastSignature] = useState<string>('');
 
+    const [currentGraph, setCurrentGraph] = useState<MermaidGraph | null>(null);
+
     const updateGraph = useCallback((graph: MermaidGraph) => {
+        setCurrentGraph(graph);
         const signature = getTopologySignature(graph);
 
         // Check if topology changed
@@ -43,7 +46,14 @@ export const useGraphData = () => {
             setEdges(layoutedEdges);
             setLastSignature(signature);
         }
-    }, [lastSignature, setNodes, setEdges]); // lastSignature in deps ensures we compare against current state
+    }, [lastSignature, setNodes, setEdges]);
+
+    const resetLayout = useCallback(() => {
+        if (!currentGraph) return;
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(currentGraph);
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+    }, [currentGraph, setNodes, setEdges]);
 
     return {
         nodes,
@@ -52,6 +62,8 @@ export const useGraphData = () => {
         onEdgesChange,
         setNodes, // expose in case we need manual override
         setEdges,
-        updateGraph
+        updateGraph,
+        resetLayout
     };
 };
+

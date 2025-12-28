@@ -38,9 +38,6 @@ function registerSemantics(semantics: ohm.Semantics) {
             const edges: GraphEdge[] = [];
 
             // Create Entry Node (Function Header)
-            // We might want the header text. 
-            // Since we are inside semantic action, getting exact text includes whitespace which is fine.
-            // Constructing a "header" label manually might be cleaner.
             const headerLabel = `define ${funcName} (...)`;
             nodes.push({
                 id: entryId,
@@ -49,30 +46,55 @@ function registerSemantics(semantics: ohm.Semantics) {
                 language: 'llvm'
             });
 
-            const blockResults = blocks.children.map((b: any) => b.parse());
+            // Parse all blocks first to get their data
+            const blockDataList = blocks.children.map((b: any) => b.parse());
 
             let firstBlockId: string | null = null;
 
-            blockResults.forEach((block: any, index: number) => {
-                nodes.push(block.node);
-                edges.push(...block.edges);
+            // Map to generate IDs and Nodes
+            // We use a 2-pass-like approach: 1. Generate IDs/Nodes, 2. Generate Edges (though we can do it in one loop if targets are just strings)
+
+            blockDataList.forEach((data: any, index: number) => {
+                // Determine Block ID
+                // If label exists, use it. Else use deterministic index.
+                let blockId = data.label ? data.label : `${funcName}_blk_${index}`;
 
                 if (index === 0) {
-                    firstBlockId = block.node.id;
+                    firstBlockId = blockId;
                 }
+
+                // Construct full label
+                const fullLabel = (data.label ? data.label + '\n' : '') + data.instructions + (data.instructions ? '\n' : '') + data.terminator.text;
+
+                nodes.push({
+                    id: blockId,
+                    label: fullLabel,
+                    type: 'square',
+                    language: 'llvm'
+                });
+
+                // Generate Edges from this block
+                data.terminator.targets.forEach((target: string, tIdx: number) => {
+                    edges.push({
+                        id: `e-${blockId}-${target}-${tIdx}`,
+                        source: blockId,
+                        target: target,
+                        label: data.terminator.labels ? data.terminator.labels[tIdx] : undefined,
+                        type: 'arrow'
+                    });
+                });
             });
 
             if (firstBlockId) {
                 edges.push({
-                    id: `e - ${entryId} -${firstBlockId} `,
+                    id: `e-${entryId}-${firstBlockId}`,
                     source: entryId,
                     target: firstBlockId!,
                     type: 'arrow'
                 });
             }
 
-            // Add implicit Exit node if needed?
-            // Our 'ret' logic below handles edges to 'exit', so if any edge points to 'exit', we add the node.
+            // Implicit Exit handling
             const hasExit = edges.some(e => e.target === 'exit');
             if (hasExit) {
                 nodes.push({
@@ -87,42 +109,16 @@ function registerSemantics(semantics: ohm.Semantics) {
         },
         BasicBlock(labelOpt: any, instructions: any, terminator: any) {
             const labelNode = labelOpt.numChildren > 0 ? labelOpt.children[0].parse() : null;
-
-            // Use label if exists, otherwise generate one? 
-            // Or maybe input guarantees labels. 
-            // If label is missing, strict graph requires ID. 
-            // Let's assume unique IDs can be derived or prompt implies labels exist.
-            // Prompt says "4: ...". 
-
-            // NOTE: In our grammar, Label is "ident :".
-            let blockId = labelNode ? labelNode.replace(':', '') : `block_${Math.random().toString(36).substr(2, 5)} `;
-            // Clean up blockId (remove leading % if present in ident - grammar says ident includes % ?)
-            // Grammar: ident = (letter | "@" | "%") ...
-            // So ID could be "%4" or "4". 
-            // Usually in LLVM IR, labels are "%4" or just "4" if numeric.
+            const labelRaw = labelNode ? labelNode.replace(':', '') : null;
 
             const instText = instructions.sourceString.trim();
-            const termResult = terminator.parse(); // { edges: [], text: ... }
+            const termResult = terminator.parse();
 
-            const fullLabel = (labelNode ? labelNode + '\n' : '') + instText + (instText ? '\n' : '') + termResult.text;
-
-            const node: GraphNode = {
-                id: blockId,
-                label: fullLabel,
-                type: 'square',
-                language: 'llvm'
+            return {
+                label: labelRaw,
+                instructions: instText,
+                terminator: termResult
             };
-
-            // Map terminator targets to edges starting from this block
-            const edges: GraphEdge[] = termResult.targets.map((target: string, idx: number) => ({
-                id: `e - ${blockId} -${target} -${idx} `,
-                source: blockId,
-                target: target,
-                label: termResult.labels ? termResult.labels[idx] : undefined,
-                type: 'arrow'
-            }));
-
-            return { node, edges };
         },
         Label(l: any, _colon: any) {
             return l.sourceString;

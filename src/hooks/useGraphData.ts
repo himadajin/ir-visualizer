@@ -54,7 +54,7 @@ export const useGraphData = () => {
                 target: edge.target,
                 label: edge.label,
                 animated: false,
-                type: 'smoothstep',
+                type: 'bezier',
             })));
 
         } else {

@@ -47,7 +47,7 @@ export const getLayoutedElements = (
         target: edge.target,
         label: edge.label,
         animated: false,
-        type: 'smoothstep',
+        type: 'bezier',
     }));
 
     return { nodes, edges };

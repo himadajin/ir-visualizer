@@ -4,6 +4,7 @@ export interface GraphNode {
     label: string;
     type?: string;
     language?: string; // For syntax highlighting
+    blockLabel?: string; // Extracted BasicBlock label
 }
 
 export interface GraphEdge {

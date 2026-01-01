@@ -1,9 +1,10 @@
 LLVM {
   Module = Function+
   
-  Function = "define" Type ident "(" Params? ")" "{" BasicBlock+ "}"
+  Function = "define" Type ident "(" Params? ")" "{" EntryBasicBlock BasicBlock* "}"
 
-  BasicBlock = Label? Instruction* Terminator
+  EntryBasicBlock = Label? Instruction* Terminator
+  BasicBlock = Label Instruction* Terminator
   
   Label = (ident | digit+) ":"
   

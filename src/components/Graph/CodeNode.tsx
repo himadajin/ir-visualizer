@@ -15,26 +15,29 @@ const getHighlighter = () => {
 };
 
 const CodeNode = ({ data }: NodeProps) => {
-    const [html, setHtml] = useState<string>(data.label as string);
+    const rawCode = data.label as string;
+    const blockLabel = data.blockLabel as string | undefined;
+
+    // Initialize html with the code to display (unhighlighted initially)
+    const [html, setHtml] = useState<string>(rawCode);
 
     useEffect(() => {
         const highlight = async () => {
             try {
                 const highlighter = await getHighlighter();
-                const code = data.label as string;
                 const lang = (data.language as string) || 'text';
-                const highlighted = highlighter.codeToHtml(code, {
+                const highlighted = highlighter.codeToHtml(rawCode, {
                     lang,
                     theme: 'github-light',
                 });
                 setHtml(highlighted);
             } catch (e) {
                 console.error('Failed to highlight', e);
-                setHtml(data.label as string);
+                setHtml(rawCode);
             }
         };
         highlight();
-    }, [data.label]);
+    }, [rawCode, data.language]);
 
     return (
         <div style={{
@@ -47,7 +50,28 @@ const CodeNode = ({ data }: NodeProps) => {
             height: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box',
+            position: 'relative', // Add relative positioning for absolute children
         }}>
+            {/* Display extracted label if present */}
+            {blockLabel && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    padding: '2px 6px',
+                    backgroundColor: '#f0f0f0',
+                    borderBottomRightRadius: '4px',
+                    borderRight: '1px solid #ddd',
+                    borderBottom: '1px solid #ddd',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    color: '#555',
+                    zIndex: 10,
+                }}>
+                    {blockLabel}
+                </div>
+            )}
+
             <div dangerouslySetInnerHTML={{ __html: html }} />
 
             {/* Invisible handles that are not connectable by user dragging */}

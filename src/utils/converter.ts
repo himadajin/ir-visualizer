@@ -20,7 +20,8 @@ export const createReactFlowNode = (node: GraphNode, position: { x: number, y: n
         data: {
             label: node.label,
             shape: node.type,
-            language: node.language
+            language: node.language,
+            blockLabel: node.blockLabel
         },
         type: 'codeNode', // Use the custom node type
         style: { width: NODE_WIDTH },

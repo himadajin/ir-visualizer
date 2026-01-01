@@ -29,9 +29,12 @@ function registerSemantics(semantics: ohm.Semantics) {
                 functions: funcNodes
             } as LLVMModule;
         },
-        Function(_def: any, _type: any, ident: any, _lp: any, _paramsNode: any, _rp: any, _lb: any, blocks: any, _rb: any) {
+        Function(_def: any, _type: any, ident: any, _lp: any, _paramsNode: any, _rp: any, _lb: any, entryBlock: any, otherBlocks: any, _rb: any) {
             const funcName = ident.sourceString;
-            const blockNodes: LLVMBasicBlock[] = blocks.children.map((b: any) => b.toAST());
+            const entryNode = entryBlock.toAST();
+            const otherBlockNodes = otherBlocks.children.map((b: any) => b.toAST());
+            const blockNodes: LLVMBasicBlock[] = [entryNode, ...otherBlockNodes];
+
             // Params parsing is not fully implemented in detail in grammar yet, effectively just consuming string
             const params: string[] = []; // Placeholder
 
@@ -42,29 +45,28 @@ function registerSemantics(semantics: ohm.Semantics) {
                 blocks: blockNodes
             } as LLVMFunction;
         },
-        BasicBlock(labelOpt: any, instructions: any, terminator: any) {
+        EntryBasicBlock(labelOpt: any, instructions: any, terminator: any) {
             const labelNode = labelOpt.numChildren > 0 ? labelOpt.children[0].toAST() : null;
-            // Label comes with optional colon, we strip it in Label rule or here. 
-            // In existing logic it was stripped in BasicBlock.
-
             const instNodes: LLVMInstruction[] = instructions.children.map((i: any) => i.toAST());
             const termNode: LLVMInstruction = terminator.toAST();
-
             const allInstructions = [...instNodes, termNode];
-
-            // Resolve ID: use label if present, otherwise will be generated later or we can placeholder.
-            // Actually, for AST we should probably just keep it as is.
-            // The converting logic (topological check etc) might depend on stable IDs.
-            // For now, if no label, we might need a temporary ID or just leave blank.
-            // The original logic generated IDs: `${funcName}_blk_${index}` during Graph generation.
-            // We can defer ID generation to Graph conversion for unnamed blocks, 
-            // OR generate them here if we had index context (which we don't easily in Ohm).
-            // Let's use label if available, otherwise empty string for now.
-            const id = labelNode || '';
 
             return {
                 type: 'BasicBlock',
-                id,
+                id: labelNode || '',
+                label: labelNode,
+                instructions: allInstructions
+            } as LLVMBasicBlock;
+        },
+        BasicBlock(label: any, instructions: any, terminator: any) {
+            const labelNode = label.toAST();
+            const instNodes: LLVMInstruction[] = instructions.children.map((i: any) => i.toAST());
+            const termNode: LLVMInstruction = terminator.toAST();
+            const allInstructions = [...instNodes, termNode];
+
+            return {
+                type: 'BasicBlock',
+                id: labelNode,
                 label: labelNode,
                 instructions: allInstructions
             } as LLVMBasicBlock;
@@ -184,15 +186,13 @@ function convertASTToGraph(module: LLVMModule): GraphData {
             if (index === 0) firstBlockId = blockId;
 
             // Construct Label from instructions
-            // Note: We might want to filter out the 'terminator' from text if we want to mimic exact previous behavior?
-            // Previous behavior: `data.instructions + (data.instructions ? '\n' : '') + data.terminator.text`
-            // Here `block.instructions` includes terminator.
-            // So just join `originalText`.
-            const fullLabel = (block.label ? block.label + ':\n' : '') + block.instructions.map(i => i.originalText).join('\n');
+            // Only use instructions for the node body content
+            const codeContent = block.instructions.map(i => i.originalText).join('\n');
 
             nodes.push({
                 id: blockId,
-                label: fullLabel,
+                label: codeContent,
+                blockLabel: block.label || undefined, // Pass separate label
                 type: 'square',
                 language: 'llvm'
             });

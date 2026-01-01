@@ -32,7 +32,22 @@ export const getLayoutedElements = (
         });
     });
 
-    const edges: Edge[] = graph.edges.map(createReactFlowEdge);
+    const edges: Edge[] = graph.edges.map(edge => {
+        const sourceNode = dagreGraph.node(edge.source);
+        const targetNode = dagreGraph.node(edge.target);
+
+        // Determine edge type
+        let edgeType = 'customBezier';
+
+        if (edge.source === edge.target) {
+            edgeType = 'backEdge';
+        } else if (sourceNode && targetNode && sourceNode.y >= targetNode.y) {
+            // Back edge if source is below or at same level as target (and not self loop)
+            edgeType = 'backEdge';
+        }
+
+        return createReactFlowEdge(edge, edgeType);
+    });
 
     return { nodes, edges };
 };

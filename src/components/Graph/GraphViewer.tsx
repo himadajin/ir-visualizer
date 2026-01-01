@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { ReactFlow, Controls, Background, Panel, type Node, type Edge, type OnNodesChange, type OnEdgesChange, type ReactFlowInstance } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import CustomBezierEdge from './CustomBezierEdge';
+import BackEdge from './BackEdge';
 
 import CodeNode from './CodeNode';
 
 const edgeTypes = {
     customBezier: CustomBezierEdge,
+    backEdge: BackEdge,
 };
 
 const nodeTypes = {

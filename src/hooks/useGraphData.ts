@@ -27,17 +27,35 @@ export const useGraphData = () => {
 
         if (isTopologyEqual) {
             // Content-only update: preserve positions
-            setNodes((currentNodes) => {
-                // Map current positions
-                const positionMap = new Map(currentNodes.map(n => [n.id, n.position]));
+            // Content-only update: preserve positions
+            // Calculate new nodes first to have positions available
+            const positionMap = new Map(nodes.map(n => [n.id, n.position]));
 
-                return graph.nodes.map(node => {
-                    const existingPos = positionMap.get(node.id) || { x: 0, y: 0 };
-                    return createReactFlowNode(node, existingPos);
-                });
+            const newNodes = graph.nodes.map(node => {
+                const existingPos = positionMap.get(node.id) || { x: 0, y: 0 };
+                return createReactFlowNode(node, existingPos);
             });
 
-            setEdges(graph.edges.map(createReactFlowEdge));
+            setNodes(newNodes);
+
+            // Calculate edges using positions from newNodes (or positionMap which is the same for existing)
+            const newEdges = graph.edges.map(edge => {
+                const sourcePos = positionMap.get(edge.source);
+                const targetPos = positionMap.get(edge.target);
+
+                let edgeType = 'customBezier';
+
+                if (edge.source === edge.target) {
+                    edgeType = 'backEdge';
+                } else if (sourcePos && targetPos && sourcePos.y >= targetPos.y) {
+                    // Check against layout direction. Assuming 'TD' (y increases downwards)
+                    // If source is below (greater y) or equal to target, it's a back edge
+                    edgeType = 'backEdge';
+                }
+                return createReactFlowEdge(edge, edgeType);
+            });
+
+            setEdges(newEdges);
 
         } else {
             // Topology changed or first run: Re-layout

@@ -28,13 +28,14 @@ export const createReactFlowNode = (node: GraphNode, position: { x: number, y: n
     };
 };
 
-export const createReactFlowEdge = (edge: GraphEdge): Edge => {
+export const createReactFlowEdge = (edge: GraphEdge, edgeType: string = 'customBezier'): Edge => {
     return {
         id: edge.id,
         source: edge.source,
         target: edge.target,
         label: edge.label,
         animated: false,
-        type: 'customBezier',
+        type: edgeType,
+        zIndex: 0
     };
 };

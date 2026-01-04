@@ -77,11 +77,10 @@ function registerSemantics(semantics: ohm.Semantics) {
         Instruction(inner: any) {
             return inner.toAST();
         },
-        AssignInstruction(_pct: any, _digit: any, _eq: any, invokeOp: any) {
-            // Text: "%1 = add ..."
-            // Result: "%1" (reconstructed from source) or just matched parts.
-            // _pct + _digit is left side.
-            const result = _pct.sourceString + _digit.sourceString;
+        AssignInstruction(localVal: any, _eq: any, invokeOp: any) {
+            // Text: "%1 = add ..." or "%var = ..."
+            // localVal is the LocalValue node (e.g. "%1")
+            const result = localVal.sourceString;
             const rhs = invokeOp.sourceString.trim();
             const [opcode, ...operandsParts] = rhs.split(/\s+/);
             const operands = operandsParts.join(' ');

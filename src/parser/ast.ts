@@ -6,8 +6,14 @@ export interface LLVMModule {
 export interface LLVMFunction {
     type: 'Function';
     name: string;
-    params: string[];
+    params: LLVMParam[];
     blocks: LLVMBasicBlock[];
+    definition: string;
+}
+
+export interface LLVMParam {
+    type: string;
+    name: string | null;
 }
 
 export interface LLVMBasicBlock {

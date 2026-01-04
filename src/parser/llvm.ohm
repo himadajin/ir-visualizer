@@ -1,7 +1,16 @@
 LLVM {
   Module = Function+
   
-  Function = "define" Type GlobalValue "(" Params? ")" "{" EntryBasicBlock BasicBlock* "}"
+  // Loose parsing for function definition:
+  // "define" [stuff] @Name ( [params] ) [stuff] { ... }
+  Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
+
+  // Consumes everything up to the GlobalValue (function name).
+  // The last element is inherently the Return Type.
+  FuncHeader = (~GlobalValue (Type | id | any))*
+  
+  // Consumes everything after ')' and before '{'
+  FuncAttrs = (~"{" any)*
 
   EntryBasicBlock = Label? Instruction* Terminator
   BasicBlock = Label Instruction* Terminator
@@ -37,11 +46,20 @@ LLVM {
   GlobalValue = "@" id
   LocalValue = "%" id
   
-  Type = (letter | digit | "[" | "]" | "x" | "*")+
-  Value = GlobalValue | LocalValue | digit+
-  Params = Param ("," Param)*
-  Param = Type Value?
+  // Type can be significantly more complex, but we keep it somewhat simple for now.
+  // Expanded to include loose tokens that might appear in types or attrs.
+  Type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
   
+  Value = GlobalValue | LocalValue | digit+
+  
+  Params = Param ("," Param)*
+  
+  // Param: Type [attributes...] Value?
+  // We need to capture attributes.
+  // ParamAttr = ~Value (id | digit+) -- any identifier/keyword not matching Value(%)
+  Param = Type ParamAttr* Value?
+  ParamAttr = ~Value id
+
   invoke_op = (~"\n" any)+
 
   space += comment

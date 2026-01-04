@@ -29,21 +29,49 @@ function registerSemantics(semantics: ohm.Semantics) {
                 functions: funcNodes
             } as LLVMModule;
         },
-        Function(_def: any, _type: any, ident: any, _lp: any, _paramsNode: any, _rp: any, _lb: any, entryBlock: any, otherBlocks: any, _rb: any) {
-            const funcName = ident.sourceString;
+        Function(def: any, header: any, name: any, lp: any, paramsNode: any, rp: any, attrs: any, _lb: any, entryBlock: any, otherBlocks: any, _rb: any) {
+            const funcName = name.sourceString;
+            // Construct the function definition string (signature)
+            // e.g. "define void @main(...)"
+            const definition = `${def.sourceString} ${header.sourceString} ${funcName} ${lp.sourceString}${paramsNode.sourceString}${rp.sourceString} ${attrs.sourceString}`.trim().replace(/\s+/g, ' ');
+
             const entryNode = entryBlock.toAST();
             const otherBlockNodes = otherBlocks.children.map((b: any) => b.toAST());
             const blockNodes: LLVMBasicBlock[] = [entryNode, ...otherBlockNodes];
 
-            // Params parsing is not fully implemented in detail in grammar yet, effectively just consuming string
-            const params: string[] = []; // Placeholder
+            // paramsNode is Params?
+            const params = paramsNode.numChildren > 0 ? paramsNode.children[0].toAST() : [];
 
             return {
                 type: 'Function',
                 name: funcName,
                 params,
-                blocks: blockNodes
+                blocks: blockNodes,
+                definition: definition
             } as LLVMFunction;
+        },
+        FuncHeader(_content: any) {
+            return this.sourceString;
+        },
+        FuncAttrs(_content: any) {
+            return this.sourceString;
+        },
+        Params(first: any, _comma: any, rest: any) {
+            const firstParam = first.toAST();
+            const restParams = rest.children.map((p: any) => p.toAST());
+            return [firstParam, ...restParams];
+        },
+        Param(type: any, _attrs: any, val: any) {
+            // type: Type
+            // _attrs: ParamAttr*
+            // val: Value?
+            return {
+                type: type.sourceString,
+                name: val.numChildren > 0 ? val.children[0].sourceString : null
+            }; // We can add attributes later if needed
+        },
+        ParamAttr(_id: any) {
+            return this.sourceString;
         },
         EntryBasicBlock(labelOpt: any, instructions: any, terminator: any) {
             const labelNode = labelOpt.numChildren > 0 ? labelOpt.children[0].toAST() : null;
@@ -170,7 +198,7 @@ function convertASTToGraph(module: LLVMModule): GraphData {
         // Entry Node
         nodes.push({
             id: entryId,
-            label: `define ${func.name} (...)`,
+            label: func.definition || `define ${func.name} (...)`,
             type: 'round',
             language: 'llvm'
         });

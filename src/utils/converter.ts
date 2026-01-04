@@ -1,79 +1,51 @@
 import { type Node, type Edge, MarkerType } from '@xyflow/react';
 import type { GraphNode, GraphEdge } from '../types/graph';
+import { getFontMetrics } from './fontUtils';
 
 export const NODE_PADDING = 20;
-export const LINE_HEIGHT = 20;
-const MIN_CHARS_MERMAID = 10;
+
+// Configuration for max characters per line before wrapping
 const MAX_CHARS_MERMAID = 30;
-const MIN_CHARS_LLVM = 30;
-const MAX_CHARS_LLVM = 60;
+const MAX_CHARS_LLVM = 75;
 
-// Font used for measurement - approx match for 'monospace' default
-const FONT = "16px monospace";
-
-let canvas: HTMLCanvasElement | null = null;
-
-const getTextWidth = (text: string): number => {
-    // Fallback for non-browser environments (e.g. CLI tests)
-    if (typeof document === 'undefined') {
-        return text.length * 8; // approx 8px per char
-    }
-
-    if (!canvas) {
-        canvas = document.createElement('canvas');
-    }
-    const context = canvas.getContext('2d');
-    if (context) {
-        context.font = FONT;
-        return context.measureText(text).width;
-    }
-    return 0;
-};
-
-// Character width approximation for min/max bounds calculation
-// We measure a representative character like 'M' or 'a' 
-// actually since it is monospace, any char should work, but let's take average of 'a'.
-let _charWidth: number | null = null;
-const getCharWidth = () => {
-    if (_charWidth) return _charWidth;
-    _charWidth = getTextWidth('a');
-    return _charWidth || 8; // Fallback 8 if measurement fails (0)
-}
+// Font configuration - must match CSS
+const FONT_FAMILY = 'monospace';
+const FONT_SIZE = '14px';
+const LINE_HEIGHT = '20px';
 
 export const calculateNodeDimensions = (node: GraphNode) => {
-    const minChars = node.language === 'mermaid' ? MIN_CHARS_MERMAID : MIN_CHARS_LLVM;
+    const metrics = getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
     const maxChars = node.language === 'mermaid' ? MAX_CHARS_MERMAID : MAX_CHARS_LLVM;
-
-    const minWidth = minChars * getCharWidth();
-    const maxWidth = maxChars * getCharWidth();
 
     const lines = node.label?.split('\n') || [''];
     
-    // Measure max line width in pixels
-    let maxLinePixelWidth = 0;
-    lines.forEach(line => {
-        const w = getTextWidth(line);
-        if (w > maxLinePixelWidth) maxLinePixelWidth = w;
-    });
-
-    // Clamp effective width between min and max
-    // Note: We clamp the CONTENT width, then add padding
-    const targetContentWidth = Math.max(minWidth, Math.min(maxLinePixelWidth, maxWidth));
-    const width = targetContentWidth + NODE_PADDING * 2;
-
+    // Find the longest line in characters, capped at the max allowed characters
+    let maxLineLength = 0;
     let totalLines = 0;
+
     lines.forEach(line => {
-        // Calculate wrapped lines by measuring
-        const lineWidth = getTextWidth(line);
-        // If line fits, it's 1 line. If not, it wraps.
-        // Approximate wrapping lines: width / targetContentWidth
-        // This is not perfect for 'word-break: break-all' but close enough for layout
-        const wraps = Math.max(1, Math.ceil(lineWidth / targetContentWidth));
-        totalLines += wraps;
+        const lineLength = line.length;
+        if (lineLength > maxLineLength) {
+            maxLineLength = lineLength;
+        }
+        
+        // Calculate wrapping
+        // Math.max(1, ...) ensures even empty lines count as 1 row if they exist in the array
+        const wrappedLines = Math.max(1, Math.ceil(lineLength / maxChars));
+        totalLines += wrappedLines;
     });
 
-    // Add a small buffer to height for safety
-    const height = totalLines * LINE_HEIGHT + NODE_PADDING * 2;
+    // The width is the longest line (up to maxChars) * charWidth
+    // We limit maxLineLength to maxChars because of the wrapping
+    const effectiveMaxChars = Math.min(maxLineLength, maxChars);
+    
+    // Clamp min width to avoid tiny nodes
+    const minChars = 10;
+    const finalChars = Math.max(effectiveMaxChars, minChars);
+
+    const width = finalChars * metrics.width + NODE_PADDING * 2;
+    const height = totalLines * metrics.height + NODE_PADDING * 2;
+
     return { width, height };
 };
 

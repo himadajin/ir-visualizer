@@ -50,11 +50,13 @@ const CodeNode = ({ data }: NodeProps) => {
             border: '1px solid #777',
             background: '#fff',
             fontFamily: 'monospace',
+            fontSize: '14px',
+            lineHeight: '20px',
             textAlign: 'left',
-            height: '100%', // ReactFlow handles height, but we want inner to fill
+            height: '100%', 
             boxSizing: 'border-box',
-            position: 'relative', // Add relative positioning for absolute children
-            // whiteSpace and wordBreak will be handled by CSS for inner pre
+            position: 'relative', 
+            // inner pre/code will inherit these
         }}>
             {/* Display extracted label if present */}
             {blockLabel && (

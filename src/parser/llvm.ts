@@ -186,7 +186,7 @@ function convertASTToGraph(module: LLVMModule): GraphData {
 
         const blocks = func.blocks;
 
-        blocks.forEach((block, index) => {
+        blocks.forEach((block) => {
             const blockId = block.id;
 
             const codeContent = block.instructions.map(i => i.originalText).join('\n');

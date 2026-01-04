@@ -47,7 +47,7 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
 const MIN_WIDTH = 200; // min px
 
 function App() {
-  const [mode, setMode] = useState<'mermaid' | 'controlflow'>('controlflow');
+  const [mode, setMode] = useState<'mermaid' | 'llvm-ir'>('llvm-ir');
   const [code, setCode] = useState(DEFAULT_LLVM_CODE);
   const { nodes, edges, onNodesChange, onEdgesChange, updateGraph, resetLayout } = useGraphData();
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +125,7 @@ function App() {
             <Select
               value={mode}
               onChange={(e: SelectChangeEvent) => {
-                const newMode = e.target.value as 'mermaid' | 'controlflow';
+                const newMode = e.target.value as 'mermaid' | 'llvm-ir';
                 setMode(newMode);
                 setCode(newMode === 'mermaid' ? DEFAULT_CODE : DEFAULT_LLVM_CODE);
               }}
@@ -133,7 +133,7 @@ function App() {
               sx={{ color: 'white', '.MuiSvgIcon-root': { color: 'white' } }}
             >
               <MenuItem value="mermaid">Mermaid</MenuItem>
-              <MenuItem value="controlflow">ControlFlow</MenuItem>
+              <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
             </Select>
           </FormControl>
         </Toolbar>
@@ -145,7 +145,7 @@ function App() {
           <CodeEditor
             code={code}
             onChange={handleEditorChange}
-            language={mode === 'controlflow' ? 'llvm' : 'markdown'}
+            language={mode === 'llvm-ir' ? 'llvm' : 'markdown'}
           />
         </Paper>
 

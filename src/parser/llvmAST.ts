@@ -21,6 +21,7 @@ export interface LLVMBasicBlock {
     id: string;
     label?: string;
     instructions: LLVMInstruction[];
+    terminator: LLVMInstruction;
 }
 
 export interface LLVMInstruction {

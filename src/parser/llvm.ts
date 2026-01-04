@@ -84,7 +84,8 @@ function registerSemantics(semantics: ohm.Semantics) {
                 type: 'BasicBlock',
                 id: labelNode || '',
                 label: labelNode,
-                instructions: allInstructions
+                instructions: allInstructions,
+                terminator: termNode
             } as LLVMBasicBlock;
         },
         BasicBlock(label: any, instructions: any, terminator: any) {
@@ -97,7 +98,8 @@ function registerSemantics(semantics: ohm.Semantics) {
                 type: 'BasicBlock',
                 id: labelNode,
                 label: labelNode,
-                instructions: allInstructions
+                instructions: allInstructions,
+                terminator: termNode
             } as LLVMBasicBlock;
         },
         Label(l: any, _colon: any) {
@@ -198,11 +200,11 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                 language: 'llvm'
             });
 
-            if (block.instructions.length > 0) {
-                const lastInst = block.instructions[block.instructions.length - 1];
+            if (block.terminator) {
+                const terminator = block.terminator;
 
-                if (lastInst.opcode === 'br') {
-                    const text = lastInst.originalText;
+                if (terminator.opcode === 'br') {
+                    const text = terminator.originalText;
 
                     if (text.includes(',')) {
                         const labelMatches = [...text.matchAll(/label\s+%?([\w.]+)/g)];
@@ -237,7 +239,7 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                             });
                         }
                     }
-                } else if (lastInst.opcode === 'ret') {
+                } else if (terminator.opcode === 'ret') {
                     edges.push({
                         id: `e-${blockId}-exit`,
                         source: blockId,

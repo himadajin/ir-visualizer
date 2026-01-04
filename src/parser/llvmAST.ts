@@ -9,6 +9,7 @@ export interface LLVMFunction {
     params: LLVMParam[];
     blocks: LLVMBasicBlock[];
     definition: string;
+    entry: LLVMBasicBlock;
 }
 
 export interface LLVMParam {
@@ -19,7 +20,7 @@ export interface LLVMParam {
 export interface LLVMBasicBlock {
     type: 'BasicBlock';
     id: string;
-    label?: string;
+    label: string | null;
     instructions: LLVMInstruction[];
     terminator: LLVMInstruction;
 }

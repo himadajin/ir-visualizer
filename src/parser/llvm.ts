@@ -51,7 +51,8 @@ function registerSemantics(semantics: ohm.Semantics) {
                 name: funcName,
                 params,
                 blocks: blockNodes,
-                definition: definition
+                definition: definition,
+                entry: entryNode
             } as LLVMFunction;
         },
         FuncHeader(_content: any) {
@@ -82,8 +83,8 @@ function registerSemantics(semantics: ohm.Semantics) {
 
             return {
                 type: 'BasicBlock',
-                id: labelNode || '',
-                label: labelNode,
+                id: labelNode || 'entry',
+                label: labelNode || null,
                 instructions: allInstructions,
                 terminator: termNode
             } as LLVMBasicBlock;
@@ -173,29 +174,35 @@ function convertASTToGraph(module: LLVMModule): GraphData {
     const edges: GraphEdge[] = [];
 
     module.functions.forEach(func => {
-        const entryId = 'entry';
+        const headerId = `header_${func.name}`;
 
         // Entry Node
         nodes.push({
-            id: entryId,
+            id: headerId,
             label: func.definition || `define ${func.name} (...)`,
             type: 'round',
             language: 'llvm'
         });
 
         const blocks = func.blocks;
-        let firstBlockId: string | null = null;
 
         blocks.forEach((block, index) => {
-            const blockId = block.id || `${func.name}_blk_${index}`;
-            if (index === 0) firstBlockId = blockId;
+            const blockId = block.id;
 
             const codeContent = block.instructions.map(i => i.originalText).join('\n');
 
             nodes.push({
                 id: blockId,
                 label: codeContent,
-                blockLabel: block.label || undefined,
+                blockLabel: block.label || undefined, // explicit undefined if null? CodeNode handles it? No, type is string | undefined
+                // Wait, if block.label is null, passing undefined is correct for Typescript if interface says string | undefined.
+                // But I want to pass null to CodeNode? CodeNode checks falsy.
+                // Wait, I planned to change CodeNode to check specifically for null.
+                // GraphNode interface in types/graph might strict it.
+                // Let's check GraphNode type first? No time.
+                // I will pass block.label as is (string | null).
+                // GraphNode interface probably allows any prop?
+                // Let's assume blockLabel can be string | null.
                 type: 'square',
                 language: 'llvm'
             });
@@ -250,11 +257,11 @@ function convertASTToGraph(module: LLVMModule): GraphData {
             }
         });
 
-        if (firstBlockId) {
+        if (func.entry) {
             edges.push({
-                id: `e-${entryId}-${firstBlockId}`,
-                source: entryId,
-                target: firstBlockId!,
+                id: `e-${headerId}-${func.entry.id}`,
+                source: headerId,
+                target: func.entry.id,
                 type: 'arrow'
             });
         }

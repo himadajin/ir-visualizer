@@ -16,7 +16,9 @@ const getHighlighter = () => {
 
 const CodeNode = ({ data }: NodeProps) => {
     const rawCode = data.label as string;
-    const blockLabel = data.blockLabel as string | undefined;
+    // explicit check for null to differentiate from undefined
+    const blockLabelProp = data.blockLabel;
+    const blockLabel = blockLabelProp === null ? 'entry' : (blockLabelProp as string | undefined);
 
     // Initialize html with the code to display (unhighlighted initially)
     const [html, setHtml] = useState<string>(rawCode);

@@ -118,7 +118,7 @@ function App() {
       <AppBar position="static">
         <Toolbar variant="dense">
           <Typography variant="h6" color="inherit" component="div" sx={{ flexGrow: 1 }}>
-            Graph Viewer
+            IRVisualizer
           </Typography>
           <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
             <InputLabel sx={{ color: 'white' }}>Mode</InputLabel>

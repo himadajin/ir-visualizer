@@ -14,6 +14,7 @@ const MAX_CHARS_LLVM = 80;
 const FONT_FAMILY = 'monospace';
 const FONT_SIZE = '14px';
 const LINE_HEIGHT = '20px';
+const HEADER_OFFSET = 24;
 
 export const calculateNodeDimensions = (node: GraphNode) => {
     const metrics = getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
@@ -46,7 +47,10 @@ export const calculateNodeDimensions = (node: GraphNode) => {
     const finalChars = Math.max(effectiveMaxChars, minChars);
 
     const width = finalChars * metrics.width + NODE_PADDING * 2;
-    const height = totalLines * metrics.height + NODE_PADDING * 2;
+    // Add header offset only if blockLabel is present (not undefined).
+    // Note: null is treated as 'entry' in CodeNode so it counts as present.
+    const hasLabel = node.blockLabel !== undefined;
+    const height = totalLines * metrics.height + NODE_PADDING * 2 + (hasLabel ? HEADER_OFFSET : 0);
 
     return { width, height };
 };

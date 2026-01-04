@@ -40,14 +40,15 @@ const CodeNode = ({ data }: NodeProps) => {
         };
         highlight();
     }, [rawCode, data.language]);
-
+    const borderRadius = '4px';
     return (
         <div 
             className="code-node-wrapper"
             style={{
-            padding: '10px',
-            borderRadius: '5px',
+            padding: blockLabel ? '28px 10px 10px 10px' : '10px',
+            borderRadius: borderRadius,
             border: '1px solid #777',
+            borderTopLeftRadius: borderRadius,
             background: '#fff',
             fontFamily: 'monospace',
             fontSize: '14px',
@@ -66,10 +67,11 @@ const CodeNode = ({ data }: NodeProps) => {
                     left: 0,
                     padding: '2px 6px',
                     backgroundColor: '#f0f0f0',
-                    borderBottomRightRadius: '4px',
+                    borderTopLeftRadius: borderRadius,
+                    borderBottomRightRadius: borderRadius,
                     borderRight: '1px solid #ddd',
                     borderBottom: '1px solid #ddd',
-                    fontSize: '10px',
+                    fontSize: '12px',
                     fontWeight: 'bold',
                     color: '#555',
                     zIndex: 10,

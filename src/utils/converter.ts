@@ -4,9 +4,11 @@ import { getFontMetrics } from './fontUtils';
 
 export const NODE_PADDING = 20;
 
-// Configuration for max characters per line before wrapping
+// Configuration for min and max characters width
+const MIN_CHARS_MERMAID = 10;
 const MAX_CHARS_MERMAID = 30;
-const MAX_CHARS_LLVM = 75;
+const MIN_CHARS_LLVM = 40;
+const MAX_CHARS_LLVM = 80;
 
 // Font configuration - must match CSS
 const FONT_FAMILY = 'monospace';
@@ -16,6 +18,7 @@ const LINE_HEIGHT = '20px';
 export const calculateNodeDimensions = (node: GraphNode) => {
     const metrics = getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
     const maxChars = node.language === 'mermaid' ? MAX_CHARS_MERMAID : MAX_CHARS_LLVM;
+    const minChars = node.language === 'mermaid' ? MIN_CHARS_MERMAID : MIN_CHARS_LLVM;
 
     const lines = node.label?.split('\n') || [''];
     
@@ -40,7 +43,6 @@ export const calculateNodeDimensions = (node: GraphNode) => {
     const effectiveMaxChars = Math.min(maxLineLength, maxChars);
     
     // Clamp min width to avoid tiny nodes
-    const minChars = 10;
     const finalChars = Math.max(effectiveMaxChars, minChars);
 
     const width = finalChars * metrics.width + NODE_PADDING * 2;

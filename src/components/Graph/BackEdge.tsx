@@ -9,9 +9,9 @@ const BackEdge = ({
     markerEnd,
 }: EdgeProps) => {
     // parameter
-    const upLength = 150;
+    const upLength = 40;
     const radiusX = 90;
-    const radiusY = 70;
+    const radiusY = 50;
     const curveIntensity = upLength;
     // source
     const sourceArcEndX = sourceX + (radiusX * 2);

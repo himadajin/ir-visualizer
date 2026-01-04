@@ -1,7 +1,7 @@
 import * as ohm from 'ohm-js';
 import llvmGrammar from './llvm.ohm?raw';
 import type { GraphData, GraphNode, GraphEdge } from '../types/graph';
-import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction } from './ast';
+import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction } from './llvmAST';
 
 let _grammar: ohm.Grammar | null = null;
 let _semantics: ohm.Semantics | null = null;

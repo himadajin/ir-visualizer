@@ -22,24 +22,28 @@ function getGrammarAndSemantics() {
 
 function registerSemantics(semantics: ohm.Semantics) {
     semantics.addOperation<any>('toAST', {
-        Module(functions: any) {
-            const funcNodes: LLVMFunction[] = functions.children.map((f: any) => f.toAST());
+        Module(topLevels: any) {
+            const children = topLevels.children.map((c: any) => c.toAST());
+            const functions = children.filter((c: any) => c && c.type === 'Function');
             return {
                 type: 'Module',
-                functions: funcNodes
+                functions: functions
             } as LLVMModule;
+        },
+        TopLevel(content: any) {
+            if (content.ctorName === 'Function') {
+                return content.toAST();
+            }
+            return null;
         },
         Function(def: any, header: any, name: any, lp: any, paramsNode: any, rp: any, attrs: any, _lb: any, entryBlock: any, otherBlocks: any, _rb: any) {
             const funcName = name.sourceString;
-            // Construct the function definition string (signature)
-            // e.g. "define void @main(...)"
             const definition = `${def.sourceString} ${header.sourceString} ${funcName} ${lp.sourceString}${paramsNode.sourceString}${rp.sourceString} ${attrs.sourceString}`.trim().replace(/\s+/g, ' ');
 
             const entryNode = entryBlock.toAST();
             const otherBlockNodes = otherBlocks.children.map((b: any) => b.toAST());
             const blockNodes: LLVMBasicBlock[] = [entryNode, ...otherBlockNodes];
 
-            // paramsNode is Params?
             const params = paramsNode.numChildren > 0 ? paramsNode.children[0].toAST() : [];
 
             return {
@@ -61,14 +65,11 @@ function registerSemantics(semantics: ohm.Semantics) {
             const restParams = rest.children.map((p: any) => p.toAST());
             return [firstParam, ...restParams];
         },
-        Param(type: any, _attrs: any, val: any) {
-            // type: Type
-            // _attrs: ParamAttr*
-            // val: Value?
+        Param(typeNode: any, _attrs: any, val: any) {
             return {
-                type: type.sourceString,
+                type: typeNode.sourceString,
                 name: val.numChildren > 0 ? val.children[0].sourceString : null
-            }; // We can add attributes later if needed
+            };
         },
         ParamAttr(_id: any) {
             return this.sourceString;
@@ -105,78 +106,56 @@ function registerSemantics(semantics: ohm.Semantics) {
         Instruction(inner: any) {
             return inner.toAST();
         },
-        AssignInstruction(localVal: any, _eq: any, invokeOp: any) {
-            // Text: "%1 = add ..." or "%var = ..."
-            // localVal is the LocalValue node (e.g. "%1")
+        AssignInstruction(localVal: any, _eq: any, opcodeNode: any, argsNode: any, _meta: any) {
             const result = localVal.sourceString;
-            const rhs = invokeOp.sourceString.trim();
-            const [opcode, ...operandsParts] = rhs.split(/\s+/);
-            const operands = operandsParts.join(' ');
-
             return {
                 type: 'Instruction',
-                opcode: opcode,
+                opcode: opcodeNode.sourceString,
                 result: result,
-                operands: operands,
+                operands: argsNode.sourceString.trim(),
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
-        StoreInstruction(_store: any, invokeOp: any) {
+        GenericInstruction(opcodeNode: any, argsNode: any, _meta: any) {
             return {
                 type: 'Instruction',
-                opcode: 'store',
-                operands: invokeOp.sourceString.trim(),
+                opcode: opcodeNode.sourceString,
+                operands: argsNode.sourceString.trim(),
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
-        CallInstruction(callKw: any, invokeOp: any) {
-            return {
-                type: 'Instruction',
-                opcode: callKw.sourceString, // "call" or "tail call"
-                operands: invokeOp.sourceString.trim(),
-                originalText: this.sourceString
-            } as LLVMInstruction;
+        // Lexical rules usually don't need explicit AST actions unless returning string
+        opcode(_id: any) {
+            return this.sourceString;
         },
-        GenericInstruction(_content: any) {
-            const text = this.sourceString.trim();
-            const [opcode, ...rest] = text.split(/\s+/);
-            return {
-                type: 'Instruction',
-                opcode: opcode,
-                operands: rest.join(' '),
-                originalText: text
-            } as LLVMInstruction;
+        args(_content: any) {
+            return this.sourceString;
         },
         Terminator(inner: any) {
             return inner.toAST();
         },
-        BrCond(_br: any, _type: any, _cond: any, _c: any, _l1: any, _targetTrue: any, _c2: any, _l2: any, _targetFalse: any) {
+        BrInstruction(_br: any, args: any, _meta: any) {
             return {
                 type: 'Instruction',
                 opcode: 'br',
-                operands: this.sourceString.substring(2).trim(), // remove "br"
+                operands: args.sourceString.trim(),
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
-        BrUncond(_br: any, _label: any, _target: any) {
-            return {
-                type: 'Instruction',
-                opcode: 'br',
-                operands: this.sourceString.substring(2).trim(),
-                originalText: this.sourceString
-            } as LLVMInstruction;
-        },
-        Ret(_ret: any, _type: any, _val: any) {
+        RetInstruction(_ret: any, args: any, _meta: any) {
             return {
                 type: 'Instruction',
                 opcode: 'ret',
-                operands: this.sourceString.substring(3).trim(),
+                operands: args.sourceString.trim(),
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
         Value(v: any) {
             const raw = v.sourceString;
             return raw.startsWith('%') ? raw.substring(1) : raw;
+        },
+        type(_content: any) {
+            return this.sourceString;
         },
         _iter(...children: any[]) {
             return children.map(c => c.toAST());
@@ -188,12 +167,11 @@ function registerSemantics(semantics: ohm.Semantics) {
 }
 
 function convertASTToGraph(module: LLVMModule): GraphData {
-    // Merge all functions into one graph as before
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];
 
     module.functions.forEach(func => {
-        const entryId = 'entry'; // Unique per function? Assuming single function for now as per prompt context
+        const entryId = 'entry';
 
         // Entry Node
         nodes.push({
@@ -207,54 +185,30 @@ function convertASTToGraph(module: LLVMModule): GraphData {
         let firstBlockId: string | null = null;
 
         blocks.forEach((block, index) => {
-            // Deterministic ID if label missing
             const blockId = block.id || `${func.name}_blk_${index}`;
-
             if (index === 0) firstBlockId = blockId;
 
-            // Construct Label from instructions
-            // Only use instructions for the node body content
             const codeContent = block.instructions.map(i => i.originalText).join('\n');
 
             nodes.push({
                 id: blockId,
                 label: codeContent,
-                blockLabel: block.label || undefined, // Pass separate label
+                blockLabel: block.label || undefined,
                 type: 'square',
                 language: 'llvm'
             });
 
-            // Parse terminators for edges
-            // We look at the LAST instruction (usually). Or any terminator instruction?
-            // Valid LLVM has terminator at end.
             if (block.instructions.length > 0) {
                 const lastInst = block.instructions[block.instructions.length - 1];
 
                 if (lastInst.opcode === 'br') {
-                    // Need to parse targets.
-                    // BrUncond: "br label %dest"
-                    // BrCond: "br i1 %cond, label %true, label %false"
+                    const text = lastInst.originalText;
 
-                    // Regex accounting for optional % and allowing . in identifiers
-                    const labelRegexPart = '%?([\\w.]+)';
-                    const uncondRegex = new RegExp(`br\\s+label\\s+${labelRegexPart}`);
-                    const uncondMatch = lastInst.originalText.match(uncondRegex);
-
-                    if (uncondMatch) {
-                        const target = uncondMatch[1];
-                        edges.push({
-                            id: `e-${blockId}-${target}`,
-                            source: blockId,
-                            target: target,
-                            type: 'arrow'
-                        });
-                    } else {
-                        // BrCond
-                        const condRegex = new RegExp(`br\\s+.*,\\s+label\\s+${labelRegexPart},\\s+label\\s+${labelRegexPart}`);
-                        const condMatch = lastInst.originalText.match(condRegex);
-                        if (condMatch) {
-                            const trueTarget = condMatch[1];
-                            const falseTarget = condMatch[2];
+                    if (text.includes(',')) {
+                        const labelMatches = [...text.matchAll(/label\s+%?([\w.]+)/g)];
+                        if (labelMatches.length >= 2) {
+                            const trueTarget = labelMatches[0][1];
+                            const falseTarget = labelMatches[1][1];
 
                             edges.push({
                                 id: `e-${blockId}-${trueTarget}-true`,
@@ -268,6 +222,17 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                                 source: blockId,
                                 target: falseTarget,
                                 label: 'false',
+                                type: 'arrow'
+                            });
+                        }
+                    } else {
+                        const match = text.match(/label\s+%?([\w.]+)/);
+                        if (match) {
+                            const target = match[1];
+                            edges.push({
+                                id: `e-${blockId}-${target}`,
+                                source: blockId,
+                                target: target,
                                 type: 'arrow'
                             });
                         }
@@ -293,7 +258,6 @@ function convertASTToGraph(module: LLVMModule): GraphData {
         }
     });
 
-    // Implicit Exit
     const hasExit = edges.some(e => e.target === 'exit');
     if (hasExit) {
         nodes.push({
@@ -315,6 +279,5 @@ export function parseLLVM(input: string): GraphData {
         throw new Error(match.message);
     }
     const nodes = semantics(match).toAST() as LLVMModule;
-    // console.log("AST:", JSON.stringify(nodes, null, 2));
     return convertASTToGraph(nodes);
 }

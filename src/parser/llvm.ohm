@@ -1,13 +1,15 @@
 LLVM {
-  Module = Function+
-  
+  Module = TopLevel*
+
+  TopLevel = Function | (~"define" any)+
+
   // Loose parsing for function definition:
   // "define" [stuff] @Name ( [params] ) [stuff] { ... }
   Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
 
   // Consumes everything up to the GlobalValue (function name).
   // The last element is inherently the Return Type.
-  FuncHeader = (~GlobalValue (Type | id | any))*
+  FuncHeader = (~GlobalValue (type | id | any))*
   
   // Consumes everything after ')' and before '{'
   FuncAttrs = (~"{" any)*
@@ -19,26 +21,27 @@ LLVM {
   
   Instruction = 
     | AssignInstruction
-    | StoreInstruction
-    | CallInstruction
     | GenericInstruction
     
-  AssignInstruction = LocalValue "=" invoke_op
-  StoreInstruction = "store" invoke_op
-  CallInstruction = ("call" | "tail call") invoke_op
-
-  // A catch-all for instructions that are not terminators
-  // use `~` to ensure we don't consume terminators or start of next block or function
-  GenericInstruction = ~Terminator ~"}" ~Label (~"\n" any)+
+  AssignInstruction = LocalValue "=" opcode args metadata?
   
+  GenericInstruction = opcode args metadata?
+  
+  opcode = ~"br" ~"ret" id
+  
+  // args consumes everything until metadata or newline
+  // Lexical rule (lowercase) ensures we don't skip newlines implicitly
+  args = (~metadata ~"\n" any)*
+
+  // metadata: optional comma, then !, then rest of line
+  metadata = ","? space* "!" (~"\n" any)+
+
   Terminator = 
-    | BrCond
-    | BrUncond
-    | Ret
+    | BrInstruction
+    | RetInstruction
     
-  BrCond = "br" Type Value "," "label" Value "," "label" Value
-  BrUncond = "br" "label" Value
-  Ret = "ret" Type Value
+  BrInstruction = "br" args metadata?
+  RetInstruction = "ret" args metadata?
   
   // Lexical rules
   id = (letter | digit | "_" | ".")+
@@ -47,20 +50,16 @@ LLVM {
   LocalValue = "%" id
   
   // Type can be significantly more complex, but we keep it somewhat simple for now.
-  // Expanded to include loose tokens that might appear in types or attrs.
-  Type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
+  // Lowercase to avoid space insertion inside types like 'i 32'
+  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
   
   Value = GlobalValue | LocalValue | digit+
   
   Params = Param ("," Param)*
   
-  // Param: Type [attributes...] Value?
-  // We need to capture attributes.
-  // ParamAttr = ~Value (id | digit+) -- any identifier/keyword not matching Value(%)
-  Param = Type ParamAttr* Value?
+  // Param: type [attributes...] Value?
+  Param = type ParamAttr* Value?
   ParamAttr = ~Value id
-
-  invoke_op = (~"\n" any)+
 
   space += comment
   comment = ";" (~"\n" any)*

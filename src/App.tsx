@@ -145,7 +145,7 @@ function App() {
           <CodeEditor
             code={code}
             onChange={handleEditorChange}
-            language={mode === 'llvm-ir' ? 'llvm' : 'markdown'}
+            language={mode === 'llvm-ir' ? 'llvm' : 'mermaid'}
           />
         </Paper>
 

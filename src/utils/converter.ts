@@ -1,4 +1,4 @@
-import { type Node, type Edge } from '@xyflow/react';
+import { type Node, type Edge, MarkerType } from '@xyflow/react';
 import type { GraphNode, GraphEdge } from '../types/graph';
 
 export const NODE_WIDTH = 300;
@@ -36,6 +36,9 @@ export const createReactFlowEdge = (edge: GraphEdge, edgeType: string = 'customB
         label: edge.label,
         animated: false,
         type: edgeType,
-        zIndex: 0
+        zIndex: 0,
+        markerEnd: {
+            type: MarkerType.ArrowClosed,
+        },
     };
 };

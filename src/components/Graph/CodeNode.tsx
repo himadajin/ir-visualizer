@@ -78,13 +78,27 @@ const CodeNode = ({ data }: NodeProps) => {
             <Handle
                 type="target"
                 position={Position.Top}
-                style={{ opacity: 0 }}
+                style={{
+                    opacity: 0,
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '1px',
+                    height: '1px',
+                }}
                 isConnectable={false}
             />
             <Handle
                 type="source"
                 position={Position.Bottom}
-                style={{ opacity: 0 }}
+                style={{
+                    opacity: 0,
+                    bottom: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '1px',
+                    height: '1px',
+                }}
                 isConnectable={false}
             />
         </div>

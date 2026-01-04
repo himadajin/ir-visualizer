@@ -3,7 +3,7 @@ import { Box, Paper, Typography, AppBar, Toolbar, Alert, Snackbar, Select, MenuI
 import { CodeEditor } from './components/Editor/CodeEditor';
 import { GraphViewer } from './components/Graph/GraphViewer';
 import { useGraphData } from './hooks/useGraphData';
-import { parseMermaid } from './parser/parser';
+import { parseMermaid } from './parser/mermaid';
 import { parseLLVM } from './parser/llvm';
 
 const DEFAULT_CODE = `graph TD

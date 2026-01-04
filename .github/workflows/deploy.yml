@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 9-host-on-github-pages
 
 jobs:
   deploy:

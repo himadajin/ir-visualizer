@@ -40,19 +40,24 @@ const CodeNode = ({ data }: NodeProps) => {
         };
         highlight();
     }, [rawCode, data.language]);
-
+    const borderRadius = '4px';
     return (
-        <div style={{
-            padding: '10px',
-            borderRadius: '5px',
+        <div 
+            className="code-node-wrapper"
+            style={{
+            padding: blockLabel ? '28px 10px 10px 10px' : '10px',
+            borderRadius: borderRadius,
             border: '1px solid #777',
+            borderTopLeftRadius: borderRadius,
             background: '#fff',
             fontFamily: 'monospace',
+            fontSize: '14px',
+            lineHeight: '20px',
             textAlign: 'left',
-            height: '100%',
-            overflow: 'hidden',
+            height: '100%', 
             boxSizing: 'border-box',
-            position: 'relative', // Add relative positioning for absolute children
+            position: 'relative', 
+            // inner pre/code will inherit these
         }}>
             {/* Display extracted label if present */}
             {blockLabel && (
@@ -62,10 +67,11 @@ const CodeNode = ({ data }: NodeProps) => {
                     left: 0,
                     padding: '2px 6px',
                     backgroundColor: '#f0f0f0',
-                    borderBottomRightRadius: '4px',
+                    borderTopLeftRadius: borderRadius,
+                    borderBottomRightRadius: borderRadius,
                     borderRight: '1px solid #ddd',
                     borderBottom: '1px solid #ddd',
-                    fontSize: '10px',
+                    fontSize: '12px',
                     fontWeight: 'bold',
                     color: '#555',
                     zIndex: 10,

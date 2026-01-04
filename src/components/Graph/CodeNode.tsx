@@ -42,17 +42,19 @@ const CodeNode = ({ data }: NodeProps) => {
     }, [rawCode, data.language]);
 
     return (
-        <div style={{
+        <div 
+            className="code-node-wrapper"
+            style={{
             padding: '10px',
             borderRadius: '5px',
             border: '1px solid #777',
             background: '#fff',
             fontFamily: 'monospace',
             textAlign: 'left',
-            height: '100%',
-            overflow: 'hidden',
+            height: '100%', // ReactFlow handles height, but we want inner to fill
             boxSizing: 'border-box',
             position: 'relative', // Add relative positioning for absolute children
+            // whiteSpace and wordBreak will be handled by CSS for inner pre
         }}>
             {/* Display extracted label if present */}
             {blockLabel && (

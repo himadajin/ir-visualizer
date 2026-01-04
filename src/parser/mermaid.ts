@@ -22,11 +22,11 @@ semantics.addOperation('parse', {
             if (!res) return;
 
             if (res.type === 'node_decl') {
-                nodes.set(res.node.id, { ...res.node, label: res.node.label || res.node.id });
+                nodes.set(res.node.id, { ...res.node, label: res.node.label || res.node.id, language: 'mermaid' });
             } else if (res.type === 'edge') {
                 // Ensure nodes exist
                 if (!nodes.has(res.source.id)) {
-                    nodes.set(res.source.id, { ...res.source, label: res.source.label || res.source.id });
+                    nodes.set(res.source.id, { ...res.source, label: res.source.label || res.source.id, language: 'mermaid' });
                 } else {
                     // Update label if provided in the edge definition and not previously set properly?
                     // Mermaid allows defining node details in edge: A[Label] --> B
@@ -36,16 +36,18 @@ semantics.addOperation('parse', {
                         existing.label = res.source.label;
                         existing.type = res.source.type || existing.type;
                     }
+                    existing.language = 'mermaid'; // Ensure language is set
                 }
 
                 if (!nodes.has(res.target.id)) {
-                    nodes.set(res.target.id, { ...res.target, label: res.target.label || res.target.id });
+                    nodes.set(res.target.id, { ...res.target, label: res.target.label || res.target.id, language: 'mermaid' });
                 } else {
                     const existing = nodes.get(res.target.id)!;
                     if (res.target.label && existing.label === existing.id) {
                         existing.label = res.target.label;
                         existing.type = res.target.type || existing.type;
                     }
+                    existing.language = 'mermaid'; // Ensure language is set
                 }
 
                 edges.push({

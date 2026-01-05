@@ -20,19 +20,18 @@ LLVM {
   Param = (~(LocalValue &ParamTerminator) ~")" any)* LocalValue
   ParamTerminator = "," | ")"
 
-  EntryBasicBlock = Label? Instruction* Terminator
-  BasicBlock = Label Instruction* Terminator
-  
+  EntryBasicBlock = Label? BasicBlockItem* Terminator
+  BasicBlock = Label BasicBlockItem* Terminator
+  BasicBlockItem = DebugRecord | Instruction
   Label = ident ":"
-  
+  DebugRecord = "#" debugRecordContent
+  debugRecordContent = (~"\n" any)*
+  // Instruction
   Instruction = 
     | AssignInstruction
     | GenericInstruction
-    
   AssignInstruction = LocalValue "=" opcode args metadata?
-  
   GenericInstruction = opcode args metadata?
-  
   opcode = ~"br" ~"ret" ident
   
   // args consumes everything until metadata or newline

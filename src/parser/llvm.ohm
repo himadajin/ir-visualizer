@@ -1,23 +1,24 @@
 LLVM {
-  Module = TopLevel*
+  LLVM = Module
 
+  // Lexical rules
+  ident = (letter | digit | "$" | "." | "_")+
+  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
+  comment = ";" (~"\n" any)*
+  space += comment
+
+  Module = TopLevel*
   TopLevel = Function | (~"define" any)+
 
-  // Loose parsing for function definition:
-  // "define" [stuff] @Name ( [params] ) [stuff] { ... }
+  // Function
   Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
-
-  // Consumes everything up to the GlobalValue (function name).
-  // The last element is inherently the Return Type.
-  FuncHeader = (~GlobalValue (type | id | any))*
-  
-  // Consumes everything after ')' and before '{'
+  FuncHeader = (~GlobalValue any)*
   FuncAttrs = (~"{" any)*
 
   EntryBasicBlock = Label? Instruction* Terminator
   BasicBlock = Label Instruction* Terminator
   
-  Label = id ":"
+  Label = ident ":"
   
   Instruction = 
     | AssignInstruction
@@ -27,7 +28,7 @@ LLVM {
   
   GenericInstruction = opcode args metadata?
   
-  opcode = ~"br" ~"ret" id
+  opcode = ~"br" ~"ret" ident
   
   // args consumes everything until metadata or newline
   // Lexical rule (lowercase) ensures we don't skip newlines implicitly
@@ -42,16 +43,8 @@ LLVM {
     
   BrInstruction = "br" args metadata?
   RetInstruction = "ret" args metadata?
-  
-  // Lexical rules
-  id = (letter | digit | "_" | ".")+
-  
-  GlobalValue = "@" id
-  LocalValue = "%" id
-  
-  // Type can be significantly more complex, but we keep it somewhat simple for now.
-  // Lowercase to avoid space insertion inside types like 'i 32'
-  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
+  GlobalValue = "@" ident
+  LocalValue = "%" ident
   
   Value = GlobalValue | LocalValue | digit+
   
@@ -59,8 +52,6 @@ LLVM {
   
   // Param: type [attributes...] Value?
   Param = type ParamAttr* Value?
-  ParamAttr = ~Value id
+  ParamAttr = ~Value ident
 
-  space += comment
-  comment = ";" (~"\n" any)*
 }

@@ -4,6 +4,7 @@ LLVM {
   // Lexical rules
   ident = (letter | digit | "$" | "." | "_")+
   type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
+  metadata = ","? space* "!" (~"\n" any)+
   comment = ";" (~"\n" any)*
   space += comment
 
@@ -14,6 +15,9 @@ LLVM {
   Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
   FuncHeader = (~GlobalValue any)*
   FuncAttrs = (~"{" any)*
+  Params = Param ("," Param)*
+  Param = (~(LocalValue &ParamTerminator) any)* LocalValue
+  ParamTerminator = "," | ")"
 
   EntryBasicBlock = Label? Instruction* Terminator
   BasicBlock = Label Instruction* Terminator
@@ -35,7 +39,6 @@ LLVM {
   args = (~metadata ~"\n" any)*
 
   // metadata: optional comma, then !, then rest of line
-  metadata = ","? space* "!" (~"\n" any)+
 
   Terminator = 
     | BrInstruction
@@ -43,15 +46,8 @@ LLVM {
     
   BrInstruction = "br" args metadata?
   RetInstruction = "ret" args metadata?
+
   GlobalValue = "@" ident
   LocalValue = "%" ident
-  
   Value = GlobalValue | LocalValue | digit+
-  
-  Params = Param ("," Param)*
-  
-  // Param: type [attributes...] Value?
-  Param = type ParamAttr* Value?
-  ParamAttr = ~Value ident
-
 }

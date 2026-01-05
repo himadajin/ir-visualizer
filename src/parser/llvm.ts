@@ -66,14 +66,11 @@ function registerSemantics(semantics: ohm.Semantics) {
             const restParams = rest.children.map((p: any) => p.toAST());
             return [firstParam, ...restParams];
         },
-        Param(typeNode: any, _attrs: any, val: any) {
+        Param(first: any, value: any) {
             return {
-                type: typeNode.sourceString,
-                name: val.numChildren > 0 ? val.children[0].sourceString : null
+                type: first.sourceString.trim(),
+                name: value.sourceString
             };
-        },
-        ParamAttr(_id: any) {
-            return this.sourceString;
         },
         EntryBasicBlock(labelOpt: any, instructions: any, terminator: any) {
             const labelNode = labelOpt.numChildren > 0 ? labelOpt.children[0].toAST() : null;

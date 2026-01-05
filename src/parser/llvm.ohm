@@ -1,40 +1,44 @@
 LLVM {
-  Module = TopLevel*
+  LLVM = Module
 
+  // Lexical rules
+  ident = (letter | digit | "$" | "." | "_")+
+  stringLiteral = "\"" (~"\"" any)* "\""
+  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
+  metadata = ","? space* "!" (~"\n" any)+
+  comment = ";" (~"\n" any)*
+  space += comment
+
+  Module = TopLevel*
   TopLevel = Function | (~"define" any)+
 
-  // Loose parsing for function definition:
-  // "define" [stuff] @Name ( [params] ) [stuff] { ... }
+  // Function
   Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
-
-  // Consumes everything up to the GlobalValue (function name).
-  // The last element is inherently the Return Type.
-  FuncHeader = (~GlobalValue (type | id | any))*
-  
-  // Consumes everything after ')' and before '{'
+  FuncHeader = (~GlobalValue any)*
   FuncAttrs = (~"{" any)*
+  Params = Param ("," Param)*
+  Param = (~(LocalValue &ParamTerminator) ~")" any)* LocalValue
+  ParamTerminator = "," | ")"
 
-  EntryBasicBlock = Label? Instruction* Terminator
-  BasicBlock = Label Instruction* Terminator
-  
-  Label = id ":"
-  
+  EntryBasicBlock = Label? BasicBlockItem* Terminator
+  BasicBlock = Label BasicBlockItem* Terminator
+  BasicBlockItem = DebugRecord | Instruction
+  Label = ident ":"
+  DebugRecord = "#" debugRecordContent
+  debugRecordContent = (~"\n" any)*
+  // Instruction
   Instruction = 
     | AssignInstruction
     | GenericInstruction
-    
   AssignInstruction = LocalValue "=" opcode args metadata?
-  
   GenericInstruction = opcode args metadata?
-  
-  opcode = ~"br" ~"ret" id
+  opcode = ~"br" ~"ret" ident
   
   // args consumes everything until metadata or newline
   // Lexical rule (lowercase) ensures we don't skip newlines implicitly
   args = (~metadata ~"\n" any)*
 
   // metadata: optional comma, then !, then rest of line
-  metadata = ","? space* "!" (~"\n" any)+
 
   Terminator = 
     | BrInstruction
@@ -42,25 +46,8 @@ LLVM {
     
   BrInstruction = "br" args metadata?
   RetInstruction = "ret" args metadata?
-  
-  // Lexical rules
-  id = (letter | digit | "_" | ".")+
-  
-  GlobalValue = "@" id
-  LocalValue = "%" id
-  
-  // Type can be significantly more complex, but we keep it somewhat simple for now.
-  // Lowercase to avoid space insertion inside types like 'i 32'
-  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
-  
-  Value = GlobalValue | LocalValue | digit+
-  
-  Params = Param ("," Param)*
-  
-  // Param: type [attributes...] Value?
-  Param = type ParamAttr* Value?
-  ParamAttr = ~Value id
 
-  space += comment
-  comment = ";" (~"\n" any)*
+  GlobalValue = "@" (ident | stringLiteral)
+  LocalValue = "%" (ident | stringLiteral)
+  Value = GlobalValue | LocalValue | digit+
 }

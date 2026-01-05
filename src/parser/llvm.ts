@@ -1,7 +1,7 @@
 import * as ohm from 'ohm-js';
 import llvmGrammar from './llvm.ohm?raw';
 import type { GraphData, GraphNode, GraphEdge } from '../types/graph';
-import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction } from './llvmAST';
+import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction, LLVMDebugRecord, LLVMBasicBlockItem } from './llvmAST';
 
 let _grammar: ohm.Grammar | null = null;
 let _semantics: ohm.Semantics | null = null;
@@ -66,42 +66,56 @@ function registerSemantics(semantics: ohm.Semantics) {
             const restParams = rest.children.map((p: any) => p.toAST());
             return [firstParam, ...restParams];
         },
-        Param(typeNode: any, _attrs: any, val: any) {
+        Param(first: any, value: any) {
             return {
-                type: typeNode.sourceString,
-                name: val.numChildren > 0 ? val.children[0].sourceString : null
+                type: first.sourceString.trim(),
+                name: value.sourceString
             };
         },
-        ParamAttr(_id: any) {
-            return this.sourceString;
-        },
-        EntryBasicBlock(labelOpt: any, instructions: any, terminator: any) {
+        EntryBasicBlock(labelOpt: any, items: any, terminator: any) {
             const labelNode = labelOpt.numChildren > 0 ? labelOpt.children[0].toAST() : null;
-            const instNodes: LLVMInstruction[] = instructions.children.map((i: any) => i.toAST());
+            const itemNodes: LLVMBasicBlockItem[] = items.children.map((i: any) => i.toAST());
             const termNode: LLVMInstruction = terminator.toAST();
-            const allInstructions = [...instNodes, termNode];
+            // NOTE: converting LLVMInstruction[] to LLVMBasicBlockItem[] is trivial via covariance if structured correctly, 
+            // but we need to make sure terminator (LLVMInstruction) is also part of instructions if desired?
+            // The previous logic was: const allInstructions = [...instNodes, termNode];
+            // But now instNodes can be DebugRecords. 
+            // LLVMBasicBlock.instructions is LLVMBasicBlockItem[].
+            // LLVMInstruction is a subtype of LLVMBasicBlockItem.
+            // So [...itemNodes, termNode] is valid.
+            const allItems = [...itemNodes, termNode];
 
             return {
                 type: 'BasicBlock',
                 id: labelNode || 'entry',
                 label: labelNode || null,
-                instructions: allInstructions,
+                instructions: allItems,
                 terminator: termNode
             } as LLVMBasicBlock;
         },
-        BasicBlock(label: any, instructions: any, terminator: any) {
+        BasicBlock(label: any, items: any, terminator: any) {
             const labelNode = label.toAST();
-            const instNodes: LLVMInstruction[] = instructions.children.map((i: any) => i.toAST());
+            const itemNodes: LLVMBasicBlockItem[] = items.children.map((i: any) => i.toAST());
             const termNode: LLVMInstruction = terminator.toAST();
-            const allInstructions = [...instNodes, termNode];
+            const allItems = [...itemNodes, termNode];
 
             return {
                 type: 'BasicBlock',
                 id: labelNode,
                 label: labelNode,
-                instructions: allInstructions,
+                instructions: allItems,
                 terminator: termNode
             } as LLVMBasicBlock;
+        },
+        BasicBlockItem(inner: any) {
+            return inner.toAST();
+        },
+        DebugRecord(_hash: any, content: any) {
+            return {
+                type: 'DebugRecord',
+                content: content.sourceString,
+                originalText: this.sourceString
+            } as LLVMDebugRecord;
         },
         Label(l: any, _colon: any) {
             return l.sourceString;
@@ -211,7 +225,7 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                 const terminator = block.terminator;
 
                 if (terminator.opcode === 'br') {
-                    const text = terminator.originalText;
+                    const text = terminator.operands;
 
                     if (text.includes(',')) {
                         const labelMatches = [...text.matchAll(/label\s+%?([\w.]+)/g)];

@@ -225,7 +225,7 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                 const terminator = block.terminator;
 
                 if (terminator.opcode === 'br') {
-                    const text = terminator.originalText;
+                    const text = terminator.operands;
 
                     if (text.includes(',')) {
                         const labelMatches = [...text.matchAll(/label\s+%?([\w.]+)/g)];

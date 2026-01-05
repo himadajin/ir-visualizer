@@ -3,6 +3,7 @@ LLVM {
 
   // Lexical rules
   ident = (letter | digit | "$" | "." | "_")+
+  stringLiteral = "\"" (~"\"" any)* "\""
   type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
   metadata = ","? space* "!" (~"\n" any)+
   comment = ";" (~"\n" any)*
@@ -47,7 +48,7 @@ LLVM {
   BrInstruction = "br" args metadata?
   RetInstruction = "ret" args metadata?
 
-  GlobalValue = "@" ident
-  LocalValue = "%" ident
+  GlobalValue = "@" (ident | stringLiteral)
+  LocalValue = "%" (ident | stringLiteral)
   Value = GlobalValue | LocalValue | digit+
 }

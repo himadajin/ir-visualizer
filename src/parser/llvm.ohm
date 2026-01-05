@@ -16,7 +16,7 @@ LLVM {
   FuncHeader = (~GlobalValue any)*
   FuncAttrs = (~"{" any)*
   Params = Param ("," Param)*
-  Param = (~(LocalValue &ParamTerminator) any)* LocalValue
+  Param = (~(LocalValue &ParamTerminator) ~")" any)* LocalValue
   ParamTerminator = "," | ")"
 
   EntryBasicBlock = Label? Instruction* Terminator

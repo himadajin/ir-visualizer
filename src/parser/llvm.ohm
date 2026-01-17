@@ -28,12 +28,12 @@ LLVM {
 
   // Function
   Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs? "{" EntryBasicBlock BasicBlock* "}"
-  Declaration = "declare" (~"\n" any)*
-  GlobalAssignment = GlobalValue "=" (~"\n" any)*
-  AttributeDef = "attributes" AttributeID "=" (~"\n" any)*
-  MetadataDef = MetadataID "=" (~"\n" any)*
-  TargetDef = "target" (~"\n" any)*
-  TypeAlias = LocalValue "=" "type" (~"\n" any)*
+  Declaration = "declare" restOfLine
+  GlobalAssignment = GlobalValue "=" restOfLine
+  AttributeDef = "attributes" AttributeID "=" restOfLine
+  MetadataDef = MetadataID "=" restOfLine
+  TargetDef = "target" restOfLine
+  TypeAlias = LocalValue "=" "type" restOfLine
 
   AttributeID = AttributeIDNumeric | AttributeIDString
   AttributeIDNumeric = "#" digit+
@@ -49,8 +49,8 @@ LLVM {
   BasicBlock = Label BasicBlockItem* Terminator
   BasicBlockItem = DebugRecord | Instruction
   Label = ident ":"
-  DebugRecord = "#" debugRecordContent
-  debugRecordContent = (~"\n" any)*
+  DebugRecord = "#" restOfLine
+  restOfLine = (~"\n" any)*
   // Instruction
   Instruction = 
     | AssignInstruction

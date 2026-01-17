@@ -57,7 +57,7 @@ LLVM {
     | GenericInstruction
   AssignInstruction = LocalValue "=" opcode args metadata?
   GenericInstruction = opcode args metadata?
-  opcode = ~"br" ~"ret" ident
+  opcode = ~"br" ~"ret" ~"switch" ident
   
   // args consumes everything until metadata or newline
   // Lexical rule (lowercase) ensures we don't skip newlines implicitly
@@ -68,9 +68,14 @@ LLVM {
   Terminator = 
     | BrInstruction
     | RetInstruction
+    | SwitchInstruction
     
   BrInstruction = "br" args metadata?
   RetInstruction = "ret" args metadata?
+
+  SwitchInstruction = "switch" SwitchHeader "[" SwitchCase* "]" metadata?
+  SwitchHeader = (~"[" any)+
+  SwitchCase = type Value "," "label" LocalValue
 
   GlobalValue = "@" (ident | stringLiteral)
   LocalValue = "%" (ident | stringLiteral)

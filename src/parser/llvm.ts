@@ -217,6 +217,19 @@ function registerSemantics(semantics: ohm.Semantics) {
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
+        SwitchInstruction(_switch: any, header: any, _lb: any, cases: any, _rb: any, _meta: any) {
+            // Reconstruct the operands string: header + [ ...cases... ]
+            // We want to preserve the structure for easier parsing later, or just pass it all through.
+            // The header includes the value being switched on and the default label.
+            const headerText = header.sourceString.trim();
+            const casesText = cases.children.map((c: any) => c.sourceString.trim()).join(' ');
+            return {
+                type: 'Instruction',
+                opcode: 'switch',
+                operands: `${headerText} [ ${casesText} ]`,
+                originalText: this.sourceString
+            } as LLVMInstruction;
+        },
         Value(v: any) {
             const raw = v.sourceString;
             return raw.startsWith('%') ? raw.substring(1) : raw;
@@ -387,6 +400,56 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                         source: blockId,
                         target: exitId,
                         type: 'arrow'
+                    });
+                } else if (terminator.opcode === 'switch') {
+                    // switch <intty> <value>, label <defaultdest> [ <intty> <val>, label <dest> ... ]
+                    // operands: "i32 %4, label %9 [ i32 10, label %5 ... ]"
+                    const operands = terminator.operands;
+
+                    // 1. Extract default label
+                    // The default label is before the '['
+                    const headerPart = operands.split('[')[0];
+                    const defaultMatch = headerPart.match(/label\s+%?([\w.]+)/);
+                    if (defaultMatch) {
+                        const defaultTarget = defaultMatch[1];
+                        const defaultId = `${funcPrefix}_block_${defaultTarget}`;
+                        edges.push({
+                            id: `e-${blockId}-${defaultId}-default`,
+                            source: blockId,
+                            target: defaultId,
+                            label: 'default',
+                            type: 'arrow'
+                        });
+                    }
+
+                    // 2. Extract cases
+                    // The cases are inside '[ ... ]'
+                    const casesPart = operands.substring(operands.indexOf('[') + 1, operands.lastIndexOf(']'));
+                    // Cases format: i32 10, label %5 i32 20, label %6 ...
+                    // We can match "type value, label target"
+                    // Regex: \w+ [\w\d]+, label %?([\w.]+)
+                    // But we need the value to show on the edge label.
+                    // Let's use matchAll
+
+                    // Example case: i32 10, label %5
+                    // Type: [\w\[\]]+
+                    // Value: [\d]+ or similar
+                    // Label: label %?([\w.]+)
+                    const caseRegex = /[\w\[\]]+\s+(\d+),\s+label\s+%?([\w.]+)/g;
+                    const matches = [...casesPart.matchAll(caseRegex)];
+
+                    matches.forEach((match) => {
+                        const val = match[1]; // e.g. "10"
+                        const target = match[2]; // e.g. "5"
+                        const targetId = `${funcPrefix}_block_${target}`;
+
+                        edges.push({
+                            id: `e-${blockId}-${targetId}-case-${val}`,
+                            source: blockId,
+                            target: targetId,
+                            label: val,
+                            type: 'arrow'
+                        });
                     });
                 }
             }

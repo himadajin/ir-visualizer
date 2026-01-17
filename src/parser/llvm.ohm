@@ -70,11 +70,13 @@ LLVM {
     | RetInstruction
     | SwitchInstruction
     
-  BrInstruction = "br" args metadata?
-  RetInstruction = "ret" args metadata?
+  BrInstruction = 
+    | "br" "i1" Value "," "label" LocalValue "," "label" LocalValue -- conditional
+    | "br" "label" LocalValue -- unconditional
 
-  SwitchInstruction = "switch" SwitchHeader "[" SwitchCase* "]" metadata?
-  SwitchHeader = (~"[" any)+
+  RetInstruction = "ret" type Value? metadata?
+
+  SwitchInstruction = "switch" type Value "," "label" LocalValue "[" SwitchCase* "]" metadata?
   SwitchCase = type Value "," "label" LocalValue
 
   GlobalValue = "@" (ident | stringLiteral)

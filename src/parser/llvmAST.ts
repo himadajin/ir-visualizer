@@ -28,7 +28,7 @@ export interface LLVMBasicBlock {
     id: string;
     label: string | null;
     instructions: LLVMBasicBlockItem[];
-    terminator: LLVMInstruction;
+    terminator: LLVMTerminator;
 }
 
 export type LLVMBasicBlockItem = LLVMInstruction | LLVMDebugRecord;
@@ -39,6 +39,42 @@ export interface LLVMInstruction {
     result?: string; // LHS (Defined operand, e.g. "%1")
     operands: string; // RHS (e.g. "i32 0, i32 0") - keeping as string for now
     originalText: string;
+}
+
+export type LLVMTerminator = LLVMBrInstruction | LLVMRetInstruction | LLVMSwitchInstruction | LLVMInstruction;
+
+export interface LLVMBrInstruction {
+    type: 'Instruction';
+    opcode: 'br';
+    destination?: string; // For unconditional br
+    condition?: string;   // For conditional br
+    trueTarget?: string;  // For conditional br
+    falseTarget?: string; // For conditional br
+    originalText: string;
+}
+
+export interface LLVMRetInstruction {
+    type: 'Instruction';
+    opcode: 'ret';
+    valType?: string;
+    value?: string;
+    originalText: string;
+}
+
+export interface LLVMSwitchInstruction {
+    type: 'Instruction';
+    opcode: 'switch';
+    conditionType: string;
+    conditionValue: string;
+    defaultTarget: string;
+    cases: LLVMSwitchCase[];
+    originalText: string;
+}
+
+export interface LLVMSwitchCase {
+    type: string;
+    value: string;
+    target: string;
 }
 
 export interface LLVMGlobalVariable {

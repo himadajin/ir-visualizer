@@ -1,7 +1,7 @@
 import * as ohm from 'ohm-js';
 import llvmGrammar from './llvm.ohm?raw';
 import type { GraphData, GraphNode, GraphEdge } from '../types/graph';
-import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction, LLVMDebugRecord, LLVMBasicBlockItem } from './llvmAST';
+import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction, LLVMDebugRecord, LLVMBasicBlockItem, LLVMBrInstruction, LLVMRetInstruction, LLVMSwitchInstruction } from './llvmAST';
 
 let _grammar: ohm.Grammar | null = null;
 let _semantics: ohm.Semantics | null = null;
@@ -201,34 +201,52 @@ function registerSemantics(semantics: ohm.Semantics) {
         Terminator(inner: any) {
             return inner.toAST();
         },
-        BrInstruction(_br: any, args: any, _meta: any) {
+        BrInstruction_conditional(_br: any, _i1: any, cond: any, _comma1: any, _l1: any, trueLabel: any, _comma2: any, _l2: any, falseLabel: any) {
             return {
                 type: 'Instruction',
                 opcode: 'br',
-                operands: args.sourceString.trim(),
+                condition: cond.toAST(),
+                trueTarget: trueLabel.toAST(),
+                falseTarget: falseLabel.toAST(),
                 originalText: this.sourceString
-            } as LLVMInstruction;
+            } as LLVMBrInstruction;
         },
-        RetInstruction(_ret: any, args: any, _meta: any) {
+        BrInstruction_unconditional(_br: any, _label: any, dest: any) {
+            return {
+                type: 'Instruction',
+                opcode: 'br',
+                destination: dest.toAST(),
+                originalText: this.sourceString
+            } as LLVMBrInstruction;
+        },
+        RetInstruction(_ret: any, typeNode: any, valNode: any, _meta: any) {
+            const val = valNode.numChildren > 0 ? valNode.children[0].toAST() : undefined;
             return {
                 type: 'Instruction',
                 opcode: 'ret',
-                operands: args.sourceString.trim(),
+                valType: typeNode.sourceString,
+                value: val,
                 originalText: this.sourceString
-            } as LLVMInstruction;
+            } as LLVMRetInstruction;
         },
-        SwitchInstruction(_switch: any, header: any, _lb: any, cases: any, _rb: any, _meta: any) {
-            // Reconstruct the operands string: header + [ ...cases... ]
-            // We want to preserve the structure for easier parsing later, or just pass it all through.
-            // The header includes the value being switched on and the default label.
-            const headerText = header.sourceString.trim();
-            const casesText = cases.children.map((c: any) => c.sourceString.trim()).join(' ');
+        SwitchInstruction(_switch: any, typeNode: any, valNode: any, _comma: any, _l: any, defaultLabel: any, _lb: any, cases: any, _rb: any, _meta: any) {
+            const caseNodes = cases.children.map((c: any) => c.toAST());
             return {
                 type: 'Instruction',
                 opcode: 'switch',
-                operands: `${headerText} [ ${casesText} ]`,
+                conditionType: typeNode.sourceString,
+                conditionValue: valNode.toAST(),
+                defaultTarget: defaultLabel.toAST(),
+                cases: caseNodes,
                 originalText: this.sourceString
-            } as LLVMInstruction;
+            } as LLVMSwitchInstruction;
+        },
+        SwitchCase(typeNode: any, valNode: any, _comma: any, _l: any, targetLabel: any) {
+            return {
+                type: typeNode.sourceString,
+                value: valNode.toAST(),
+                target: targetLabel.toAST()
+            };
         },
         Value(v: any) {
             const raw = v.sourceString;
@@ -236,6 +254,12 @@ function registerSemantics(semantics: ohm.Semantics) {
         },
         type(_content: any) {
             return this.sourceString;
+        },
+        LocalValue(_percent: any, val: any) {
+            return val.sourceString;
+        },
+        GlobalValue(_at: any, val: any) {
+            return val.sourceString;
         },
         _iter(...children: any[]) {
             return children.map(c => c.toAST());
@@ -341,44 +365,39 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                 const terminator = block.terminator;
 
                 if (terminator.opcode === 'br') {
-                    const text = terminator.operands;
+                    const br = terminator as LLVMBrInstruction;
+                    if (br.condition) {
+                        // Conditional Branch
+                        const trueTarget = br.trueTarget!;
+                        const falseTarget = br.falseTarget!;
 
-                    if (text.includes(',')) {
-                        const labelMatches = [...text.matchAll(/label\s+%?([\w.]+)/g)];
-                        if (labelMatches.length >= 2) {
-                            const trueTarget = labelMatches[0][1];
-                            const falseTarget = labelMatches[1][1];
+                        const trueId = `${funcPrefix}_block_${trueTarget}`;
+                        const falseId = `${funcPrefix}_block_${falseTarget}`;
 
-                            const trueId = `${funcPrefix}_block_${trueTarget}`;
-                            const falseId = `${funcPrefix}_block_${falseTarget}`;
-
-                            edges.push({
-                                id: `e-${blockId}-${trueId}-true`,
-                                source: blockId,
-                                target: trueId,
-                                label: 'true',
-                                type: 'arrow' // Using 'arrow' as standard edge
-                            });
-                            edges.push({
-                                id: `e-${blockId}-${falseId}-false`,
-                                source: blockId,
-                                target: falseId,
-                                label: 'false',
-                                type: 'arrow'
-                            });
-                        }
-                    } else {
-                        const match = text.match(/label\s+%?([\w.]+)/);
-                        if (match) {
-                            const target = match[1];
-                            const targetId = `${funcPrefix}_block_${target}`;
-                            edges.push({
-                                id: `e-${blockId}-${targetId}`,
-                                source: blockId,
-                                target: targetId,
-                                type: 'arrow'
-                            });
-                        }
+                        edges.push({
+                            id: `e-${blockId}-${trueId}-true`,
+                            source: blockId,
+                            target: trueId,
+                            label: 'true',
+                            type: 'arrow'
+                        });
+                        edges.push({
+                            id: `e-${blockId}-${falseId}-false`,
+                            source: blockId,
+                            target: falseId,
+                            label: 'false',
+                            type: 'arrow'
+                        });
+                    } else if (br.destination) {
+                        // Unconditional Branch
+                        const target = br.destination;
+                        const targetId = `${funcPrefix}_block_${target}`;
+                        edges.push({
+                            id: `e-${blockId}-${targetId}`,
+                            source: blockId,
+                            target: targetId,
+                            type: 'arrow'
+                        });
                     }
                 } else if (terminator.opcode === 'ret') {
                     // Unique exit per function? Or shared exit?
@@ -402,52 +421,34 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                         type: 'arrow'
                     });
                 } else if (terminator.opcode === 'switch') {
-                    // switch <intty> <value>, label <defaultdest> [ <intty> <val>, label <dest> ... ]
-                    // operands: "i32 %4, label %9 [ i32 10, label %5 ... ]"
-                    const operands = terminator.operands;
+                    const sw = terminator as LLVMSwitchInstruction;
 
-                    // 1. Extract default label
-                    // The default label is before the '['
-                    const headerPart = operands.split('[')[0];
-                    const defaultMatch = headerPart.match(/label\s+%?([\w.]+)/);
-                    if (defaultMatch) {
-                        const defaultTarget = defaultMatch[1];
-                        const defaultId = `${funcPrefix}_block_${defaultTarget}`;
-                        edges.push({
-                            id: `e-${blockId}-${defaultId}-default`,
-                            source: blockId,
-                            target: defaultId,
-                            label: 'default',
-                            type: 'arrow'
-                        });
-                    }
+                    // Default case
+                    const defaultTarget = sw.defaultTarget;
+                    const defaultId = `${funcPrefix}_block_${defaultTarget}`;
+                    edges.push({
+                        id: `e-${blockId}-${defaultId}-default`,
+                        source: blockId,
+                        target: defaultId,
+                        label: 'default',
+                        type: 'arrow'
+                    });
 
-                    // 2. Extract cases
-                    // The cases are inside '[ ... ]'
-                    const casesPart = operands.substring(operands.indexOf('[') + 1, operands.lastIndexOf(']'));
-                    // Cases format: i32 10, label %5 i32 20, label %6 ...
-                    // We can match "type value, label target"
-                    // Regex: \w+ [\w\d]+, label %?([\w.]+)
-                    // But we need the value to show on the edge label.
-                    // Let's use matchAll
-
-                    // Example case: i32 10, label %5
-                    // Type: [\w\[\]]+
-                    // Value: [\d]+ or similar
-                    // Label: label %?([\w.]+)
-                    const caseRegex = /[\w\[\]]+\s+(\d+),\s+label\s+%?([\w.]+)/g;
-                    const matches = [...casesPart.matchAll(caseRegex)];
-
-                    matches.forEach((match) => {
-                        const val = match[1]; // e.g. "10"
-                        const target = match[2]; // e.g. "5"
+                    // Other cases
+                    sw.cases.forEach((c) => {
+                        const val = c.value;
+                        const target = c.target;
                         const targetId = `${funcPrefix}_block_${target}`;
 
                         edges.push({
                             id: `e-${blockId}-${targetId}-case-${val}`,
                             source: blockId,
                             target: targetId,
-                            label: val,
+                            label: val, // We need the value from AST. Currently AST has `value` as node, need string? 
+                            // Wait, `value` in switch case is `type Value`. `toAST` returns it as string if it's digit or %val. 
+                            // Let's check `SwitchCase` semantics. 
+                            // `value` is `valNode.toAST()`. `Value` rule returns string (substring(1) if %) or digits. 
+                            // So it is a string.
                             type: 'arrow'
                         });
                     });

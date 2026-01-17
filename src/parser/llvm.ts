@@ -254,7 +254,43 @@ function convertASTToGraph(module: LLVMModule): GraphData {
         });
     }
 
-    // 2. Process Functions
+    // 2. Process Attributes
+    if (module.attributes) {
+        module.attributes.forEach(attr => {
+            nodes.push({
+                id: uniqueId('attr', attr.id),
+                label: attr.originalText,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 3. Process Metadata
+    if (module.metadata) {
+        module.metadata.forEach(meta => {
+            nodes.push({
+                id: uniqueId('meta', meta.id),
+                label: meta.originalText,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 4. Process Declarations
+    if (module.declarations) {
+        module.declarations.forEach(decl => {
+            nodes.push({
+                id: uniqueId('decl', decl.name),
+                label: decl.definition,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 5. Process Functions
     module.functions.forEach(func => {
         // Namespace function blocks to avoid collisions if multiple functions use same labels (e.g. "entry")
         // Although LLVM IR usually has implicit or explicit numbering that prevents simple clashes,

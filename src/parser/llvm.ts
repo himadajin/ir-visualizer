@@ -62,7 +62,7 @@ function registerSemantics(semantics: ohm.Semantics) {
                 entry: entryNode
             } as LLVMFunction;
         },
-        Declaration(_declare: any, rest: any) {
+        Declaration(_declare: any, _rest: any) {
             return {
                 type: 'Declaration',
                 name: 'declaration', // We could parse declaration name if needed, but for now just stashing text
@@ -110,9 +110,7 @@ function registerSemantics(semantics: ohm.Semantics) {
                 originalText: this.sourceString
             };
         },
-        TypeAlias(name: any, _eq: any, _type: any, _rest: any) {
-            // Treat as global var for now or ignore? 
-            // Maybe ignore for graph visualization unless requested.
+        TypeAlias(_name: any, _eq: any, _type: any, _rest: any) {
             return null;
         },
         FuncHeader(_content: any) {

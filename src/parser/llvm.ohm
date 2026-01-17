@@ -10,10 +10,32 @@ LLVM {
   space += comment
 
   Module = TopLevel*
-  TopLevel = Function | (~"define" any)+
+  
+  TopLevel = 
+    | Function
+    | Declaration
+    | GlobalAssignment
+    | AttributeDef
+    | MetadataDef
+    | TargetDef
+    | TypeAlias
+    | EmptyLine
+
+  EmptyLine = space+
 
   // Function
-  Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
+  Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs? "{" EntryBasicBlock BasicBlock* "}"
+  Declaration = "declare" (~"\n" any)*
+  GlobalAssignment = GlobalValue "=" (~"\n" any)*
+  AttributeDef = "attributes" AttributeID "=" (~"\n" any)*
+  MetadataDef = MetadataID "=" (~"\n" any)*
+  TargetDef = "target" (~"\n" any)*
+  TypeAlias = LocalValue "=" "type" (~"\n" any)*
+
+  AttributeID = AttributeIDNumeric | AttributeIDString
+  AttributeIDNumeric = "#" digit+
+  AttributeIDString = "#" stringLiteral
+  MetadataID = "!" (digit | ident | ".") +
   FuncHeader = (~GlobalValue any)*
   FuncAttrs = (~"{" any)*
   Params = Param ("," Param)*

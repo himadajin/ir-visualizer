@@ -1,6 +1,11 @@
 export interface LLVMModule {
     type: 'Module';
     functions: LLVMFunction[];
+    globalVariables: LLVMGlobalVariable[];
+    attributes: LLVMAttributeGroup[];
+    metadata: LLVMMetadata[];
+    declarations: LLVMDeclaration[];
+    targets: LLVMTarget[];
 }
 
 export interface LLVMFunction {
@@ -33,6 +38,39 @@ export interface LLVMInstruction {
     result?: string; // LHS (Defined operand, e.g. "%1")
     operands: string; // RHS (e.g. "i32 0, i32 0") - keeping as string for now
     originalText: string;
+}
+
+export interface LLVMGlobalVariable {
+    type: 'GlobalVariable';
+    name: string;
+    value: string;
+    originalText: string;
+}
+
+export interface LLVMAttributeGroup {
+    type: 'AttributeGroup';
+    id: string;
+    value: string;
+    originalText: string;
+}
+
+export interface LLVMMetadata {
+    type: 'Metadata';
+    id: string; // e.g. "!0" or "!llvm.module.flags"
+    value: string;
+    originalText: string;
+}
+
+export interface LLVMDeclaration {
+    type: 'Declaration';
+    name: string;
+    definition: string;
+}
+
+export interface LLVMTarget {
+    type: 'Target';
+    key: string;
+    value: string;
 }
 
 export interface LLVMDebugRecord {

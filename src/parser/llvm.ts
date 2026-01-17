@@ -1,7 +1,7 @@
 import * as ohm from 'ohm-js';
 import llvmGrammar from './llvm.ohm?raw';
 import type { GraphData, GraphNode, GraphEdge } from '../types/graph';
-import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction, LLVMDebugRecord, LLVMBasicBlockItem, LLVMBrInstruction, LLVMRetInstruction, LLVMSwitchInstruction } from './llvmAST';
+import type { LLVMModule, LLVMFunction, LLVMBasicBlock, LLVMInstruction, LLVMDebugRecord, LLVMBasicBlockItem, LLVMBrInstruction, LLVMRetInstruction, LLVMSwitchInstruction, LLVMOperand } from './llvmAST';
 
 let _grammar: ohm.Grammar | null = null;
 let _semantics: ohm.Semantics | null = null;
@@ -174,28 +174,140 @@ function registerSemantics(semantics: ohm.Semantics) {
         Instruction(inner: any) {
             return inner.toAST();
         },
-        AssignInstruction(localVal: any, _eq: any, opcodeNode: any, argsNode: any, _meta: any) {
-            const result = localVal.sourceString;
+        StoreInstruction(_store: any, argsNode: any, _meta: any) {
+            const parts = argsNode.toAST();
+            const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
+
+            // Logic: The LAST Local/Global operand is the pointer (Write).
+            let lastIdx = -1;
+            operandsList.forEach((op, i) => {
+                if (op.type === 'Local' || op.type === 'Global') lastIdx = i;
+            });
+
+            const usage = operandsList.map((op, i) => {
+                if (i === lastIdx) {
+                    return { ...op, isWrite: true };
+                }
+                return op;
+            });
+
             return {
                 type: 'Instruction',
-                opcode: opcodeNode.sourceString,
+                opcode: 'store',
+                operands: argsNode.sourceString.trim(),
+                usage: usage,
+                originalText: this.sourceString
+            } as LLVMInstruction;
+        },
+        CmpxchgInstruction(_cmpxchg: any, argsNode: any, _meta: any) {
+            const parts = argsNode.toAST();
+            const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
+
+            // Logic: The first operand is pointer (write).
+            let valCount = 0;
+            const usage = operandsList.map(op => {
+                if (op.type === 'Local' || op.type === 'Global') {
+                    valCount++;
+                    if (valCount === 1) {
+                        return { ...op, isWrite: true };
+                    }
+                }
+                return op;
+            });
+
+            return {
+                type: 'Instruction',
+                opcode: 'cmpxchg',
+                operands: argsNode.sourceString.trim(),
+                usage: usage,
+                originalText: this.sourceString
+            } as LLVMInstruction;
+        },
+        AtomicRMWInstruction(_atomicrmw: any, argsNode: any, _meta: any) {
+            const parts = argsNode.toAST();
+            const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
+
+            // Logic: The first operand is pointer (write).
+            let valCount = 0;
+            const usage = operandsList.map(op => {
+                if (op.type === 'Local' || op.type === 'Global') {
+                    valCount++;
+                    if (valCount === 1) {
+                        return { ...op, isWrite: true };
+                    }
+                }
+                return op;
+            });
+
+            return {
+                type: 'Instruction',
+                opcode: 'atomicrmw',
+                operands: argsNode.sourceString.trim(),
+                usage: usage,
+                originalText: this.sourceString
+            } as LLVMInstruction;
+        },
+        AssignInstruction(localVal: any, _eq: any, opcodeNode: any, argsNode: any, _meta: any) {
+            const result = localVal.sourceString;
+            const opcode = opcodeNode.sourceString;
+            const parts = argsNode.toAST(); // Returns array of (LLVMOperand (partial) | null)
+            const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
+
+            // Default: all read
+            const usage = operandsList;
+
+            return {
+                type: 'Instruction',
+                opcode: opcode,
                 result: result,
                 operands: argsNode.sourceString.trim(),
+                usage: usage,
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
         GenericInstruction(opcodeNode: any, argsNode: any, _meta: any) {
+            const opcode = opcodeNode.sourceString;
+            const parts = argsNode.toAST();
+            if (_meta.numChildren > 0) {
+                // Metadata consumed
+            }
+            const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
+
+            // Default: all read
+            const usage = operandsList;
+
             return {
                 type: 'Instruction',
-                opcode: opcodeNode.sourceString,
+                opcode: opcode,
                 operands: argsNode.sourceString.trim(),
+                usage: usage,
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
-        opcode(_id: any) {
-            return this.sourceString;
+        args(parts: any) {
+            return parts.children.map((c: any) => c.toAST());
         },
-        args(_content: any) {
+        argPart(inner: any) {
+            // inner is a CST node. We check its rule name to determine type.
+            const node = inner.toAST();
+            const ruleName = inner.ctorName;
+
+            if (ruleName === 'globalValue') {
+                return { type: 'Global', value: node, isWrite: false };
+            }
+            if (ruleName === 'localValue') {
+                return { type: 'Local', value: node, isWrite: false };
+            }
+            if (ruleName === 'metadataID') {
+                return { type: 'Metadata', value: node, isWrite: false };
+            }
+            // argText returns null
+            return null;
+        },
+        argText(_chars: any) {
+            return null;
+        },
+        metadataID(_bang: any, _rest: any) {
             return this.sourceString;
         },
         Terminator(inner: any) {
@@ -255,10 +367,10 @@ function registerSemantics(semantics: ohm.Semantics) {
         type(_content: any) {
             return this.sourceString;
         },
-        LocalValue(_percent: any, val: any) {
+        localValue(_percent: any, val: any) {
             return val.sourceString;
         },
-        GlobalValue(_at: any, val: any) {
+        globalValue(_at: any, val: any) {
             return val.sourceString;
         },
         _iter(...children: any[]) {
@@ -480,3 +592,13 @@ export function parseLLVM(input: string): GraphData {
     const nodes = semantics(match).toAST() as LLVMModule;
     return convertASTToGraph(nodes);
 }
+
+export function parseLLVMToAST(input: string): LLVMModule {
+    const { grammar, semantics } = getGrammarAndSemantics();
+    const match = grammar.match(input);
+    if (match.failed()) {
+        throw new Error(match.message);
+    }
+    return semantics(match).toAST() as LLVMModule;
+}
+

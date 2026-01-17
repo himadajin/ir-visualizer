@@ -38,7 +38,15 @@ export interface LLVMInstruction {
     opcode: string;
     result?: string; // LHS (Defined operand, e.g. "%1")
     operands: string; // RHS (e.g. "i32 0, i32 0") - keeping as string for now
+    usage: LLVMOperand[];
     originalText: string;
+}
+
+export interface LLVMOperand {
+    type: 'Local' | 'Global' | 'Metadata';
+    value: string;
+    isWrite: boolean;
+
 }
 
 export type LLVMTerminator = LLVMBrInstruction | LLVMRetInstruction | LLVMSwitchInstruction | LLVMInstruction;

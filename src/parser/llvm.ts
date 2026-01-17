@@ -23,22 +23,29 @@ function getGrammarAndSemantics() {
 function registerSemantics(semantics: ohm.Semantics) {
     semantics.addOperation<any>('toAST', {
         Module(topLevels: any) {
-            const children = topLevels.children.map((c: any) => c.toAST());
-            const functions = children.filter((c: any) => c && c.type === 'Function');
+            const children = topLevels.children.map((c: any) => c.toAST()).filter((c: any) => c !== null);
             return {
                 type: 'Module',
-                functions: functions
+                functions: children.filter((c: any) => c && c.type === 'Function'),
+                globalVariables: children.filter((c: any) => c && c.type === 'GlobalVariable'),
+                attributes: children.filter((c: any) => c && c.type === 'AttributeGroup'),
+                metadata: children.filter((c: any) => c && c.type === 'Metadata'),
+                declarations: children.filter((c: any) => c && c.type === 'Declaration'),
+                targets: children.filter((c: any) => c && c.type === 'Target'),
+                sourceFilenames: children.filter((c: any) => c && c.type === 'SourceFilename'),
             } as LLVMModule;
         },
         TopLevel(content: any) {
-            if (content.ctorName === 'Function') {
-                return content.toAST();
-            }
+            return content.toAST();
+        },
+        EmptyLine(_space: any) {
             return null;
         },
         Function(def: any, header: any, name: any, lp: any, paramsNode: any, rp: any, attrs: any, _lb: any, entryBlock: any, otherBlocks: any, _rb: any) {
             const funcName = name.sourceString;
-            const definition = `${def.sourceString} ${header.sourceString} ${funcName} ${lp.sourceString}${paramsNode.sourceString}${rp.sourceString} ${attrs.sourceString}`.trim().replace(/\s+/g, ' ');
+            // Handle optional attrs (Ohm ? produces empty list or result)
+            const attrsStr = attrs.numChildren > 0 ? attrs.sourceString : '';
+            const definition = `${def.sourceString} ${header.sourceString} ${funcName} ${lp.sourceString}${paramsNode.sourceString}${rp.sourceString} ${attrsStr}`.trim().replace(/\s+/g, ' ');
 
             const entryNode = entryBlock.toAST();
             const otherBlockNodes = otherBlocks.children.map((b: any) => b.toAST());
@@ -54,6 +61,59 @@ function registerSemantics(semantics: ohm.Semantics) {
                 definition: definition,
                 entry: entryNode
             } as LLVMFunction;
+        },
+        Declaration(_declare: any, rest: any) {
+            return {
+                type: 'Declaration',
+                name: 'declaration', // We could parse declaration name if needed, but for now just stashing text
+                definition: this.sourceString.trim()
+            };
+        },
+        GlobalAssignment(name: any, _eq: any, _rest: any) {
+            const gName = name.sourceString;
+            const fullText = this.sourceString;
+            const value = fullText.substring(fullText.indexOf('=') + 1).trim();
+            return {
+                type: 'GlobalVariable',
+                name: gName,
+                value: value,
+                originalText: fullText
+            };
+        },
+        AttributeDef(_attr: any, id: any, _eq: any, _rest: any) {
+            return {
+                type: 'AttributeGroup',
+                id: id.sourceString,
+                value: this.sourceString.substring(this.sourceString.indexOf('=') + 1).trim(),
+                originalText: this.sourceString
+            };
+        },
+        MetadataDef(id: any, _eq: any, _rest: any) {
+            return {
+                type: 'Metadata',
+                id: id.sourceString,
+                value: this.sourceString.substring(this.sourceString.indexOf('=') + 1).trim(),
+                originalText: this.sourceString
+            };
+        },
+        TargetDef(target: any, _rest: any) {
+            return {
+                type: 'Target',
+                key: target.sourceString,
+                value: this.sourceString.trim()
+            };
+        },
+        SourceFilename(_sf: any, _eq: any, name: any) {
+            return {
+                type: 'SourceFilename',
+                name: name.sourceString,
+                originalText: this.sourceString
+            };
+        },
+        TypeAlias(name: any, _eq: any, _type: any, _rest: any) {
+            // Treat as global var for now or ignore? 
+            // Maybe ignore for graph visualization unless requested.
+            return null;
         },
         FuncHeader(_content: any) {
             return this.sourceString;
@@ -76,13 +136,6 @@ function registerSemantics(semantics: ohm.Semantics) {
             const labelNode = labelOpt.numChildren > 0 ? labelOpt.children[0].toAST() : null;
             const itemNodes: LLVMBasicBlockItem[] = items.children.map((i: any) => i.toAST());
             const termNode: LLVMInstruction = terminator.toAST();
-            // NOTE: converting LLVMInstruction[] to LLVMBasicBlockItem[] is trivial via covariance if structured correctly, 
-            // but we need to make sure terminator (LLVMInstruction) is also part of instructions if desired?
-            // The previous logic was: const allInstructions = [...instNodes, termNode];
-            // But now instNodes can be DebugRecords. 
-            // LLVMBasicBlock.instructions is LLVMBasicBlockItem[].
-            // LLVMInstruction is a subtype of LLVMBasicBlockItem.
-            // So [...itemNodes, termNode] is valid.
             const allItems = [...itemNodes, termNode];
 
             return {
@@ -141,7 +194,6 @@ function registerSemantics(semantics: ohm.Semantics) {
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
-        // Lexical rules usually don't need explicit AST actions unless returning string
         opcode(_id: any) {
             return this.sourceString;
         },
@@ -187,8 +239,64 @@ function convertASTToGraph(module: LLVMModule): GraphData {
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];
 
+    // Helper to generate unique IDs if necessary
+    const uniqueId = (prefix: string, name: string) => `${prefix}_${name.replace(/[@%"]/g, '')}`;
+
+    // 1. Process Global Variables
+    if (module.globalVariables) {
+        module.globalVariables.forEach(gVar => {
+            nodes.push({
+                id: uniqueId('global', gVar.name),
+                label: gVar.originalText,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 2. Process Attributes
+    if (module.attributes) {
+        module.attributes.forEach(attr => {
+            nodes.push({
+                id: uniqueId('attr', attr.id),
+                label: attr.originalText,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 3. Process Metadata
+    if (module.metadata) {
+        module.metadata.forEach(meta => {
+            nodes.push({
+                id: uniqueId('meta', meta.id),
+                label: meta.originalText,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 4. Process Declarations
+    if (module.declarations) {
+        module.declarations.forEach(decl => {
+            nodes.push({
+                id: uniqueId('decl', decl.name),
+                label: decl.definition,
+                type: 'square',
+                language: 'llvm'
+            });
+        });
+    }
+
+    // 5. Process Functions
     module.functions.forEach(func => {
-        const headerId = `header_${func.name}`;
+        // Namespace function blocks to avoid collisions if multiple functions use same labels (e.g. "entry")
+        // Although LLVM IR usually has implicit or explicit numbering that prevents simple clashes,
+        // separate functions definitely have separate scopes.
+        const funcPrefix = uniqueId('func', func.name);
+        const headerId = `${funcPrefix}_header`;
 
         // Entry Node
         nodes.push({
@@ -201,22 +309,19 @@ function convertASTToGraph(module: LLVMModule): GraphData {
         const blocks = func.blocks;
 
         blocks.forEach((block) => {
-            const blockId = block.id;
+            // Block IDs need to be scoped to function because 'entry' or numbered blocks '%1' repeat across functions.
+            // Using a composite ID: funcName_blockName
+            const rawBlockId = block.id;
+            // block.id comes from Label rule (ident) or 'entry'. 
+            // If it's a numeric label from source (like "4:"), ohm might capture "4".
+            const blockId = `${funcPrefix}_block_${rawBlockId}`;
 
             const codeContent = block.instructions.map(i => i.originalText).join('\n');
 
             nodes.push({
                 id: blockId,
                 label: codeContent,
-                blockLabel: block.label || undefined, // explicit undefined if null? CodeNode handles it? No, type is string | undefined
-                // Wait, if block.label is null, passing undefined is correct for Typescript if interface says string | undefined.
-                // But I want to pass null to CodeNode? CodeNode checks falsy.
-                // Wait, I planned to change CodeNode to check specifically for null.
-                // GraphNode interface in types/graph might strict it.
-                // Let's check GraphNode type first? No time.
-                // I will pass block.label as is (string | null).
-                // GraphNode interface probably allows any prop?
-                // Let's assume blockLabel can be string | null.
+                blockLabel: block.label || undefined,
                 type: 'square',
                 language: 'llvm'
             });
@@ -233,17 +338,20 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                             const trueTarget = labelMatches[0][1];
                             const falseTarget = labelMatches[1][1];
 
+                            const trueId = `${funcPrefix}_block_${trueTarget}`;
+                            const falseId = `${funcPrefix}_block_${falseTarget}`;
+
                             edges.push({
-                                id: `e-${blockId}-${trueTarget}-true`,
+                                id: `e-${blockId}-${trueId}-true`,
                                 source: blockId,
-                                target: trueTarget,
+                                target: trueId,
                                 label: 'true',
-                                type: 'arrow'
+                                type: 'arrow' // Using 'arrow' as standard edge
                             });
                             edges.push({
-                                id: `e-${blockId}-${falseTarget}-false`,
+                                id: `e-${blockId}-${falseId}-false`,
                                 source: blockId,
-                                target: falseTarget,
+                                target: falseId,
                                 label: 'false',
                                 type: 'arrow'
                             });
@@ -252,19 +360,34 @@ function convertASTToGraph(module: LLVMModule): GraphData {
                         const match = text.match(/label\s+%?([\w.]+)/);
                         if (match) {
                             const target = match[1];
+                            const targetId = `${funcPrefix}_block_${target}`;
                             edges.push({
-                                id: `e-${blockId}-${target}`,
+                                id: `e-${blockId}-${targetId}`,
                                 source: blockId,
-                                target: target,
+                                target: targetId,
                                 type: 'arrow'
                             });
                         }
                     }
                 } else if (terminator.opcode === 'ret') {
+                    // Unique exit per function? Or shared exit?
+                    // Typically CFG has unique exit per function.
+                    const exitId = `${funcPrefix}_exit`;
+
+                    // Check if exit node exists for this function, if not add it
+                    if (!nodes.find(n => n.id === exitId)) {
+                        nodes.push({
+                            id: exitId,
+                            label: 'exit',
+                            type: 'round', // Exit is usually round
+                            language: 'text'
+                        });
+                    }
+
                     edges.push({
-                        id: `e-${blockId}-exit`,
+                        id: `e-${blockId}-${exitId}`,
                         source: blockId,
-                        target: 'exit',
+                        target: exitId,
                         type: 'arrow'
                     });
                 }
@@ -272,24 +395,15 @@ function convertASTToGraph(module: LLVMModule): GraphData {
         });
 
         if (func.entry) {
+            const entryBlockId = `${funcPrefix}_block_${func.entry.id}`;
             edges.push({
-                id: `e-${headerId}-${func.entry.id}`,
+                id: `e-${headerId}-${entryBlockId}`,
                 source: headerId,
-                target: func.entry.id,
+                target: entryBlockId,
                 type: 'arrow'
             });
         }
     });
-
-    const hasExit = edges.some(e => e.target === 'exit');
-    if (hasExit) {
-        nodes.push({
-            id: 'exit',
-            label: 'exit',
-            type: 'round',
-            language: 'text'
-        });
-    }
 
     return { nodes, edges, direction: 'TD' };
 }

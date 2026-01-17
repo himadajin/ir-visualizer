@@ -1,6 +1,12 @@
 export interface LLVMModule {
     type: 'Module';
     functions: LLVMFunction[];
+    globalVariables: LLVMGlobalVariable[];
+    attributes: LLVMAttributeGroup[];
+    metadata: LLVMMetadata[];
+    declarations: LLVMDeclaration[];
+    targets: LLVMTarget[];
+    sourceFilenames: LLVMSourceFilename[];
 }
 
 export interface LLVMFunction {
@@ -35,8 +41,47 @@ export interface LLVMInstruction {
     originalText: string;
 }
 
+export interface LLVMGlobalVariable {
+    type: 'GlobalVariable';
+    name: string;
+    value: string;
+    originalText: string;
+}
+
+export interface LLVMAttributeGroup {
+    type: 'AttributeGroup';
+    id: string;
+    value: string;
+    originalText: string;
+}
+
+export interface LLVMMetadata {
+    type: 'Metadata';
+    id: string; // e.g. "!0" or "!llvm.module.flags"
+    value: string;
+    originalText: string;
+}
+
+export interface LLVMDeclaration {
+    type: 'Declaration';
+    name: string;
+    definition: string;
+}
+
+export interface LLVMTarget {
+    type: 'Target';
+    key: string;
+    value: string;
+}
+
 export interface LLVMDebugRecord {
     type: 'DebugRecord';
     content: string;
+    originalText: string;
+}
+
+export interface LLVMSourceFilename {
+    type: 'SourceFilename';
+    name: string;
     originalText: string;
 }

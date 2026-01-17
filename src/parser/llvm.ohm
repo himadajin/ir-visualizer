@@ -19,7 +19,10 @@ LLVM {
     | MetadataDef
     | TargetDef
     | TypeAlias
+    | SourceFilename
     | EmptyLine
+
+  SourceFilename = "source_filename" "=" stringLiteral
 
   EmptyLine = space+
 

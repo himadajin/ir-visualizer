@@ -6,6 +6,7 @@ export interface LLVMModule {
     metadata: LLVMMetadata[];
     declarations: LLVMDeclaration[];
     targets: LLVMTarget[];
+    sourceFilenames: LLVMSourceFilename[];
 }
 
 export interface LLVMFunction {
@@ -76,5 +77,11 @@ export interface LLVMTarget {
 export interface LLVMDebugRecord {
     type: 'DebugRecord';
     content: string;
+    originalText: string;
+}
+
+export interface LLVMSourceFilename {
+    type: 'SourceFilename';
+    name: string;
     originalText: string;
 }

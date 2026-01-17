@@ -32,6 +32,7 @@ function registerSemantics(semantics: ohm.Semantics) {
                 metadata: children.filter((c: any) => c && c.type === 'Metadata'),
                 declarations: children.filter((c: any) => c && c.type === 'Declaration'),
                 targets: children.filter((c: any) => c && c.type === 'Target'),
+                sourceFilenames: children.filter((c: any) => c && c.type === 'SourceFilename'),
             } as LLVMModule;
         },
         TopLevel(content: any) {
@@ -100,6 +101,13 @@ function registerSemantics(semantics: ohm.Semantics) {
                 type: 'Target',
                 key: target.sourceString,
                 value: this.sourceString.trim()
+            };
+        },
+        SourceFilename(_sf: any, _eq: any, name: any) {
+            return {
+                type: 'SourceFilename',
+                name: name.sourceString,
+                originalText: this.sourceString
             };
         },
         TypeAlias(name: any, _eq: any, _type: any, _rest: any) {

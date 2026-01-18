@@ -43,7 +43,7 @@ export type LLVMInstruction =
     | LLVMCallInstruction
     | LLVMGenericInstruction;
 
-// Base interface for shared properties if needed, 
+// Base interface for shared properties if needed,
 // allows discriminated union by 'opcode' effectively if we expand it properly, 
 // but for now we rely on the specific interfaces.
 interface LLVMInstructionBase {
@@ -80,7 +80,7 @@ export interface LLVMCallInstruction extends LLVMInstructionBase {
 }
 
 export interface LLVMOperand {
-    type: 'Local' | 'Global' | 'Metadata' | 'Type' | 'Other';
+    type: 'Local' | 'Global' | 'Metadata' | 'Other';
     value: string;
     isWrite: boolean;
 }

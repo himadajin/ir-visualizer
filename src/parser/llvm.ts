@@ -20,22 +20,7 @@ function getGrammarAndSemantics() {
     return { grammar: _grammar, semantics: _semantics! };
 }
 
-function classifyArgText(text: string): 'Type' | 'Other' {
-    const t = text.trim();
-    if (t.startsWith('i') && /^\d+$/.test(t.substring(1))) return 'Type'; // i32, i64, etc.
-    if (['void', 'half', 'float', 'double', 'x86_fp80', 'fp128', 'ppc_fp128', 'label', 'metadata', 'x86_mmx', 'ptr'].includes(t)) return 'Type';
-    if (t.startsWith('<') || t.startsWith('[') || t.startsWith('{')) return 'Type';
 
-    // Keywords often found in instructions that act as 'Other'
-    if (['nuw', 'nsw', 'exact', 'inbounds', 'acquire', 'release', 'acq_rel', 'seq_cst', 'monotonic', 'unordered', 'volatile', 'align', 'byval', 'sret', 'inreg', 'nest', 'noalias', 'nocapture', 'writeonly', 'readnone', 'readonly'].includes(t)) return 'Other';
-
-    // Fallback: if it looks like a type?
-    // Maybe checking if it ends with '*' (pointer) but 'ptr' is opaque pointer now.
-    // Old pointers: 'i32*' etc.
-    if (t.endsWith('*')) return 'Type';
-
-    return 'Other';
-}
 
 function registerSemantics(semantics: ohm.Semantics) {
     semantics.addOperation<any>('toAST', {
@@ -358,7 +343,7 @@ function registerSemantics(semantics: ohm.Semantics) {
             }
             if (ruleName === 'argText') {
                 // node is the string
-                return { type: classifyArgText(node), value: node, isWrite: false };
+                return { type: 'Other', value: node, isWrite: false };
             }
 
             // Should not happen with new grammar

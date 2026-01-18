@@ -33,50 +33,80 @@ export interface LLVMBasicBlock {
 
 export type LLVMBasicBlockItem = LLVMInstruction | LLVMDebugRecord;
 
-export interface LLVMInstruction {
+export type LLVMInstruction =
+    | LLVMStoreInstruction
+    | LLVMCmpxchgInstruction
+    | LLVMAtomicRMWInstruction
+    | LLVMBrInstruction
+    | LLVMRetInstruction
+    | LLVMSwitchInstruction
+    | LLVMCallInstruction
+    | LLVMGenericInstruction;
+
+// Base interface for shared properties if needed, 
+// allows discriminated union by 'opcode' effectively if we expand it properly, 
+// but for now we rely on the specific interfaces.
+interface LLVMInstructionBase {
     type: 'Instruction';
-    opcode: string;
-    result?: string; // LHS (Defined operand, e.g. "%1")
-    operands: string; // RHS (e.g. "i32 0, i32 0") - keeping as string for now
-    usage: LLVMOperand[];
     originalText: string;
 }
 
-export interface LLVMOperand {
-    type: 'Local' | 'Global' | 'Metadata';
-    value: string;
-    isWrite: boolean;
-
+export interface LLVMGenericInstruction extends LLVMInstructionBase {
+    opcode: string;
+    result?: string;
+    operands: LLVMOperand[];
 }
 
-export type LLVMTerminator = LLVMBrInstruction | LLVMRetInstruction | LLVMSwitchInstruction | LLVMInstruction;
+export interface LLVMStoreInstruction extends LLVMInstructionBase {
+    opcode: 'store';
+    operands: LLVMOperand[];
+}
 
-export interface LLVMBrInstruction {
-    type: 'Instruction';
+export interface LLVMCmpxchgInstruction extends LLVMInstructionBase {
+    opcode: 'cmpxchg';
+    operands: LLVMOperand[];
+}
+
+export interface LLVMAtomicRMWInstruction extends LLVMInstructionBase {
+    opcode: 'atomicrmw';
+    operands: LLVMOperand[];
+}
+
+export interface LLVMCallInstruction extends LLVMInstructionBase {
+    opcode: string; // 'call', 'tail call', etc.
+    callee: string;
+    args: LLVMOperand[];
+    dest?: string; // result variable
+}
+
+export interface LLVMOperand {
+    type: 'Local' | 'Global' | 'Metadata' | 'Type' | 'Other';
+    value: string;
+    isWrite: boolean;
+}
+
+export type LLVMTerminator = LLVMBrInstruction | LLVMRetInstruction | LLVMSwitchInstruction | LLVMCallInstruction | LLVMGenericInstruction;
+
+export interface LLVMBrInstruction extends LLVMInstructionBase {
     opcode: 'br';
     destination?: string; // For unconditional br
     condition?: string;   // For conditional br
     trueTarget?: string;  // For conditional br
     falseTarget?: string; // For conditional br
-    originalText: string;
 }
 
-export interface LLVMRetInstruction {
-    type: 'Instruction';
+export interface LLVMRetInstruction extends LLVMInstructionBase {
     opcode: 'ret';
     valType?: string;
     value?: string;
-    originalText: string;
 }
 
-export interface LLVMSwitchInstruction {
-    type: 'Instruction';
+export interface LLVMSwitchInstruction extends LLVMInstructionBase {
     opcode: 'switch';
     conditionType: string;
     conditionValue: string;
     defaultTarget: string;
     cases: LLVMSwitchCase[];
-    originalText: string;
 }
 
 export interface LLVMSwitchCase {

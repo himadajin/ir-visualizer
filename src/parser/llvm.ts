@@ -20,6 +20,23 @@ function getGrammarAndSemantics() {
     return { grammar: _grammar, semantics: _semantics! };
 }
 
+function classifyArgText(text: string): 'Type' | 'Other' {
+    const t = text.trim();
+    if (t.startsWith('i') && /^\d+$/.test(t.substring(1))) return 'Type'; // i32, i64, etc.
+    if (['void', 'half', 'float', 'double', 'x86_fp80', 'fp128', 'ppc_fp128', 'label', 'metadata', 'x86_mmx', 'ptr'].includes(t)) return 'Type';
+    if (t.startsWith('<') || t.startsWith('[') || t.startsWith('{')) return 'Type';
+
+    // Keywords often found in instructions that act as 'Other'
+    if (['nuw', 'nsw', 'exact', 'inbounds', 'acquire', 'release', 'acq_rel', 'seq_cst', 'monotonic', 'unordered', 'volatile', 'align', 'byval', 'sret', 'inreg', 'nest', 'noalias', 'nocapture', 'writeonly', 'readnone', 'readonly'].includes(t)) return 'Other';
+
+    // Fallback: if it looks like a type?
+    // Maybe checking if it ends with '*' (pointer) but 'ptr' is opaque pointer now.
+    // Old pointers: 'i32*' etc.
+    if (t.endsWith('*')) return 'Type';
+
+    return 'Other';
+}
+
 function registerSemantics(semantics: ohm.Semantics) {
     semantics.addOperation<any>('toAST', {
         Module(topLevels: any) {
@@ -184,7 +201,7 @@ function registerSemantics(semantics: ohm.Semantics) {
                 if (op.type === 'Local' || op.type === 'Global') lastIdx = i;
             });
 
-            const usage = operandsList.map((op, i) => {
+            const operands = operandsList.map((op, i) => {
                 if (i === lastIdx) {
                     return { ...op, isWrite: true };
                 }
@@ -194,8 +211,7 @@ function registerSemantics(semantics: ohm.Semantics) {
             return {
                 type: 'Instruction',
                 opcode: 'store',
-                operands: argsNode.sourceString.trim(),
-                usage: usage,
+                operands: operands,
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
@@ -204,8 +220,9 @@ function registerSemantics(semantics: ohm.Semantics) {
             const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
 
             // Logic: The first operand is pointer (write).
+            // cmpxchg <ty> <pointer>, <ty> <cmp>, <ty> <new> [sync scope] <ordering> <failure_ordering>
             let valCount = 0;
-            const usage = operandsList.map(op => {
+            const operands = operandsList.map(op => {
                 if (op.type === 'Local' || op.type === 'Global') {
                     valCount++;
                     if (valCount === 1) {
@@ -218,8 +235,7 @@ function registerSemantics(semantics: ohm.Semantics) {
             return {
                 type: 'Instruction',
                 opcode: 'cmpxchg',
-                operands: argsNode.sourceString.trim(),
-                usage: usage,
+                operands: operands,
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
@@ -228,8 +244,9 @@ function registerSemantics(semantics: ohm.Semantics) {
             const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
 
             // Logic: The first operand is pointer (write).
+            // atomicrmw <op> <ty> <pointer>, <ty> <val> <ordering>
             let valCount = 0;
-            const usage = operandsList.map(op => {
+            const operands = operandsList.map(op => {
                 if (op.type === 'Local' || op.type === 'Global') {
                     valCount++;
                     if (valCount === 1) {
@@ -242,53 +259,91 @@ function registerSemantics(semantics: ohm.Semantics) {
             return {
                 type: 'Instruction',
                 opcode: 'atomicrmw',
-                operands: argsNode.sourceString.trim(),
-                usage: usage,
+                operands: operands,
+                originalText: this.sourceString
+            } as LLVMInstruction;
+        },
+        CallTarget(localVal: any, _eq: any) {
+            return localVal.sourceString;
+        },
+        CallInstruction(targetOpt: any, opcodeNode: any, preArgsNode: any, _lp: any, argsNode: any, _rp: any, _postArgsNode: any, _meta: any) {
+            const dest = targetOpt.numChildren > 0 ? targetOpt.children[0].toAST() : undefined;
+            const opcode = opcodeNode.sourceString; // 'call', 'tail call', etc.
+
+            const preArgs: LLVMOperand[] = preArgsNode.toAST().filter((p: any) => p !== null);
+            const callArgs: LLVMOperand[] = argsNode.toAST().filter((p: any) => p !== null);
+
+
+            // Find callee in preArgs: usually the last Local or Global
+            let callee = "";
+            // If no Local/Global, maybe it's an inline asm or constant, but identifying last 'value' is a good heuristic.
+            for (let i = preArgs.length - 1; i >= 0; i--) {
+                const op = preArgs[i];
+                if (op.type === 'Local' || op.type === 'Global') {
+                    callee = op.value;
+                    break;
+                }
+            }
+            // If not found, maybe just take the last thing? 
+            if (!callee && preArgs.length > 0) {
+                callee = preArgs[preArgs.length - 1].value;
+            }
+
+            return {
+                type: 'Instruction',
+                opcode: opcode,
+                callee: callee,
+                args: callArgs,
+                dest: dest,
+                operands: [], // Keeping base interface happy if needed, or we can populate it with all args? 
+                // The base `LLVMInstruction` union type doesn't enforce `operands` on `CallInstruction` specifically 
+                // if we defined `LLVMCallInstruction` to extend `LLVMInstructionBase` and not `LLVMGenericInstruction`.
+                // But let's check LLVMInstruction type definition.
+                // It is a union. `LLVMCallInstruction` has `args`. 
+                // `LLVMStoreInstruction` has `operands`.
+                // Generic `LLVMInstruction` interface in `llvmAST.ts` (the old one) had `operands`. 
+                // But I replaced the type alias.
+                // So I don't need 'operands' here if `LLVMCallInstruction` interface doesn't require it.
+                // I checked `llvmAST.ts` content I wrote. `LLVMCallInstruction` does NOT have `operands`.
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
         AssignInstruction(localVal: any, _eq: any, opcodeNode: any, argsNode: any, _meta: any) {
             const result = localVal.sourceString;
             const opcode = opcodeNode.sourceString;
-            const parts = argsNode.toAST(); // Returns array of (LLVMOperand (partial) | null)
+            const parts = argsNode.toAST();
             const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
-
-            // Default: all read
-            const usage = operandsList;
 
             return {
                 type: 'Instruction',
                 opcode: opcode,
                 result: result,
-                operands: argsNode.sourceString.trim(),
-                usage: usage,
+                operands: operandsList,
                 originalText: this.sourceString
             } as LLVMInstruction;
         },
         GenericInstruction(opcodeNode: any, argsNode: any, _meta: any) {
             const opcode = opcodeNode.sourceString;
             const parts = argsNode.toAST();
-            if (_meta.numChildren > 0) {
-                // Metadata consumed
-            }
             const operandsList: LLVMOperand[] = parts.filter((p: any) => p !== null);
-
-            // Default: all read
-            const usage = operandsList;
 
             return {
                 type: 'Instruction',
                 opcode: opcode,
-                operands: argsNode.sourceString.trim(),
-                usage: usage,
+                operands: operandsList,
                 originalText: this.sourceString
             } as LLVMInstruction;
+        },
+        CallOpcode(_pre: any, _call: any) {
+            return this.sourceString; // "tail call" etc.
         },
         args(parts: any) {
             return parts.children.map((c: any) => c.toAST());
         },
         argPart(inner: any) {
-            // inner is a CST node. We check its rule name to determine type.
+            // inner can be globalValue, localValue, metadataID, "," or argText
+            if (inner.sourceString.trim() === ',') return null;
+
             const node = inner.toAST();
             const ruleName = inner.ctorName;
 
@@ -301,11 +356,16 @@ function registerSemantics(semantics: ohm.Semantics) {
             if (ruleName === 'metadataID') {
                 return { type: 'Metadata', value: node, isWrite: false };
             }
-            // argText returns null
+            if (ruleName === 'argText') {
+                // node is the string
+                return { type: classifyArgText(node), value: node, isWrite: false };
+            }
+
+            // Should not happen with new grammar
             return null;
         },
         argText(_chars: any) {
-            return null;
+            return this.sourceString;
         },
         metadataID(_bang: any, _rest: any) {
             return this.sourceString;

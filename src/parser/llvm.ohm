@@ -10,8 +10,8 @@ LLVM {
   space += comment
 
   Module = TopLevel*
-  
-  TopLevel = 
+
+  TopLevel =
     | Function
     | Declaration
     | GlobalAssignment
@@ -51,40 +51,48 @@ LLVM {
   Label = ident ":"
   DebugRecord = "#" restOfLine
   restOfLine = (~"\n" any)*
+
   // Instruction
-  Instruction = 
+  Instruction =
     | StoreInstruction
     | CmpxchgInstruction
     | AtomicRMWInstruction
+    | CallInstruction
     | AssignInstruction
     | GenericInstruction
-  
+
   StoreInstruction = "store" args metadata?
   CmpxchgInstruction = "cmpxchg" args metadata?
   AtomicRMWInstruction = "atomicrmw" args metadata?
+  CallInstruction = CallTarget? CallOpcode args "(" args ")" args metadata?
+  CallTarget = localValue "="
 
   AssignInstruction = localValue "=" opcode args metadata?
   GenericInstruction = opcode args metadata?
-  opcode = ~"br" ~"ret" ~"switch" ~"store" ~"cmpxchg" ~"atomicrmw" ident
-  
+
+  opcode = ~"br" ~"ret" ~"switch" ~"store" ~"cmpxchg" ~"atomicrmw" ~"call" ~"tail" ~"musttail" ~"notail" ident
+
+  CallOpcode = ("tail" | "musttail" | "notail")? "call"
+
   args = argPart*
-  argPart = 
+  argPart =
     | globalValue
     | localValue
     | metadataID
+    | ","
     | argText
 
-  // argText matches anything that isn't a value, metadata start, or newline.
-  argText = (~globalValue ~localValue ~metadataID ~metadata ~"\n" any)+
+  // argText matches anything that isn't a value, metadata start, newline, comma, or parens
+  argText = (~globalValue ~localValue ~metadataID ~metadata ~"\n" ~"," ~"(" ~")" any)+
 
   // metadata: optional comma, then !, then rest of line
 
-  Terminator = 
+  Terminator =
     | BrInstruction
     | RetInstruction
     | SwitchInstruction
-    
-  BrInstruction = 
+
+  BrInstruction =
     | "br" "i1" Value "," "label" localValue "," "label" localValue -- conditional
     | "br" "label" localValue -- unconditional
 

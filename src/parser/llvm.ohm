@@ -5,13 +5,13 @@ LLVM {
   ident = (letter | digit | "$" | "." | "_")+
   stringLiteral = "\"" (~"\"" any)* "\""
   type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
-  metadata = ","? space* "!" (~"\n" any)+
+  metadata = "," space* "!" (~"\n" any)+
   comment = ";" (~"\n" any)*
   space += comment
 
   Module = TopLevel*
-  
-  TopLevel = 
+
+  TopLevel =
     | Function
     | Declaration
     | GlobalAssignment
@@ -27,22 +27,22 @@ LLVM {
   EmptyLine = space+
 
   // Function
-  Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs? "{" EntryBasicBlock BasicBlock* "}"
+  Function = "define" FuncHeader globalValue "(" Params? ")" FuncAttrs? "{" EntryBasicBlock BasicBlock* "}"
   Declaration = "declare" restOfLine
-  GlobalAssignment = GlobalValue "=" restOfLine
+  GlobalAssignment = globalValue "=" restOfLine
   AttributeDef = "attributes" AttributeID "=" restOfLine
-  MetadataDef = MetadataID "=" restOfLine
+  MetadataDef = metadataID "=" restOfLine
   TargetDef = "target" restOfLine
-  TypeAlias = LocalValue "=" "type" restOfLine
+  TypeAlias = localValue "=" "type" restOfLine
 
   AttributeID = AttributeIDNumeric | AttributeIDString
   AttributeIDNumeric = "#" digit+
   AttributeIDString = "#" stringLiteral
-  MetadataID = "!" (digit | ident | ".") +
-  FuncHeader = (~GlobalValue any)*
+  metadataID = "!" (digit | letter | "." | "_" | "-")+
+  FuncHeader = (~globalValue any)*
   FuncAttrs = (~"{" any)*
   Params = Param ("," Param)*
-  Param = (~(LocalValue &ParamTerminator) ~")" any)* LocalValue
+  Param = (~(localValue &ParamTerminator) ~")" any)* localValue
   ParamTerminator = "," | ")"
 
   EntryBasicBlock = Label? BasicBlockItem* Terminator
@@ -51,33 +51,57 @@ LLVM {
   Label = ident ":"
   DebugRecord = "#" restOfLine
   restOfLine = (~"\n" any)*
+
   // Instruction
-  Instruction = 
+  Instruction =
+    | StoreInstruction
+    | CmpxchgInstruction
+    | AtomicRMWInstruction
+    | CallInstruction
     | AssignInstruction
     | GenericInstruction
-  AssignInstruction = LocalValue "=" opcode args metadata?
+
+  StoreInstruction = "store" args metadata?
+  CmpxchgInstruction = "cmpxchg" args metadata?
+  AtomicRMWInstruction = "atomicrmw" args metadata?
+  CallInstruction = CallTarget? CallOpcode args "(" args ")" args metadata?
+  CallTarget = localValue "="
+
+  AssignInstruction = localValue "=" opcode args metadata?
   GenericInstruction = opcode args metadata?
-  opcode = ~"br" ~"ret" ~"switch" ident
-  
-  // args consumes everything until metadata or newline
-  // Lexical rule (lowercase) ensures we don't skip newlines implicitly
-  args = (~metadata ~"\n" any)*
+
+  opcode = ~"br" ~"ret" ~"switch" ~"store" ~"cmpxchg" ~"atomicrmw" ~"call" ~"tail" ~"musttail" ~"notail" ident
+
+  CallOpcode = ("tail" | "musttail" | "notail")? "call"
+
+  args = argPart*
+  argPart =
+    | globalValue
+    | localValue
+    | metadataID
+    | ","
+    | argText
+
+  // argText matches anything that isn't a value, metadata start, newline, comma, or parens
+  argText = (~globalValue ~localValue ~metadataID ~metadata ~"\n" ~"," ~"(" ~")" any)+
 
   // metadata: optional comma, then !, then rest of line
 
-  Terminator = 
+  Terminator =
     | BrInstruction
     | RetInstruction
     | SwitchInstruction
-    
-  BrInstruction = "br" args metadata?
-  RetInstruction = "ret" args metadata?
 
-  SwitchInstruction = "switch" SwitchHeader "[" SwitchCase* "]" metadata?
-  SwitchHeader = (~"[" any)+
-  SwitchCase = type Value "," "label" LocalValue
+  BrInstruction =
+    | "br" "i1" Value "," "label" localValue "," "label" localValue -- conditional
+    | "br" "label" localValue -- unconditional
 
-  GlobalValue = "@" (ident | stringLiteral)
-  LocalValue = "%" (ident | stringLiteral)
-  Value = GlobalValue | LocalValue | digit+
+  RetInstruction = "ret" type Value? metadata?
+
+  SwitchInstruction = "switch" type Value "," "label" localValue "[" SwitchCase* "]" metadata?
+  SwitchCase = type Value "," "label" localValue
+
+  globalValue = "@" (ident | stringLiteral)
+  localValue = "%" (ident | stringLiteral)
+  Value = globalValue | localValue | digit+
 }

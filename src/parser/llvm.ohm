@@ -1,66 +1,107 @@
 LLVM {
+  LLVM = Module
+
+  // Lexical rules
+  ident = (letter | digit | "$" | "." | "_")+
+  stringLiteral = "\"" (~"\"" any)* "\""
+  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
+  metadata = "," space* "!" (~"\n" any)+
+  comment = ";" (~"\n" any)*
+  space += comment
+
   Module = TopLevel*
 
-  TopLevel = Function | (~"define" any)+
+  TopLevel =
+    | Function
+    | Declaration
+    | GlobalAssignment
+    | AttributeDef
+    | MetadataDef
+    | TargetDef
+    | TypeAlias
+    | SourceFilename
+    | EmptyLine
 
-  // Loose parsing for function definition:
-  // "define" [stuff] @Name ( [params] ) [stuff] { ... }
-  Function = "define" FuncHeader GlobalValue "(" Params? ")" FuncAttrs "{" EntryBasicBlock BasicBlock* "}"
+  SourceFilename = "source_filename" "=" stringLiteral
 
-  // Consumes everything up to the GlobalValue (function name).
-  // The last element is inherently the Return Type.
-  FuncHeader = (~GlobalValue (type | id | any))*
-  
-  // Consumes everything after ')' and before '{'
+  EmptyLine = space+
+
+  // Function
+  Function = "define" FuncHeader globalValue "(" Params? ")" FuncAttrs? "{" EntryBasicBlock BasicBlock* "}"
+  Declaration = "declare" restOfLine
+  GlobalAssignment = globalValue "=" restOfLine
+  AttributeDef = "attributes" AttributeID "=" restOfLine
+  MetadataDef = metadataID "=" restOfLine
+  TargetDef = "target" restOfLine
+  TypeAlias = localValue "=" "type" restOfLine
+
+  AttributeID = AttributeIDNumeric | AttributeIDString
+  AttributeIDNumeric = "#" digit+
+  AttributeIDString = "#" stringLiteral
+  metadataID = "!" (digit | letter | "." | "_" | "-")+
+  FuncHeader = (~globalValue any)*
   FuncAttrs = (~"{" any)*
+  Params = Param ("," Param)*
+  Param = (~(localValue &ParamTerminator) ~")" any)* localValue
+  ParamTerminator = "," | ")"
 
-  EntryBasicBlock = Label? Instruction* Terminator
-  BasicBlock = Label Instruction* Terminator
-  
-  Label = id ":"
-  
-  Instruction = 
+  EntryBasicBlock = Label? BasicBlockItem* Terminator
+  BasicBlock = Label BasicBlockItem* Terminator
+  BasicBlockItem = DebugRecord | Instruction
+  Label = ident ":"
+  DebugRecord = "#" restOfLine
+  restOfLine = (~"\n" any)*
+
+  // Instruction
+  Instruction =
+    | StoreInstruction
+    | CmpxchgInstruction
+    | AtomicRMWInstruction
+    | CallInstruction
     | AssignInstruction
     | GenericInstruction
-    
-  AssignInstruction = LocalValue "=" opcode args metadata?
-  
+
+  StoreInstruction = "store" args metadata?
+  CmpxchgInstruction = "cmpxchg" args metadata?
+  AtomicRMWInstruction = "atomicrmw" args metadata?
+  CallInstruction = CallTarget? CallOpcode args "(" args ")" args metadata?
+  CallTarget = localValue "="
+
+  AssignInstruction = localValue "=" opcode args metadata?
   GenericInstruction = opcode args metadata?
-  
-  opcode = ~"br" ~"ret" id
-  
-  // args consumes everything until metadata or newline
-  // Lexical rule (lowercase) ensures we don't skip newlines implicitly
-  args = (~metadata ~"\n" any)*
+
+  opcode = ~"br" ~"ret" ~"switch" ~"store" ~"cmpxchg" ~"atomicrmw" ~"call" ~"tail" ~"musttail" ~"notail" ident
+
+  CallOpcode = ("tail" | "musttail" | "notail")? "call"
+
+  args = argPart*
+  argPart =
+    | globalValue
+    | localValue
+    | metadataID
+    | ","
+    | argText
+
+  // argText matches anything that isn't a value, metadata start, newline, comma, or parens
+  argText = (~globalValue ~localValue ~metadataID ~metadata ~"\n" ~"," ~"(" ~")" any)+
 
   // metadata: optional comma, then !, then rest of line
-  metadata = ","? space* "!" (~"\n" any)+
 
-  Terminator = 
+  Terminator =
     | BrInstruction
     | RetInstruction
-    
-  BrInstruction = "br" args metadata?
-  RetInstruction = "ret" args metadata?
-  
-  // Lexical rules
-  id = (letter | digit | "_" | ".")+
-  
-  GlobalValue = "@" id
-  LocalValue = "%" id
-  
-  // Type can be significantly more complex, but we keep it somewhat simple for now.
-  // Lowercase to avoid space insertion inside types like 'i 32'
-  type = (letter | digit | "[" | "]" | "x" | "*" | "{" | "}" | "<" | ">" | "(" | ")" | "=" | "," | ".")+
-  
-  Value = GlobalValue | LocalValue | digit+
-  
-  Params = Param ("," Param)*
-  
-  // Param: type [attributes...] Value?
-  Param = type ParamAttr* Value?
-  ParamAttr = ~Value id
+    | SwitchInstruction
 
-  space += comment
-  comment = ";" (~"\n" any)*
+  BrInstruction =
+    | "br" "i1" Value "," "label" localValue "," "label" localValue -- conditional
+    | "br" "label" localValue -- unconditional
+
+  RetInstruction = "ret" type Value? metadata?
+
+  SwitchInstruction = "switch" type Value "," "label" localValue "[" SwitchCase* "]" metadata?
+  SwitchCase = type Value "," "label" localValue
+
+  globalValue = "@" (ident | stringLiteral)
+  localValue = "%" (ident | stringLiteral)
+  Value = globalValue | localValue | digit+
 }

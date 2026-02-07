@@ -59,6 +59,65 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
 
 const MIN_WIDTH = 200; // min px
 
+type EditorPaneProps = {
+  width: number;
+  code: string;
+  language: "llvm" | "mermaid";
+  onChange: (value: string | undefined) => void;
+};
+
+function EditorPane({ width, code, language, onChange }: EditorPaneProps) {
+  return (
+    <Paper
+      square
+      sx={{
+        width,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <CodeEditor code={code} onChange={onChange} language={language} />
+    </Paper>
+  );
+}
+
+type GraphPaneProps = {
+  nodes: ReturnType<typeof useGraphData>["nodes"];
+  edges: ReturnType<typeof useGraphData>["edges"];
+  onNodesChange: ReturnType<typeof useGraphData>["onNodesChange"];
+  onEdgesChange: ReturnType<typeof useGraphData>["onEdgesChange"];
+  onResetLayout: ReturnType<typeof useGraphData>["resetLayout"];
+  error: string | null;
+};
+
+function GraphPane({
+  nodes,
+  edges,
+  onNodesChange,
+  onEdgesChange,
+  onResetLayout,
+  error,
+}: GraphPaneProps) {
+  return (
+    <Box sx={{ flexGrow: 1, position: "relative" }}>
+      <GraphViewer
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onResetLayout={onResetLayout}
+      />
+      {error && (
+        <Snackbar open={true} autoHideDuration={6000}>
+          <Alert severity="error" sx={{ width: "100%" }}>
+            {error.substring(0, 100)}...
+          </Alert>
+        </Snackbar>
+      )}
+    </Box>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState<"mermaid" | "llvm-ir">("llvm-ir");
   const [code, setCode] = useState(DEFAULT_LLVM_CODE);
@@ -171,20 +230,12 @@ function App() {
 
       <Box sx={{ flexGrow: 1, display: "flex", overflow: "hidden" }}>
         {/* Left Panel: Editor */}
-        <Paper
-          square
-          sx={{
-            width: leftPaneWidth,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <CodeEditor
-            code={code}
-            onChange={handleEditorChange}
-            language={mode === "llvm-ir" ? "llvm" : "mermaid"}
-          />
-        </Paper>
+        <EditorPane
+          width={leftPaneWidth}
+          code={code}
+          onChange={handleEditorChange}
+          language={mode === "llvm-ir" ? "llvm" : "mermaid"}
+        />
 
         {/* Resizer */}
         <Box
@@ -199,22 +250,14 @@ function App() {
         />
 
         {/* Right Panel: Graph */}
-        <Box sx={{ flexGrow: 1, position: "relative" }}>
-          <GraphViewer
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onResetLayout={resetLayout}
-          />
-          {error && (
-            <Snackbar open={true} autoHideDuration={6000}>
-              <Alert severity="error" sx={{ width: "100%" }}>
-                {error.substring(0, 100)}...
-              </Alert>
-            </Snackbar>
-          )}
-        </Box>
+        <GraphPane
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onResetLayout={resetLayout}
+          error={error}
+        />
       </Box>
     </Box>
   );

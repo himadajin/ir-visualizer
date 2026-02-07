@@ -15,6 +15,14 @@ import CustomBezierEdge from "./CustomBezierEdge";
 import BackEdge from "./BackEdge";
 
 import CodeNode from "./CodeNode";
+import LLVMBasicBlockNode from "./LLVM/LLVMBasicBlockNode";
+import LLVMFunctionHeaderNode from "./LLVM/LLVMFunctionHeaderNode";
+import LLVMGlobalVariableNode from "./LLVM/LLVMGlobalVariableNode";
+import LLVMAttributeGroupNode from "./LLVM/LLVMAttributeGroupNode";
+import LLVMMetadataNode from "./LLVM/LLVMMetadataNode";
+import LLVMDeclarationNode from "./LLVM/LLVMDeclarationNode";
+import LLVMExitNode from "./LLVM/LLVMExitNode";
+import MermaidNode from "./Mermaid/MermaidNode";
 
 const edgeTypes = {
   customBezier: CustomBezierEdge,
@@ -23,6 +31,14 @@ const edgeTypes = {
 
 const nodeTypes = {
   codeNode: CodeNode,
+  llvmBasicBlock: LLVMBasicBlockNode,
+  llvmFunctionHeader: LLVMFunctionHeaderNode,
+  llvmGlobalVariable: LLVMGlobalVariableNode,
+  llvmAttributeGroup: LLVMAttributeGroupNode,
+  llvmMetadata: LLVMMetadataNode,
+  llvmDeclaration: LLVMDeclarationNode,
+  llvmExit: LLVMExitNode,
+  mermaidNode: MermaidNode,
 };
 
 interface GraphViewerProps {

@@ -1,10 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Paper, Typography, AppBar, Toolbar, Alert, Snackbar, Select, MenuItem, FormControl, InputLabel, type SelectChangeEvent } from '@mui/material';
-import { CodeEditor } from './components/Editor/CodeEditor';
-import { GraphViewer } from './components/Graph/GraphViewer';
-import { useGraphData } from './hooks/useGraphData';
-import { parseMermaid } from './parser/mermaid';
-import { parseLLVM } from './parser/llvm';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  Box,
+  Paper,
+  Typography,
+  AppBar,
+  Toolbar,
+  Alert,
+  Snackbar,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  type SelectChangeEvent,
+} from "@mui/material";
+import { CodeEditor } from "./components/Editor/CodeEditor";
+import { GraphViewer } from "./components/Graph/GraphViewer";
+import { useGraphData } from "./hooks/useGraphData";
+import { parseMermaid } from "./parser/mermaid";
+import { parseLLVM } from "./parser/llvm";
 
 const DEFAULT_CODE = `graph TD
   A[Is this working?] -->|Yes| B(Great!)
@@ -46,10 +59,110 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
 
 const MIN_WIDTH = 200; // min px
 
+type ToolbarPaneProps = {
+  mode: "mermaid" | "llvm-ir";
+  onModeChange: (event: SelectChangeEvent) => void;
+};
+
+function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
+  return (
+    <AppBar position="static">
+      <Toolbar variant="dense">
+        <Typography
+          variant="h6"
+          color="inherit"
+          component="div"
+          sx={{ flexGrow: 1 }}
+        >
+          IRVisualizer
+        </Typography>
+        <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
+          <InputLabel sx={{ color: "white" }}>Mode</InputLabel>
+          <Select
+            value={mode}
+            onChange={onModeChange}
+            label="Mode"
+            sx={{ color: "white", ".MuiSvgIcon-root": { color: "white" } }}
+          >
+            <MenuItem value="mermaid">Mermaid</MenuItem>
+            <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
+          </Select>
+        </FormControl>
+      </Toolbar>
+    </AppBar>
+  );
+}
+
+type EditorPaneProps = {
+  width: number;
+  code: string;
+  language: "llvm" | "mermaid";
+  onChange: (value: string | undefined) => void;
+};
+
+function EditorPane({ width, code, language, onChange }: EditorPaneProps) {
+  return (
+    <Paper
+      square
+      sx={{
+        width,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <CodeEditor code={code} onChange={onChange} language={language} />
+    </Paper>
+  );
+}
+
+type GraphPaneProps = {
+  nodes: ReturnType<typeof useGraphData>["nodes"];
+  edges: ReturnType<typeof useGraphData>["edges"];
+  onNodesChange: ReturnType<typeof useGraphData>["onNodesChange"];
+  onEdgesChange: ReturnType<typeof useGraphData>["onEdgesChange"];
+  onResetLayout: ReturnType<typeof useGraphData>["resetLayout"];
+  error: string | null;
+};
+
+function GraphPane({
+  nodes,
+  edges,
+  onNodesChange,
+  onEdgesChange,
+  onResetLayout,
+  error,
+}: GraphPaneProps) {
+  return (
+    <Box sx={{ flexGrow: 1, position: "relative" }}>
+      <GraphViewer
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onResetLayout={onResetLayout}
+      />
+      {error && (
+        <Snackbar open={true} autoHideDuration={6000}>
+          <Alert severity="error" sx={{ width: "100%" }}>
+            {error.substring(0, 100)}...
+          </Alert>
+        </Snackbar>
+      )}
+    </Box>
+  );
+}
+
 function App() {
-  const [mode, setMode] = useState<'mermaid' | 'llvm-ir'>('llvm-ir');
+  const [mode, setMode] = useState<"mermaid" | "llvm-ir">("llvm-ir");
   const [code, setCode] = useState(DEFAULT_LLVM_CODE);
-  const { nodes, edges, onNodesChange, onEdgesChange, updateGraph, resetLayout } = useGraphData();
+  const {
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    updateGraph,
+    resetLayout,
+  } = useGraphData();
   const [error, setError] = useState<string | null>(null);
 
   // Resizing state
@@ -57,30 +170,33 @@ function App() {
   const isDragging = React.useRef(false);
 
   // Resize Handlers
-  const handleMouseDown = useCallback((_e: React.MouseEvent) => {
+  const handleMouseDown = useCallback(() => {
     isDragging.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none'; // prevent text selection
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none"; // prevent text selection
   }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging.current) return;
-    const newWidth = Math.min(Math.max(e.clientX, MIN_WIDTH), window.innerWidth - MIN_WIDTH);
+    const newWidth = Math.min(
+      Math.max(e.clientX, MIN_WIDTH),
+      window.innerWidth - MIN_WIDTH,
+    );
     setLeftPaneWidth(newWidth);
   }, []);
 
   const handleMouseUp = useCallback(() => {
     isDragging.current = false;
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   }, []);
 
   useEffect(() => {
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [handleMouseMove, handleMouseUp]);
 
@@ -89,17 +205,21 @@ function App() {
     const timer = setTimeout(() => {
       try {
         let graph;
-        if (mode === 'mermaid') {
+        if (mode === "mermaid") {
           graph = parseMermaid(code);
         } else {
           graph = parseLLVM(code);
         }
         updateGraph(graph);
         setError(null);
-      } catch (e: any) {
+      } catch (error: unknown) {
         // Only show error if it persists, or maybe just log it?
         // Ohm errors can be verbose.
-        setError(e.message);
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError("Unknown error");
+        }
       }
     }, 750);
 
@@ -113,71 +233,46 @@ function App() {
     }
   }, []);
 
-  return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <AppBar position="static">
-        <Toolbar variant="dense">
-          <Typography variant="h6" color="inherit" component="div" sx={{ flexGrow: 1 }}>
-            IRVisualizer
-          </Typography>
-          <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
-            <InputLabel sx={{ color: 'white' }}>Mode</InputLabel>
-            <Select
-              value={mode}
-              onChange={(e: SelectChangeEvent) => {
-                const newMode = e.target.value as 'mermaid' | 'llvm-ir';
-                setMode(newMode);
-                setCode(newMode === 'mermaid' ? DEFAULT_CODE : DEFAULT_LLVM_CODE);
-              }}
-              label="Mode"
-              sx={{ color: 'white', '.MuiSvgIcon-root': { color: 'white' } }}
-            >
-              <MenuItem value="mermaid">Mermaid</MenuItem>
-              <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
-            </Select>
-          </FormControl>
-        </Toolbar>
-      </AppBar>
+  const handleModeChange = useCallback((event: SelectChangeEvent) => {
+    const newMode = event.target.value as "mermaid" | "llvm-ir";
+    setMode(newMode);
+    setCode(newMode === "mermaid" ? DEFAULT_CODE : DEFAULT_LLVM_CODE);
+  }, []);
 
-      <Box sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden' }}>
+  return (
+    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+      <ToolbarPane mode={mode} onModeChange={handleModeChange} />
+
+      <Box sx={{ flexGrow: 1, display: "flex", overflow: "hidden" }}>
         {/* Left Panel: Editor */}
-        <Paper square sx={{ width: leftPaneWidth, display: 'flex', flexDirection: 'column' }}>
-          <CodeEditor
-            code={code}
-            onChange={handleEditorChange}
-            language={mode === 'llvm-ir' ? 'llvm' : 'mermaid'}
-          />
-        </Paper>
+        <EditorPane
+          width={leftPaneWidth}
+          code={code}
+          onChange={handleEditorChange}
+          language={mode === "llvm-ir" ? "llvm" : "mermaid"}
+        />
 
         {/* Resizer */}
         <Box
           sx={{
-            width: '5px',
-            cursor: 'col-resize',
-            backgroundColor: '#ccc',
-            ':hover': { backgroundColor: '#999' },
+            width: "5px",
+            cursor: "col-resize",
+            backgroundColor: "#ccc",
+            ":hover": { backgroundColor: "#999" },
             zIndex: 10,
           }}
           onMouseDown={handleMouseDown}
         />
 
         {/* Right Panel: Graph */}
-        <Box sx={{ flexGrow: 1, position: 'relative' }}>
-          <GraphViewer
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onResetLayout={resetLayout}
-          />
-          {error && (
-            <Snackbar open={true} autoHideDuration={6000}>
-              <Alert severity="error" sx={{ width: '100%' }}>
-                {error.substring(0, 100)}...
-              </Alert>
-            </Snackbar>
-          )}
-        </Box>
+        <GraphPane
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onResetLayout={resetLayout}
+          error={error}
+        />
       </Box>
     </Box>
   );

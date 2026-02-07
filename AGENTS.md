@@ -11,3 +11,4 @@ The graph is rendered using react-flow.
 - Build project: `npm run build`
 - Start dev server: `npm run dev`
 - Lint code: `npm run lint`
+- Format code: `npm run format`

@@ -59,6 +59,40 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
 
 const MIN_WIDTH = 200; // min px
 
+type ToolbarPaneProps = {
+  mode: "mermaid" | "llvm-ir";
+  onModeChange: (event: SelectChangeEvent) => void;
+};
+
+function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
+  return (
+    <AppBar position="static">
+      <Toolbar variant="dense">
+        <Typography
+          variant="h6"
+          color="inherit"
+          component="div"
+          sx={{ flexGrow: 1 }}
+        >
+          IRVisualizer
+        </Typography>
+        <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
+          <InputLabel sx={{ color: "white" }}>Mode</InputLabel>
+          <Select
+            value={mode}
+            onChange={onModeChange}
+            label="Mode"
+            sx={{ color: "white", ".MuiSvgIcon-root": { color: "white" } }}
+          >
+            <MenuItem value="mermaid">Mermaid</MenuItem>
+            <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
+          </Select>
+        </FormControl>
+      </Toolbar>
+    </AppBar>
+  );
+}
+
 type EditorPaneProps = {
   width: number;
   code: string;
@@ -195,38 +229,15 @@ function App() {
     }
   }, []);
 
+  const handleModeChange = useCallback((event: SelectChangeEvent) => {
+    const newMode = event.target.value as "mermaid" | "llvm-ir";
+    setMode(newMode);
+    setCode(newMode === "mermaid" ? DEFAULT_CODE : DEFAULT_LLVM_CODE);
+  }, []);
+
   return (
     <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <AppBar position="static">
-        <Toolbar variant="dense">
-          <Typography
-            variant="h6"
-            color="inherit"
-            component="div"
-            sx={{ flexGrow: 1 }}
-          >
-            IRVisualizer
-          </Typography>
-          <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
-            <InputLabel sx={{ color: "white" }}>Mode</InputLabel>
-            <Select
-              value={mode}
-              onChange={(e: SelectChangeEvent) => {
-                const newMode = e.target.value as "mermaid" | "llvm-ir";
-                setMode(newMode);
-                setCode(
-                  newMode === "mermaid" ? DEFAULT_CODE : DEFAULT_LLVM_CODE,
-                );
-              }}
-              label="Mode"
-              sx={{ color: "white", ".MuiSvgIcon-root": { color: "white" } }}
-            >
-              <MenuItem value="mermaid">Mermaid</MenuItem>
-              <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
-            </Select>
-          </FormControl>
-        </Toolbar>
-      </AppBar>
+      <ToolbarPane mode={mode} onModeChange={handleModeChange} />
 
       <Box sx={{ flexGrow: 1, display: "flex", overflow: "hidden" }}>
         {/* Left Panel: Editor */}

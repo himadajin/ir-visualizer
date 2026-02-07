@@ -13,7 +13,7 @@ import type {
   LLVMRetInstruction,
   LLVMSwitchInstruction,
   LLVMOperand,
-} from "./llvmAST";
+} from "../ast/llvmAST";
 
 let _grammar: ohm.Grammar | null = null;
 let _semantics: ohm.Semantics | null = null;

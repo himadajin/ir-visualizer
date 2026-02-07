@@ -13,6 +13,8 @@ export function convertASTToGraph(ast: MermaidAST): GraphData {
     label: node.label || node.id,
     type: nodeShapeToGraphType(node.shape),
     language: "mermaid",
+    nodeType: "mermaid-node",
+    astData: node as unknown as Record<string, unknown>,
   }));
 
   const edges: GraphEdge[] = ast.edges.map((edge, i) => ({

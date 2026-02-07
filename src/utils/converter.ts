@@ -10,6 +10,16 @@ const MAX_CHARS_MERMAID = 30;
 const MIN_CHARS_LLVM = 40;
 const MAX_CHARS_LLVM = 80;
 
+/**
+ * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
+ * Falls back to "codeNode" when nodeType is not set.
+ */
+const nodeTypeToReactFlowType = (nodeType?: string): string => {
+  if (!nodeType) return "codeNode";
+  // Convert "llvm-basicBlock" → "llvmBasicBlock", "mermaid-node" → "mermaidNode"
+  return nodeType.replace(/-([a-zA-Z])/g, (_, c: string) => c.toUpperCase());
+};
+
 // Font configuration - must match CSS
 const FONT_FAMILY = "monospace";
 const FONT_SIZE = "14px";
@@ -76,8 +86,9 @@ export const createReactFlowNode = (
       shape: node.type,
       language: node.language,
       blockLabel: node.blockLabel,
+      astData: node.astData,
     },
-    type: "codeNode", // Use the custom node type
+    type: nodeTypeToReactFlowType(node.nodeType),
     style: { width: width },
   };
 };

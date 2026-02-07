@@ -1,9 +1,23 @@
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
 import type {
   LLVMModule,
+  LLVMBasicBlock,
   LLVMBrInstruction,
   LLVMSwitchInstruction,
 } from "../ast/llvmAST";
+
+/**
+ * Build the label text from a BasicBlock's instructions and terminator.
+ * This is used both for the label field (fallback / dimension calculation)
+ * and matches what BasicBlockNode renders from the AST.
+ */
+function buildBasicBlockLabel(block: LLVMBasicBlock): string {
+  const lines: string[] = block.instructions.map((i) => i.originalText);
+  if (block.terminator) {
+    lines.push(block.terminator.originalText);
+  }
+  return lines.join("\n");
+}
 
 export function convertASTToGraph(module: LLVMModule): GraphData {
   const nodes: GraphNode[] = [];
@@ -21,6 +35,8 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         label: gVar.originalText,
         type: "square",
         language: "llvm",
+        nodeType: "llvm-globalVariable",
+        astData: gVar as unknown as Record<string, unknown>,
       });
     });
   }
@@ -33,6 +49,8 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         label: attr.originalText,
         type: "square",
         language: "llvm",
+        nodeType: "llvm-attributeGroup",
+        astData: attr as unknown as Record<string, unknown>,
       });
     });
   }
@@ -45,6 +63,8 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         label: meta.originalText,
         type: "square",
         language: "llvm",
+        nodeType: "llvm-metadata",
+        astData: meta as unknown as Record<string, unknown>,
       });
     });
   }
@@ -57,6 +77,8 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         label: decl.definition,
         type: "square",
         language: "llvm",
+        nodeType: "llvm-declaration",
+        astData: decl as unknown as Record<string, unknown>,
       });
     });
   }
@@ -75,6 +97,11 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
       label: func.definition || `define ${func.name} (...)`,
       type: "round",
       language: "llvm",
+      nodeType: "llvm-functionHeader",
+      astData: {
+        definition: func.definition || `define ${func.name} (...)`,
+        name: func.name,
+      },
     });
 
     const blocks = func.blocks;
@@ -87,16 +114,14 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
       // If it's a numeric label from source (like "4:"), ohm might capture "4".
       const blockId = `${funcPrefix}_block_${rawBlockId}`;
 
-      const codeContent = block.instructions
-        .map((i) => i.originalText)
-        .join("\n");
-
       nodes.push({
         id: blockId,
-        label: codeContent,
+        label: buildBasicBlockLabel(block),
         blockLabel: block.label || undefined,
         type: "square",
         language: "llvm",
+        nodeType: "llvm-basicBlock",
+        astData: block as unknown as Record<string, unknown>,
       });
 
       if (block.terminator) {
@@ -149,6 +174,8 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
               label: "exit",
               type: "round", // Exit is usually round
               language: "text",
+              nodeType: "llvm-exit",
+              astData: {},
             });
           }
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import * as ohm from "ohm-js";
 import mermaidGrammar from "./mermaid.ohm?raw";
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";

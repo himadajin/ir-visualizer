@@ -77,7 +77,7 @@ export const useGraphData = () => {
         setLastSignature(signature);
       }
     },
-    [lastSignature, setNodes, setEdges],
+    [lastSignature, nodes, setNodes, setEdges],
   );
 
   const resetLayout = useCallback(() => {

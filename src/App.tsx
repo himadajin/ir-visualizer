@@ -170,7 +170,7 @@ function App() {
   const isDragging = React.useRef(false);
 
   // Resize Handlers
-  const handleMouseDown = useCallback((_e: React.MouseEvent) => {
+  const handleMouseDown = useCallback(() => {
     isDragging.current = true;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none"; // prevent text selection
@@ -212,10 +212,14 @@ function App() {
         }
         updateGraph(graph);
         setError(null);
-      } catch (e: any) {
+      } catch (error: unknown) {
         // Only show error if it persists, or maybe just log it?
         // Ohm errors can be verbose.
-        setError(e.message);
+        if (error instanceof Error) {
+          setError(error.message);
+        } else {
+          setError("Unknown error");
+        }
       }
     }, 750);
 

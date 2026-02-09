@@ -1,0 +1,62 @@
+SelectionDAG {
+  Line = Node | Comment
+  Node = space* NodeLHS space* "=" space* NodeRHS space*
+  Comment = (~"\n" any)+
+  NodeLHS = nodeId ":" Types
+  NodeRHS = opName Details Verbose? Operands?
+
+  Details = flag* Detail? Reg?
+  flag
+    = "nuw"
+    | "nsw"
+    | "exact"
+    | "samesign"
+    | "nneg"
+    | "nnan"
+    | "ninf"
+    | "nsz"
+    | "arcp"
+    | "contract"
+    | "afn"
+    | "reassoc"
+    | "nofpexcept"
+  Detail = "<" (~">" any)+ ">"
+  Verbose = "[" (~"]" any)+ "]"
+
+  Operands = Operand ("," Operand)*
+  Operand
+    = "<null>"       -- null
+    | NodeOperand    -- nodeOp
+    | InlineOperand  -- inlineOp
+  NodeOperand = nodeId NodeIndex?
+  NodeIndex = ":" digit+
+  InlineOperand = opName ":" Types Details
+
+  Types = Type ("," Type)*
+  Type = type
+  type = identChar+
+
+  opName
+    = unknownOpName    -- unknown
+    | machineISDName   -- machine
+    | identChar+       -- ident
+
+  unknownOpName = "<<" (~">>" any)+ ">>"
+  machineISDName = (~"::" identChar)+ "::" identChar+
+
+  Reg
+    = RegNoReg
+    | RegStack
+    | RegVirtReg
+    | RegPhysReg
+  RegNoReg = "$noreg"
+  RegStack = "SS#" digit+
+  RegVirtReg = "%" identChar+
+  RegPhysReg = "$" identChar+
+
+  nodeId
+    = "t" digit+      -- tId
+    | "0x" hexDigit+  -- hexId
+  identChar = alnum | "_"
+  space += "\t"
+}

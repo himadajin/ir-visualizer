@@ -1,3 +1,5 @@
+/// <reference types="vitest/config" />
+import { resolve } from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -5,4 +7,16 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "/ir-visualizer/",
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, "index.html"),
+        debug: resolve(__dirname, "debug.html"),
+      },
+    },
+  },
+  test: {
+    include: ["src/**/*.test.ts"],
+    environment: "node",
+  },
 });

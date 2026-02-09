@@ -14,7 +14,7 @@ const grammar = ohm.grammar(mermaidGrammar);
 const semantics = grammar.createSemantics();
 
 semantics.addOperation("toAST", {
-  Graph(header: any, statements: any) {
+  Graph(_leadingSep: any, header: any, statements: any) {
     const dir = header.toAST();
     const nodes = new Map<string, MermaidASTNode>();
     const edges: MermaidASTEdge[] = [];

@@ -19,6 +19,12 @@ const HANDLE_STYLE: React.CSSProperties = {
   zIndex: 10,
 };
 
+const ROW_CONTAINER_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
 const SelectionDAGOperandItem = ({
   node,
   index,
@@ -73,15 +79,15 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
         fontSize: "13px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      <div style={ROW_CONTAINER_STYLE}>
         {operands.map((_, i) => (
           <SelectionDAGOperandItem key={i} node={node} index={i} />
         ))}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      <div style={ROW_CONTAINER_STYLE}>
         <CodeFragment code={opLabel} />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      <div style={ROW_CONTAINER_STYLE}>
         <div style={{ position: "relative" }}>
           <CodeFragment code={node.nodeId} />
           <Handle

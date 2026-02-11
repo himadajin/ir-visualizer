@@ -1,7 +1,6 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import type { GraphNode, GraphEdge } from "../types/graph";
 import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
-import { buildSelectionDAGDetailsLabel } from "../ast/selectionDAGAST";
 import { estimateSelectionDAGRowWidths } from "../components/Graph/SelectionDAG/selectionDAGLayoutUtils";
 import { getFontMetrics } from "./fontUtils";
 
@@ -102,19 +101,24 @@ const calculateSelectionDAGDimensions = (node: GraphNode) => {
   const hasOperands = operands.length > 0;
 
   // Each CodeFragment has padding-y: 2px
-  const codeFragmentHeight = metrics.height + SELECTION_DAG_CODE_FRAGMENT_PADDING_Y * 2;
+  const codeFragmentHeight =
+    metrics.height + SELECTION_DAG_CODE_FRAGMENT_PADDING_Y * 2;
 
   // Row 1 (Operands): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
   const operandsRowHeight = hasOperands
-    ? codeFragmentHeight + (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2
+    ? codeFragmentHeight +
+      (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2
     : 0;
 
   // Row 2 (Main Content): Cell Padding (2) + CF Height + Cell Padding (2)
-  const mainContentRowHeight = codeFragmentHeight + SELECTION_DAG_CELL_PADDING_Y * 2;
+  const mainContentRowHeight =
+    codeFragmentHeight + SELECTION_DAG_CELL_PADDING_Y * 2;
 
   // Row 3 (Types): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
   // Types are always present in SelectionDAG nodes
-  const typesRowHeight = codeFragmentHeight + (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2;
+  const typesRowHeight =
+    codeFragmentHeight +
+    (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2;
 
   const totalHeight =
     SELECTION_DAG_ROOT_BORDER * 2 +

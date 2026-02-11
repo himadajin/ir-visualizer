@@ -87,7 +87,7 @@ export const useGraphData = () => {
         setLastSignature(signature);
       }
     },
-    [lastSignature, nodes, setNodes, setEdges],
+    [edges, lastSignature, nodes, setNodes, setEdges],
   );
 
   const resetLayout = useCallback(() => {
@@ -107,6 +107,7 @@ export const useGraphData = () => {
 
       if (isTopologyEqual) {
         const positionMap = new Map(nodes.map((n) => [n.id, n.position]));
+        const edgeTypeMap = new Map(edges.map((edge) => [edge.id, edge.type]));
 
         const newNodes = graph.nodes.map((node) => {
           const existingPos = positionMap.get(node.id) || { x: 0, y: 0 };
@@ -116,15 +117,7 @@ export const useGraphData = () => {
         setNodes(newNodes);
 
         const newEdges = graph.edges.map((edge) => {
-          const sourcePos = positionMap.get(edge.source);
-          const targetPos = positionMap.get(edge.target);
-
-          let edgeType = "customBezier";
-          if (edge.source === edge.target) {
-            edgeType = "backEdge";
-          } else if (sourcePos && targetPos && sourcePos.y >= targetPos.y) {
-            edgeType = "backEdge";
-          }
+          const edgeType = edgeTypeMap.get(edge.id) || "customBezier";
           return createSelectionDAGReactFlowEdge(edge, edgeType);
         });
 

@@ -103,17 +103,7 @@ export const getSelectionDAGLayoutedElements = (
   });
 
   const edges: Edge[] = graph.edges.map((edge) => {
-    const sourceNode = dagreGraph.node(edge.source);
-    const targetNode = dagreGraph.node(edge.target);
-
-    let edgeType = "customBezier";
-    if (edge.source === edge.target) {
-      edgeType = "backEdge";
-    } else if (sourceNode && targetNode && sourceNode.y >= targetNode.y) {
-      edgeType = "backEdge";
-    }
-
-    return createSelectionDAGReactFlowEdge(edge, edgeType);
+    return createSelectionDAGReactFlowEdge(edge, "customBezier");
   });
 
   return { nodes, edges };

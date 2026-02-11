@@ -16,19 +16,34 @@ const getHighlighter = () => {
 interface HighlightedCodeProps {
   code: string;
   language?: string;
+  inline?: boolean;
+  style?: React.CSSProperties;
 }
 
-const HighlightedCode = ({ code, language = "text" }: HighlightedCodeProps) => {
+const HighlightedCode = ({
+  code,
+  language = "text",
+  inline = false,
+  style,
+}: HighlightedCodeProps) => {
   const [html, setHtml] = useState<string>(code);
 
   useEffect(() => {
     const highlight = async () => {
       try {
         const highlighter = await getHighlighter();
-        const highlighted = highlighter.codeToHtml(code, {
+        let highlighted = highlighter.codeToHtml(code, {
           lang: language,
           theme: "github-light",
         });
+
+        if (inline) {
+          // Remove <pre> and <code> tags
+          highlighted = highlighted.replace(/<pre[^>]*>/g, "");
+          highlighted = highlighted.replace(/<\/pre>/g, "");
+          highlighted = highlighted.replace(/<code[^>]*>/g, "");
+          highlighted = highlighted.replace(/<\/code>/g, "");
+        }
         setHtml(highlighted);
       } catch (e) {
         console.error("Failed to highlight", e);
@@ -36,9 +51,14 @@ const HighlightedCode = ({ code, language = "text" }: HighlightedCodeProps) => {
       }
     };
     highlight();
-  }, [code, language]);
+  }, [code, language, inline]);
 
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+  return (
+    <div
+      style={{ display: inline ? "inline" : "block", ...style }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 };
 
 export default HighlightedCode;

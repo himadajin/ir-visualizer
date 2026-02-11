@@ -88,8 +88,6 @@ function GraphPane({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
-          nodesDraggable={false}
-          nodesConnectable={false}
           preventScrolling={false}
           fitView
           fitViewOptions={{ padding: 2 }}

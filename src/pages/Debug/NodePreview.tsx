@@ -90,15 +90,9 @@ function GraphPane({
           nodeTypes={nodeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
-          panOnDrag={false}
-          panOnScroll={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          zoomOnDoubleClick={false}
           preventScrolling={false}
           fitView
-          fitViewOptions={{ padding: 0.3 }}
+          fitViewOptions={{ padding: 2 }}
           proOptions={{ hideAttribution: true }}
         />
       </ReactFlowProvider>

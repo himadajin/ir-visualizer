@@ -62,9 +62,10 @@ export const formatSelectionDAGOperand = (op: SelectionDAGOperand): string => {
     case "node":
       return op.index !== undefined ? `${op.nodeId}:${op.index}` : op.nodeId;
     case "inline": {
-      const types = op.types.length > 0 ? `<${op.types.join(",")}>` : "";
-      const detail = op.details?.detail ? ` ${op.details.detail}` : "";
-      return `${op.opName}${types}${detail}`;
+      const types = op.types.length > 0 ? `:${op.types.join(",")}` : "";
+      const detail = op.details?.detail ? `<${op.details.detail}>` : "";
+      const reg = op.details?.reg ? ` ${op.details.reg.value}` : "";
+      return `${op.opName}${types}${detail}${reg}`;
     }
     case "null":
       return "<null>";

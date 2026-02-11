@@ -51,9 +51,7 @@ function formatOperand(op: SelectionDAGOperand): string {
     case "inline": {
       const types = op.types.length > 0 ? `:${op.types.join(",")}` : "";
       const detail = op.details?.detail ? `<${op.details.detail}>` : "";
-      const reg = op.details?.reg
-        ? ` ${op.details.reg.type}:${op.details.reg.value}`
-        : "";
+      const reg = op.details?.reg ? ` ${op.details.reg.value}` : "";
       return `${op.opName}${types}${detail}${reg}`;
     }
     case "null":

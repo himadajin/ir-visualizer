@@ -15,8 +15,12 @@ const MAX_CHARS_LLVM = 80;
 const MIN_CHARS_SELECTION_DAG = 12;
 const MAX_CHARS_SELECTION_DAG = 50;
 
-const SELECTION_DAG_PADDING_Y = 8;
-const SELECTION_DAG_ROW_GAP = 6;
+// SelectionDAG specific layout constants (must match SelectionDAGNode.tsx)
+const SELECTION_DAG_ROOT_BORDER = 1;
+const SELECTION_DAG_ROW_BORDER = 1;
+const SELECTION_DAG_CELL_PADDING_Y = 2;
+const SELECTION_DAG_ITEM_PADDING_Y = 2;
+const SELECTION_DAG_CODE_FRAGMENT_PADDING_Y = 2;
 
 /**
  * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
@@ -93,20 +97,33 @@ const calculateSelectionDAGDimensions = (node: GraphNode) => {
   const rowWidths = estimateSelectionDAGRowWidths(ast, metrics.width);
   const width = Math.max(...rowWidths);
 
-  // Calculate actual number of rows rendered
+  // Calculate actual height based on CSS structure in SelectionDAGNode.tsx
   const operands = ast.operands ?? [];
-  const detailsLabel = buildSelectionDAGDetailsLabel(ast);
+  const hasOperands = operands.length > 0;
 
-  let rows = 2; // OpName and ID:Types are always present
-  if (operands.length > 0) rows++;
-  if (detailsLabel) rows++;
+  // Each CodeFragment has padding-y: 2px
+  const codeFragmentHeight = metrics.height + SELECTION_DAG_CODE_FRAGMENT_PADDING_Y * 2;
 
-  const height =
-    rows * metrics.height +
-    (rows - 1) * SELECTION_DAG_ROW_GAP +
-    SELECTION_DAG_PADDING_Y * 2;
+  // Row 1 (Operands): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
+  const operandsRowHeight = hasOperands
+    ? codeFragmentHeight + (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2
+    : 0;
 
-  return { width, height };
+  // Row 2 (Main Content): Cell Padding (2) + CF Height + Cell Padding (2)
+  const mainContentRowHeight = codeFragmentHeight + SELECTION_DAG_CELL_PADDING_Y * 2;
+
+  // Row 3 (Types): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
+  // Types are always present in SelectionDAG nodes
+  const typesRowHeight = codeFragmentHeight + (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2;
+
+  const totalHeight =
+    SELECTION_DAG_ROOT_BORDER * 2 +
+    (hasOperands ? operandsRowHeight + SELECTION_DAG_ROW_BORDER : 0) +
+    mainContentRowHeight +
+    SELECTION_DAG_ROW_BORDER +
+    typesRowHeight;
+
+  return { width, height: totalHeight };
 };
 
 const calculateCodeNodeDimensions = (

@@ -12,7 +12,7 @@ import CodeFragment from "../common/CodeFragment";
 
 const BORDER_COLOR = "#050505";
 const BORDER = `1px solid ${BORDER_COLOR}`;
-const CELL_PADDING = "8px 10px";
+const CELL_PADDING = "2px 2px";
 
 const HANDLE_STYLE: React.CSSProperties = {
   width: "4px",
@@ -29,7 +29,7 @@ const ROOT_STYLE: React.CSSProperties = {
   alignItems: "stretch",
   border: BORDER,
   borderRadius: "4px",
-  background: "#fff",
+  background: "#ffffff",
   fontFamily: "monospace",
   fontSize: "14px",
   lineHeight: "20px",
@@ -44,7 +44,10 @@ const LEFT_COLUMN_STYLE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  borderTopLeftRadius: "4px",
+  borderBottomLeftRadius: "4px",
   padding: CELL_PADDING,
+  background: "#f4f2ff",
 };
 
 /** Right column: operands / opName+details / types */
@@ -103,10 +106,11 @@ const SelectionDAGOperandItem = ({
           id={`${node.nodeId}-operand-${index}`}
           style={{
             ...HANDLE_STYLE,
-            top: "-12px",
+            top: "-6px",
             left: "50%",
             transform: "translateX(-50%)",
           }}
+          isConnectable={false}
         />
       )}
       <CodeFragment code={formatSelectionDAGOperand(operand)} language="llvm" />
@@ -133,7 +137,7 @@ const SelectionDAGTypeItem = ({
         id={`${node.nodeId}-type-${index}`}
         style={{
           ...HANDLE_STYLE,
-          bottom: "-12px",
+          bottom: "-6px",
           left: "50%",
           transform: "translateX(-50%)",
         }}
@@ -156,7 +160,7 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
     <div style={ROOT_STYLE}>
       {/* Left column: nodeId */}
       <div style={LEFT_COLUMN_STYLE}>
-        <CodeFragment code={node.nodeId} language="llvm" />
+        <CodeFragment code={node.nodeId} language="text" />
       </div>
 
       {/* Right column: operands, opName/details, types */}
@@ -183,8 +187,10 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
 
         {/* opName + details */}
         <div style={MAIN_CONTENT_STYLE}>
-          <CodeFragment code={opNameLabel} language="llvm" />
-          {detailsLabel && <CodeFragment code={detailsLabel} language="llvm" />}
+          <CodeFragment
+            code={`${opNameLabel} ${detailsLabel}`}
+            language="llvm"
+          />
         </div>
 
         {/* types */}

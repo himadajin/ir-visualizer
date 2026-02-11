@@ -8,22 +8,12 @@ import {
 // --- CSS-matching layout constants ---
 // These MUST stay in sync with the styles in SelectionDAGNode.tsx.
 
-/** Horizontal padding inside each cell: padding "8px 10px" → 10px per side */
-const CELL_PADDING_X = 10;
-
-/** Horizontal padding inside SelectionDAGOperandItem: padding "2px 2px" → 2px per side */
+/** Horizontal padding inside each cell: padding "2px 2px" → 2px per side */
+const CELL_PADDING_X = 2;
 const ITEM_PADDING_X = 2;
-
-/** Root border: 1px solid → 1px per side */
 const ROOT_BORDER = 1;
-
-/** Right-column borderLeft: 1px solid */
 const RIGHT_COL_BORDER_LEFT = 1;
-
-/** Operand cell borderLeft (applied for i > 0): 1px solid */
 const OPERAND_CELL_BORDER_LEFT = 1;
-
-/** Horizontal padding inside CodeFragment: padding "2px 4px" → 4px per side */
 const CODE_FRAGMENT_PADDING_X = 4;
 
 export const estimateSelectionDAGRowWidths = (
@@ -60,17 +50,15 @@ export const estimateSelectionDAGRowWidths = (
 
   // 2) Main content row (opName + details): padding applied once around the block
   const opNameLabel = buildSelectionDAGOpNameLabel(node);
-  const opNameWidth =
-    opNameLabel.length * charWidth +
+  const detailsLabel = buildSelectionDAGDetailsLabel(node);
+  const mainContentText = detailsLabel
+    ? `${opNameLabel} ${detailsLabel}`
+    : opNameLabel;
+
+  const mainContentWidth =
+    mainContentText.length * charWidth +
     CELL_PADDING_X * 2 +
     CODE_FRAGMENT_PADDING_X * 2;
-
-  const detailsLabel = buildSelectionDAGDetailsLabel(node);
-  const detailsWidth = detailsLabel
-    ? detailsLabel.length * charWidth +
-      CELL_PADDING_X * 2 +
-      CODE_FRAGMENT_PADDING_X * 2
-    : 0;
 
   // 3) Types row: each type in its own cell (like operands)
   let typesRowWidth = 0;
@@ -92,8 +80,7 @@ export const estimateSelectionDAGRowWidths = (
   // Right column width = max of its rows
   const rightColumnWidth = Math.max(
     operandsRowWidth,
-    opNameWidth,
-    detailsWidth,
+    mainContentWidth,
     typesWidth,
   );
 

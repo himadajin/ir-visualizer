@@ -72,7 +72,7 @@ export const getSelectionDAGLayoutedElements = (
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setGraph({
     rankdir: options.direction || graph.direction || "TD",
-    ranksep: 80,
+    ranksep: 95,
   });
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 

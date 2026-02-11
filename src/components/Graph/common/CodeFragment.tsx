@@ -14,7 +14,6 @@ const CodeFragment = ({
   return (
     <div
       style={{
-        background: "#f5f5f5",
         padding: "2px 4px",
         borderRadius: "2px",
         fontSize: "13px",

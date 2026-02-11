@@ -5,52 +5,87 @@ import {
   formatSelectionDAGOperand,
 } from "../../../ast/selectionDAGAST";
 
+// --- CSS-matching layout constants ---
+// These MUST stay in sync with the styles in SelectionDAGNode.tsx.
+
+/** Horizontal padding inside each cell: padding "8px 10px" → 10px per side */
+const CELL_PADDING_X = 10;
+
+/** Horizontal padding inside SelectionDAGOperandItem: padding "2px 2px" → 2px per side */
+const ITEM_PADDING_X = 2;
+
+/** Root border: 1px solid → 1px per side */
+const ROOT_BORDER = 1;
+
+/** Right-column borderLeft: 1px solid */
+const RIGHT_COL_BORDER_LEFT = 1;
+
+/** Operand cell borderLeft (applied for i > 0): 1px solid */
+const OPERAND_CELL_BORDER_LEFT = 1;
+
 export const estimateSelectionDAGRowWidths = (
   node: SelectionDAGNodeAST,
   charWidth: number,
-  options: {
-    fragmentPaddingX: number;
-    rowGap: number;
-    typesGap: number;
-  },
 ) => {
+  // Left column: nodeId text + cell padding
+  const leftColumnWidth = node.nodeId.length * charWidth + CELL_PADDING_X * 2;
+
+  // --- Right column rows ---
+
+  // 1) Operands row
   const operands = node.operands ?? [];
-  let operandsWidth = 0;
+  let operandsRowWidth = 0;
   if (operands.length > 0) {
     operands.forEach((op, i) => {
-      const isLast = i === operands.length - 1;
       const opText = formatSelectionDAGOperand(op);
-      // SelectionDAGOperandItem has padding "2px 2px" = 4px horizontal
-      let itemWidth = opText.length * charWidth + options.fragmentPaddingX + 4;
-      if (!isLast) {
-        // !isLast && <span style={{ marginLeft: "2px" }}>,</span>
-        // comma is roughly 1 charWidth
-        itemWidth += charWidth + 2;
+      // Each cell: outer cell padding + inner item padding + text
+      let cellWidth =
+        opText.length * charWidth + CELL_PADDING_X * 2 + ITEM_PADDING_X * 2;
+      // Non-first cells have a borderLeft separator
+      if (i > 0) {
+        cellWidth += OPERAND_CELL_BORDER_LEFT;
       }
-      operandsWidth += itemWidth;
+      operandsRowWidth += cellWidth;
     });
-    // ROW_CONTAINER_STYLE has gap of 6px
-    operandsWidth += (operands.length - 1) * options.rowGap;
   }
 
+  // 2) Main content row (opName + details): padding applied once around the block
   const opNameLabel = buildSelectionDAGOpNameLabel(node);
-  const opNameWidth = opNameLabel.length * charWidth + options.fragmentPaddingX;
+  const opNameWidth = opNameLabel.length * charWidth + CELL_PADDING_X * 2;
 
   const detailsLabel = buildSelectionDAGDetailsLabel(node);
   const detailsWidth = detailsLabel
-    ? detailsLabel.length * charWidth + options.fragmentPaddingX
+    ? detailsLabel.length * charWidth + CELL_PADDING_X * 2
     : 0;
 
-  const typesText = node.types.join(",");
-  // Row for ID and Types: [NodeId Fragment] [Gap] [:] [Gap] [Types Fragment]
-  const nodeLineWidth =
-    node.nodeId.length * charWidth +
-    options.fragmentPaddingX +
-    options.rowGap + // Gap before :
-    charWidth + // Width of :
-    options.rowGap + // Gap after :
-    typesText.length * charWidth +
-    options.fragmentPaddingX;
+  // 3) Types row: each type in its own cell (like operands)
+  let typesRowWidth = 0;
+  if (node.types.length > 0) {
+    node.types.forEach((t, i) => {
+      let cellWidth =
+        t.length * charWidth + CELL_PADDING_X * 2 + ITEM_PADDING_X * 2;
+      if (i > 0) {
+        cellWidth += OPERAND_CELL_BORDER_LEFT;
+      }
+      typesRowWidth += cellWidth;
+    });
+  }
+  const typesWidth = typesRowWidth;
 
-  return [operandsWidth, opNameWidth, detailsWidth, nodeLineWidth];
+  // Right column width = max of its rows
+  const rightColumnWidth = Math.max(
+    operandsRowWidth,
+    opNameWidth,
+    detailsWidth,
+    typesWidth,
+  );
+
+  // Total = left column + right-col borderLeft + right column + root border (left+right)
+  const totalWidth =
+    leftColumnWidth +
+    RIGHT_COL_BORDER_LEFT +
+    rightColumnWidth +
+    ROOT_BORDER * 2;
+
+  return [totalWidth];
 };

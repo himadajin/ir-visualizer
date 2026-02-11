@@ -10,6 +10,18 @@ body,
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }
+
+/* Keep the cursor consistent when hovering the graph. */
+.react-flow,
+.react-flow__pane,
+.react-flow__viewport,
+.react-flow__node,
+.react-flow__edge,
+.react-flow__edge-path,
+.react-flow__connection,
+.react-flow__connectionline {
+  cursor: default !important;
+}
 .code-node-wrapper pre {
   margin: 0;
   white-space: pre-wrap !important;

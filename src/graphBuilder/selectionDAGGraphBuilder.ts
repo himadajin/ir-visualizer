@@ -8,6 +8,7 @@ import type {
 export interface SelectionDAGEdge extends GraphEdge {
   sourceHandle?: string;
   targetHandle?: string;
+  isChainOrGlue?: boolean;
 }
 
 export interface SelectionDAGGraphData {
@@ -71,8 +72,8 @@ export function convertASTToGraph(
     .filter((e) => e.kind === "node")
     .map((e) => e.node);
 
-  // Build a set of known node IDs for edge validation
-  const knownNodeIds = new Set(dagNodes.map((n) => n.nodeId));
+  // Build a map of known node IDs for type lookup and edge validation
+  const nodeMap = new Map(dagNodes.map((n) => [n.nodeId, n]));
 
   // Convert each SelectionDAG node to a GraphNode
   dagNodes.forEach((dagNode) => {
@@ -87,12 +88,19 @@ export function convertASTToGraph(
     // Generate edges from operands
     if (dagNode.operands) {
       dagNode.operands.forEach((operand, index) => {
-        if (operand.kind === "node" && knownNodeIds.has(operand.nodeId)) {
+        if (operand.kind === "node" && nodeMap.has(operand.nodeId)) {
+          const sourceNode = nodeMap.get(operand.nodeId)!;
+          const sourceIndex = operand.index ?? 0;
+          const sourceType = sourceNode.types[sourceIndex];
+          const isChainOrGlue = sourceType === "ch" || sourceType === "glue";
+
           edges.push({
             id: `e-${operand.nodeId}-${dagNode.nodeId}-op${index}`,
             source: operand.nodeId,
             target: dagNode.nodeId,
+            sourceHandle: `${operand.nodeId}-type-${sourceIndex}`,
             targetHandle: `${dagNode.nodeId}-operand-${index}`,
+            isChainOrGlue,
           });
         }
       });

@@ -84,6 +84,29 @@ describe("selectionDAGGraphBuilder", () => {
     expect(result.edges[1].targetHandle).toBe("t2-operand-1");
   });
 
+  it("identifies ch and glue edges", () => {
+    const result = convertASTToGraph(
+      makeParseResult([
+        { nodeId: "t0", types: ["ch", "glue", "i32"], opName: "EntryToken" },
+        {
+          nodeId: "t1",
+          types: ["i32"],
+          opName: "Store",
+          operands: [
+            { kind: "node", nodeId: "t0", index: 0 }, // ch
+            { kind: "node", nodeId: "t0", index: 1 }, // glue
+            { kind: "node", nodeId: "t0", index: 2 }, // i32
+          ],
+        },
+      ]),
+    );
+
+    expect(result.edges).toHaveLength(3);
+    expect(result.edges[0].isChainOrGlue).toBe(true); // ch
+    expect(result.edges[1].isChainOrGlue).toBe(true); // glue
+    expect(result.edges[2].isChainOrGlue).toBe(false); // i32
+  });
+
   it("does not create edges for inline operands", () => {
     const result = convertASTToGraph(
       makeParseResult([

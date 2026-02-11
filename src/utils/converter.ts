@@ -15,11 +15,8 @@ const MAX_CHARS_LLVM = 80;
 const MIN_CHARS_SELECTION_DAG = 12;
 const MAX_CHARS_SELECTION_DAG = 50;
 
-const SELECTION_DAG_PADDING_X = 10;
 const SELECTION_DAG_PADDING_Y = 8;
 const SELECTION_DAG_ROW_GAP = 6;
-const SELECTION_DAG_FRAGMENT_PADDING_X = 8;
-const SELECTION_DAG_TYPES_GAP = 4;
 
 /**
  * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
@@ -93,12 +90,8 @@ const calculateSelectionDAGDimensions = (node: GraphNode) => {
   }
 
   const ast = node.astData;
-  const rowWidths = estimateSelectionDAGRowWidths(ast, metrics.width, {
-    fragmentPaddingX: SELECTION_DAG_FRAGMENT_PADDING_X,
-    rowGap: SELECTION_DAG_ROW_GAP,
-    typesGap: SELECTION_DAG_TYPES_GAP,
-  });
-  const width = Math.max(...rowWidths) + SELECTION_DAG_PADDING_X * 2;
+  const rowWidths = estimateSelectionDAGRowWidths(ast, metrics.width);
+  const width = Math.max(...rowWidths);
 
   // Calculate actual number of rows rendered
   const operands = ast.operands ?? [];
@@ -187,13 +180,16 @@ export const createReactFlowEdge = (
     zIndex: 0,
     markerEnd: {
       type: MarkerType.ArrowClosed,
+      color: "#666",
     },
+    style: { stroke: "#666" },
   };
 };
 
 export interface SelectionDAGReactFlowEdge {
   sourceHandle?: string;
   targetHandle?: string;
+  isChainOrGlue?: boolean;
 }
 
 export const createSelectionDAGReactFlowEdge = (
@@ -212,6 +208,11 @@ export const createSelectionDAGReactFlowEdge = (
     zIndex: 0,
     markerEnd: {
       type: MarkerType.ArrowClosed,
+      color: "#666",
+    },
+    style: {
+      stroke: "#666",
+      ...(edge.isChainOrGlue ? { strokeDasharray: "8 8" } : {}),
     },
   };
 };

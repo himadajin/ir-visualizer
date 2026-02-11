@@ -6,24 +6,82 @@ import {
   buildSelectionDAGOpNameLabel,
   formatSelectionDAGOperand,
 } from "../../../ast/selectionDAGAST";
-import NodeShell from "../common/NodeShell";
-import CodeFragment from "../common/CodeFragment";
 
-// --- Styles ---
+// --- Style constants ---
+
+const BORDER_COLOR = "#050505";
+const BORDER = `1px solid ${BORDER_COLOR}`;
+const CELL_PADDING = "8px 10px";
 
 const HANDLE_STYLE: React.CSSProperties = {
   width: "4px",
   height: "4px",
   background: "#ffffff",
-  border: "1px solid #050505",
+  border: BORDER,
   zIndex: 10,
 };
 
-const ROW_CONTAINER_STYLE: React.CSSProperties = {
+/** Root container — replaces NodeShell */
+const ROOT_STYLE: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "stretch",
+  border: BORDER,
+  borderRadius: "4px",
+  background: "#fff",
+  fontFamily: "monospace",
+  fontSize: "14px",
+  lineHeight: "20px",
+  whiteSpace: "nowrap",
+  boxSizing: "border-box",
+  width: "100%",
+};
+
+/** Left column: nodeId + source handle */
+const LEFT_COLUMN_STYLE: React.CSSProperties = {
+  position: "relative",
   display: "flex",
   alignItems: "center",
+  justifyContent: "center",
+  padding: CELL_PADDING,
+};
+
+/** Right column: operands / opName+details / types */
+const RIGHT_COLUMN_STYLE: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  borderLeft: BORDER,
+  flex: 1,
+  minWidth: 0,
+};
+
+/** Operands row (separated from content below by borderBottom) */
+const OPERANDS_ROW_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  justifyContent: "center",
+  borderBottom: BORDER,
+};
+
+/** Main content area: opName + optional details */
+const MAIN_CONTENT_STYLE: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  padding: CELL_PADDING,
   gap: "6px",
 };
+
+/** Types row (separated from content above by borderTop) */
+const TYPES_ROW_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  justifyContent: "center",
+  borderTop: BORDER,
+};
+
+// --- Sub-components ---
 
 const SelectionDAGOperandItem = ({
   node,
@@ -35,28 +93,56 @@ const SelectionDAGOperandItem = ({
   const operand = node.operands?.[index];
   if (!operand) return null;
 
-  const isLast = index === (node.operands?.length ?? 0) - 1;
-
   return (
     <div style={{ position: "relative", padding: "2px 2px" }}>
-      <Handle
-        type="target"
-        position={Position.Top}
-        id={`${node.nodeId}-operand-${index}`}
-        style={{
-          ...HANDLE_STYLE,
-          top: "-10px",
-          left: "50%",
-          transform: "translateX(-50%)",
-        }}
-      />
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <CodeFragment code={formatSelectionDAGOperand(operand)} />
-        {!isLast && <span style={{ marginLeft: "2px" }}>,</span>}
-      </div>
+      {operand.kind === "node" && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          id={`${node.nodeId}-operand-${index}`}
+          style={{
+            ...HANDLE_STYLE,
+            top: "-12px",
+            left: "50%",
+            transform: "translateX(-50%)",
+          }}
+        />
+      )}
+      <span>{formatSelectionDAGOperand(operand)}</span>
     </div>
   );
 };
+
+const SelectionDAGTypeItem = ({
+  node,
+  index,
+}: {
+  node: SelectionDAGNodeAST;
+  index: number;
+}) => {
+  const type = node.types[index];
+  if (!type) return null;
+
+  return (
+    <div style={{ position: "relative", padding: "2px 2px" }}>
+      <span>{type}</span>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id={`${node.nodeId}-type-${index}`}
+        style={{
+          ...HANDLE_STYLE,
+          bottom: "-12px",
+          left: "50%",
+          transform: "translateX(-50%)",
+        }}
+        isConnectable={false}
+      />
+    </div>
+  );
+};
+
+// --- Main component ---
 
 const SelectionDAGNode = ({ data }: NodeProps) => {
   const node = data.astData as SelectionDAGNodeAST;
@@ -66,50 +152,60 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
   const detailsLabel = buildSelectionDAGDetailsLabel(node);
 
   return (
-    <NodeShell
-      borderColor="#050505"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "6px",
-        padding: "8px 10px",
-        whiteSpace: "nowrap",
-        fontSize: "13px",
-      }}
-    >
-      <div style={ROW_CONTAINER_STYLE}>
-        {operands.map((_, i) => (
-          <SelectionDAGOperandItem key={i} node={node} index={i} />
-        ))}
+    <div style={ROOT_STYLE}>
+      {/* Left column: nodeId */}
+      <div style={LEFT_COLUMN_STYLE}>
+        <span>{node.nodeId}</span>
       </div>
-      <div style={ROW_CONTAINER_STYLE}>
-        <CodeFragment code={opNameLabel} />
-      </div>
-      {detailsLabel && (
-        <div style={ROW_CONTAINER_STYLE}>
-          <CodeFragment code={detailsLabel} />
+
+      {/* Right column: operands, opName/details, types */}
+      <div style={RIGHT_COLUMN_STYLE}>
+        {operands.length > 0 && (
+          <div style={OPERANDS_ROW_STYLE}>
+            {operands.map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: CELL_PADDING,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flex: 1,
+                  ...(i > 0 ? { borderLeft: BORDER } : {}),
+                }}
+              >
+                <SelectionDAGOperandItem node={node} index={i} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* opName + details */}
+        <div style={MAIN_CONTENT_STYLE}>
+          <span>{opNameLabel}</span>
+          {detailsLabel && <span>{detailsLabel}</span>}
         </div>
-      )}
-      <div style={ROW_CONTAINER_STYLE}>
-        <div style={{ position: "relative" }}>
-          <CodeFragment code={node.nodeId} />
-          <Handle
-            type="source"
-            position={Position.Bottom}
-            style={{
-              ...HANDLE_STYLE,
-              bottom: "-10px",
-              left: "50%",
-              transform: "translateX(-50%)",
-            }}
-            isConnectable={false}
-          />
+
+        {/* types */}
+        <div style={TYPES_ROW_STYLE}>
+          {node.types.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                padding: CELL_PADDING,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flex: 1,
+                ...(i > 0 ? { borderLeft: BORDER } : {}),
+              }}
+            >
+              <SelectionDAGTypeItem node={node} index={i} />
+            </div>
+          ))}
         </div>
-        <span style={{ fontWeight: "bold" }}>:</span>
-        <CodeFragment code={node.types.join(",")} />
       </div>
-    </NodeShell>
+    </div>
   );
 };
 

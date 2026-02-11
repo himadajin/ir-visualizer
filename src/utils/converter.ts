@@ -1,6 +1,7 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import type { GraphNode, GraphEdge } from "../types/graph";
 import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
+import { buildSelectionDAGDetailsLabel } from "../ast/selectionDAGAST";
 import { estimateSelectionDAGRowWidths } from "../components/Graph/SelectionDAG/selectionDAGLayoutUtils";
 import { getFontMetrics } from "./fontUtils";
 
@@ -91,14 +92,22 @@ const calculateSelectionDAGDimensions = (node: GraphNode) => {
     return calculateCodeNodeDimensions(node, metrics);
   }
 
-  const rowWidths = estimateSelectionDAGRowWidths(node.astData, metrics.width, {
+  const ast = node.astData;
+  const rowWidths = estimateSelectionDAGRowWidths(ast, metrics.width, {
     fragmentPaddingX: SELECTION_DAG_FRAGMENT_PADDING_X,
     rowGap: SELECTION_DAG_ROW_GAP,
     typesGap: SELECTION_DAG_TYPES_GAP,
   });
   const width = Math.max(...rowWidths) + SELECTION_DAG_PADDING_X * 2;
 
-  const rows = 3;
+  // Calculate actual number of rows rendered
+  const operands = ast.operands ?? [];
+  const detailsLabel = buildSelectionDAGDetailsLabel(ast);
+
+  let rows = 2; // OpName and ID:Types are always present
+  if (operands.length > 0) rows++;
+  if (detailsLabel) rows++;
+
   const height =
     rows * metrics.height +
     (rows - 1) * SELECTION_DAG_ROW_GAP +

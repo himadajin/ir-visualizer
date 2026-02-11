@@ -64,7 +64,6 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
 
   const opNameLabel = buildSelectionDAGOpNameLabel(node);
   const detailsLabel = buildSelectionDAGDetailsLabel(node);
-  const opLabel = detailsLabel ? `${opNameLabel} ${detailsLabel}` : opNameLabel;
 
   return (
     <NodeShell
@@ -85,8 +84,13 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
         ))}
       </div>
       <div style={ROW_CONTAINER_STYLE}>
-        <CodeFragment code={opLabel} />
+        <CodeFragment code={opNameLabel} />
       </div>
+      {detailsLabel && (
+        <div style={ROW_CONTAINER_STYLE}>
+          <CodeFragment code={detailsLabel} />
+        </div>
+      )}
       <div style={ROW_CONTAINER_STYLE}>
         <div style={{ position: "relative" }}>
           <CodeFragment code={node.nodeId} />

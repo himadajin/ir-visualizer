@@ -28,24 +28,25 @@ const DEFAULT_CODE = `graph TD
   D -->|No| C
 `;
 
-const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
+const DEFAULT_LLVM_CODE = `
+define i32 @func(i32 %0, i32 %1, i1  %2) {
   br i1 %2, label %4, label %7
 
-4:                                                ; preds = %3
+4:
   %5 = add i32 %0, 45
   %6 = add i32 %5, %1
   br label %18
 
-7:                                                ; preds = %3
+7:
   %8 = icmp sgt i32 %1, 0
   br i1 %8, label %12, label %9
 
-9:                                                ; preds = %12, %7
+9:
   %10 = phi i32 [ %1, %7 ], [ %15, %12 ]
   %11 = sub i32 %10, %0
   br label %18
 
-12:                                               ; preds = %7, %12
+12:
   %13 = phi i32 [ %16, %12 ], [ 0, %7 ]
   %14 = phi i32 [ %15, %12 ], [ %1, %7 ]
   %15 = sub i32 %14, %13
@@ -53,20 +54,28 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
   %17 = icmp slt i32 %16, %15
   br i1 %17, label %12, label %9
 
-18:                                               ; preds = %9, %4
+18:
   %19 = phi i32 [ %6, %4 ], [ %11, %9 ]
   ret i32 %19
 }`;
 
-const DEFAULT_SELECTIONDAG_CODE = `Optimized legalized selection DAG: %bb.0 'test:entry'
-SelectionDAG has 12 nodes:
+const DEFAULT_SELECTIONDAG_CODE = `
+Optimized legalized selection DAG: %bb.0 'test:entry'
+SelectionDAG has 22 nodes:
   t0: ch,glue = EntryToken
-  t2: i64,ch = CopyFromReg t0, Register:i64 %0
-  t4: i64,ch = CopyFromReg t0, Register:i64 %1
-  t6: i64 = add t2, t4
-  t10: ch = store<(store (s64) into %ir.a.addr)> t0, t2, FrameIndex:i64<0>, <null>
-  t12: ch = store<(store (s64) into %ir.b.addr)> t10, t4, FrameIndex:i64<1>, <null>
-  t22: ch = RISCVISD::RET_GLUE t12, Register:i64 $x10, t12:1
+        t2: i64,ch = CopyFromReg t0, Register:i64 %0
+      t10: ch = store<(store (s64) into %ir.a.addr)> t0, t2, FrameIndex:i64<0>, undef:i64
+      t4: i64,ch = CopyFromReg t0, Register:i64 %1
+    t12: ch = store<(store (s64) into %ir.b.addr)> t10, t4, FrameIndex:i64<1>, undef:i64
+    t6: i64,ch = CopyFromReg t0, Register:i64 %2
+  t14: ch = store<(store (s64) into %ir.c.addr)> t12, t6, FrameIndex:i64<2>, undef:i64
+      t15: i64,ch = load<(dereferenceable load (s64) from %ir.a.addr)> t14, FrameIndex:i64<0>, undef:i64
+        t16: i64,ch = load<(dereferenceable load (s64) from %ir.b.addr)> t14, FrameIndex:i64<1>, undef:i64
+        t17: i64,ch = load<(dereferenceable load (s64) from %ir.c.addr)> t14, FrameIndex:i64<2>, undef:i64
+      t18: i64 = mul t16, t17
+    t19: i64 = add t15, t18
+  t21: ch,glue = CopyToReg t14, Register:i64 $x10, t19
+  t22: ch = RISCVISD::RET_GLUE t21, Register:i64 $x10, t21:1
 `;
 
 const MIN_WIDTH = 200; // min px

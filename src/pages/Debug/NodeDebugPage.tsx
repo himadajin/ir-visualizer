@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { NodePreview } from "./NodePreview";
 import { llvmNodeGroup } from "./llvmNodeDefs";
 import { mermaidNodeGroup } from "./mermaidNodeDefs";
+import { selectionDAGNodeGroup } from "./selectionDAGNodeDefs";
 import { styles } from "./types";
 import type { NodeDefGroup } from "./types";
 
-type Mode = "llvm" | "mermaid";
+type Mode = "llvm" | "mermaid" | "selectionDAG";
 
 export default function NodeDebugPage() {
   const [mode, setMode] = useState<Mode>("llvm");
@@ -26,6 +27,7 @@ export default function NodeDebugPage() {
   const groups: Record<Mode, NodeDefGroup> = {
     llvm: llvmNodeGroup,
     mermaid: mermaidNodeGroup,
+    selectionDAG: selectionDAGNodeGroup,
   };
   const group = groups[mode];
 
@@ -41,6 +43,7 @@ export default function NodeDebugPage() {
         >
           <option value="llvm">LLVM</option>
           <option value="mermaid">Mermaid</option>
+          <option value="selectionDAG">SelectionDAG</option>
         </select>
       </div>
 

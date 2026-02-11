@@ -1,11 +1,45 @@
 import { describe, it, expect } from "vitest";
+import { MarkerType } from "@xyflow/react";
 import {
   createReactFlowNode,
   createReactFlowEdge,
+  createSelectionDAGReactFlowEdge,
   calculateNodeDimensions,
   NODE_PADDING,
 } from "../converter";
 import type { GraphNode, GraphEdge } from "../../types/graph";
+
+describe("createSelectionDAGReactFlowEdge", () => {
+  it("should create a normal edge when isChainOrGlue is false", () => {
+    const edge = {
+      id: "e1",
+      source: "n1",
+      target: "n2",
+      isChainOrGlue: false,
+    };
+    const rfEdge = createSelectionDAGReactFlowEdge(edge);
+    expect(rfEdge.style).toEqual({ stroke: "#666" });
+    expect(rfEdge.markerStart).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: "#666",
+    });
+  });
+
+  it("should create a dashed edge when isChainOrGlue is true", () => {
+    const edge = {
+      id: "e1",
+      source: "n1",
+      target: "n2",
+      isChainOrGlue: true,
+    };
+    const rfEdge = createSelectionDAGReactFlowEdge(edge);
+    expect(rfEdge.style).toEqual({ stroke: "#666", strokeDasharray: "8 8" });
+    expect(rfEdge.markerStart).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: "#666",
+    });
+  });
+});
 
 describe("calculateNodeDimensions", () => {
   // In Node.js test environment, fontUtils falls back to { width: 8, height: 20 }
@@ -184,7 +218,11 @@ describe("createReactFlowEdge", () => {
     expect(rfEdge.label).toBe("true");
     expect(rfEdge.type).toBe("customBezier");
     expect(rfEdge.animated).toBe(false);
-    expect(rfEdge.markerEnd).toBeDefined();
+    expect(rfEdge.style).toEqual({ stroke: "#666" });
+    expect(rfEdge.markerStart).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: "#666",
+    });
   });
 
   it("should use custom edge type when provided", () => {

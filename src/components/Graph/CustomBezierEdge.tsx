@@ -8,7 +8,7 @@ const CustomBezierEdge = ({
   sourcePosition,
   targetPosition,
   style = {},
-  markerEnd,
+  markerStart,
 }: EdgeProps) => {
   const [edgePath] = getBezierPath({
     sourceX,
@@ -20,7 +20,7 @@ const CustomBezierEdge = ({
     curvature: 0.75,
   });
 
-  return <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />;
+  return <BaseEdge path={edgePath} markerStart={markerStart} style={style} />;
 };
 
 export default CustomBezierEdge;

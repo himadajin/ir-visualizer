@@ -18,6 +18,7 @@ import { GraphViewer } from "./components/Graph/GraphViewer";
 import { useGraphData } from "./hooks/useGraphData";
 import { parseMermaid } from "./parser/mermaid";
 import { parseLLVM } from "./parser/llvm";
+import { parseSelectionDAGToGraphData } from "./parser/selectionDAG";
 
 const DEFAULT_CODE = `graph TD
   A[Is this working?] -->|Yes| B(Great!)
@@ -27,24 +28,25 @@ const DEFAULT_CODE = `graph TD
   D -->|No| C
 `;
 
-const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
+const DEFAULT_LLVM_CODE = `
+define i32 @func(i32 %0, i32 %1, i1  %2) {
   br i1 %2, label %4, label %7
 
-4:                                                ; preds = %3
+4:
   %5 = add i32 %0, 45
   %6 = add i32 %5, %1
   br label %18
 
-7:                                                ; preds = %3
+7:
   %8 = icmp sgt i32 %1, 0
   br i1 %8, label %12, label %9
 
-9:                                                ; preds = %12, %7
+9:
   %10 = phi i32 [ %1, %7 ], [ %15, %12 ]
   %11 = sub i32 %10, %0
   br label %18
 
-12:                                               ; preds = %7, %12
+12:
   %13 = phi i32 [ %16, %12 ], [ 0, %7 ]
   %14 = phi i32 [ %15, %12 ], [ %1, %7 ]
   %15 = sub i32 %14, %13
@@ -52,15 +54,34 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
   %17 = icmp slt i32 %16, %15
   br i1 %17, label %12, label %9
 
-18:                                               ; preds = %9, %4
+18:
   %19 = phi i32 [ %6, %4 ], [ %11, %9 ]
   ret i32 %19
 }`;
 
+const DEFAULT_SELECTIONDAG_CODE = `
+Optimized legalized selection DAG: %bb.0 'test:entry'
+SelectionDAG has 22 nodes:
+  t0: ch,glue = EntryToken
+        t2: i64,ch = CopyFromReg t0, Register:i64 %0
+      t10: ch = store<(store (s64) into %ir.a.addr)> t0, t2, FrameIndex:i64<0>, undef:i64
+      t4: i64,ch = CopyFromReg t0, Register:i64 %1
+    t12: ch = store<(store (s64) into %ir.b.addr)> t10, t4, FrameIndex:i64<1>, undef:i64
+    t6: i64,ch = CopyFromReg t0, Register:i64 %2
+  t14: ch = store<(store (s64) into %ir.c.addr)> t12, t6, FrameIndex:i64<2>, undef:i64
+      t15: i64,ch = load<(dereferenceable load (s64) from %ir.a.addr)> t14, FrameIndex:i64<0>, undef:i64
+        t16: i64,ch = load<(dereferenceable load (s64) from %ir.b.addr)> t14, FrameIndex:i64<1>, undef:i64
+        t17: i64,ch = load<(dereferenceable load (s64) from %ir.c.addr)> t14, FrameIndex:i64<2>, undef:i64
+      t18: i64 = mul t16, t17
+    t19: i64 = add t15, t18
+  t21: ch,glue = CopyToReg t14, Register:i64 $x10, t19
+  t22: ch = RISCVISD::RET_GLUE t21, Register:i64 $x10, t21:1
+`;
+
 const MIN_WIDTH = 200; // min px
 
 type ToolbarPaneProps = {
-  mode: "mermaid" | "llvm-ir";
+  mode: "mermaid" | "llvm-ir" | "selectionDAG";
   onModeChange: (event: SelectChangeEvent) => void;
 };
 
@@ -86,6 +107,7 @@ function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
           >
             <MenuItem value="mermaid">Mermaid</MenuItem>
             <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
+            <MenuItem value="selectionDAG">SelectionDAG</MenuItem>
           </Select>
         </FormControl>
       </Toolbar>
@@ -153,7 +175,9 @@ function GraphPane({
 }
 
 function App() {
-  const [mode, setMode] = useState<"mermaid" | "llvm-ir">("llvm-ir");
+  const [mode, setMode] = useState<"mermaid" | "llvm-ir" | "selectionDAG">(
+    "llvm-ir",
+  );
   const [code, setCode] = useState(DEFAULT_LLVM_CODE);
   const {
     nodes,
@@ -161,7 +185,9 @@ function App() {
     onNodesChange,
     onEdgesChange,
     updateGraph,
+    updateSelectionDAGGraph,
     resetLayout,
+    resetSelectionDAGLayout,
   } = useGraphData();
   const [error, setError] = useState<string | null>(null);
 
@@ -207,10 +233,14 @@ function App() {
         let graph;
         if (mode === "mermaid") {
           graph = parseMermaid(code);
+          updateGraph(graph);
+        } else if (mode === "selectionDAG") {
+          graph = parseSelectionDAGToGraphData(code);
+          updateSelectionDAGGraph(graph);
         } else {
           graph = parseLLVM(code);
+          updateGraph(graph);
         }
-        updateGraph(graph);
         setError(null);
       } catch (error: unknown) {
         // Only show error if it persists, or maybe just log it?
@@ -224,7 +254,7 @@ function App() {
     }, 750);
 
     return () => clearTimeout(timer);
-  }, [code, mode, updateGraph]);
+  }, [code, mode, updateGraph, updateSelectionDAGGraph]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     console.log(value);
@@ -234,9 +264,18 @@ function App() {
   }, []);
 
   const handleModeChange = useCallback((event: SelectChangeEvent) => {
-    const newMode = event.target.value as "mermaid" | "llvm-ir";
+    const newMode = event.target.value as
+      | "mermaid"
+      | "llvm-ir"
+      | "selectionDAG";
     setMode(newMode);
-    setCode(newMode === "mermaid" ? DEFAULT_CODE : DEFAULT_LLVM_CODE);
+    if (newMode === "mermaid") {
+      setCode(DEFAULT_CODE);
+    } else if (newMode === "selectionDAG") {
+      setCode(DEFAULT_SELECTIONDAG_CODE);
+    } else {
+      setCode(DEFAULT_LLVM_CODE);
+    }
   }, []);
 
   return (
@@ -249,7 +288,7 @@ function App() {
           width={leftPaneWidth}
           code={code}
           onChange={handleEditorChange}
-          language={mode === "llvm-ir" ? "llvm" : "mermaid"}
+          language={mode === "mermaid" ? "mermaid" : "llvm"}
         />
 
         {/* Resizer */}
@@ -270,7 +309,9 @@ function App() {
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onResetLayout={resetLayout}
+          onResetLayout={
+            mode === "selectionDAG" ? resetSelectionDAGLayout : resetLayout
+          }
           error={error}
         />
       </Box>

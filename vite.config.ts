@@ -15,6 +15,11 @@ export default defineConfig({
       },
     },
   },
+  server: {
+    watch: {
+      usePolling: true,
+    },
+  },
   test: {
     include: ["src/**/*.test.ts"],
     environment: "node",

@@ -87,7 +87,7 @@ export const useGraphData = () => {
         setLastSignature(signature);
       }
     },
-    [edges, lastSignature, nodes, setNodes, setEdges],
+    [lastSignature, nodes, setNodes, setEdges],
   );
 
   const resetLayout = useCallback(() => {
@@ -130,7 +130,7 @@ export const useGraphData = () => {
         setLastSignature(signature);
       }
     },
-    [lastSignature, nodes, setNodes, setEdges],
+    [lastSignature, nodes, edges, setNodes, setEdges],
   );
 
   const resetSelectionDAGLayout = useCallback(() => {

@@ -1,5 +1,7 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import type { GraphNode, GraphEdge } from "../types/graph";
+import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
+import { estimateSelectionDAGRowWidths } from "../components/Graph/SelectionDAG/selectionDAGLayoutUtils";
 import { getFontMetrics } from "./fontUtils";
 
 export const NODE_PADDING = 20;
@@ -9,6 +11,14 @@ const MIN_CHARS_MERMAID = 10;
 const MAX_CHARS_MERMAID = 30;
 const MIN_CHARS_LLVM = 40;
 const MAX_CHARS_LLVM = 80;
+const MIN_CHARS_SELECTION_DAG = 12;
+const MAX_CHARS_SELECTION_DAG = 50;
+
+const SELECTION_DAG_PADDING_X = 10;
+const SELECTION_DAG_PADDING_Y = 8;
+const SELECTION_DAG_ROW_GAP = 6;
+const SELECTION_DAG_FRAGMENT_PADDING_X = 8;
+const SELECTION_DAG_TYPES_GAP = 4;
 
 /**
  * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
@@ -26,16 +36,29 @@ const FONT_SIZE = "14px";
 const LINE_HEIGHT = "20px";
 const HEADER_OFFSET = 24;
 
-export const calculateNodeDimensions = (node: GraphNode) => {
-  const metrics = getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
-  const maxChars =
-    node.language === "mermaid" ? MAX_CHARS_MERMAID : MAX_CHARS_LLVM;
-  const minChars =
-    node.language === "mermaid" ? MIN_CHARS_MERMAID : MIN_CHARS_LLVM;
+type NodeSizingConfig = {
+  minChars: number;
+  maxChars: number;
+};
 
-  const lines = node.label?.split("\n") || [""];
+const getSizingConfig = (node: GraphNode): NodeSizingConfig => {
+  if (node.nodeType === "selectionDAG-node") {
+    return {
+      minChars: MIN_CHARS_SELECTION_DAG,
+      maxChars: MAX_CHARS_SELECTION_DAG,
+    };
+  }
 
-  // Find the longest line in characters, capped at the max allowed characters
+  if (node.language === "mermaid") {
+    return { minChars: MIN_CHARS_MERMAID, maxChars: MAX_CHARS_MERMAID };
+  }
+
+  return { minChars: MIN_CHARS_LLVM, maxChars: MAX_CHARS_LLVM };
+};
+
+const getLabelLines = (label?: string): string[] => label?.split("\n") || [""];
+
+const measureWrappedLines = (lines: string[], maxChars: number) => {
   let maxLineLength = 0;
   let totalLines = 0;
 
@@ -45,22 +68,62 @@ export const calculateNodeDimensions = (node: GraphNode) => {
       maxLineLength = lineLength;
     }
 
-    // Calculate wrapping
-    // Math.max(1, ...) ensures even empty lines count as 1 row if they exist in the array
     const wrappedLines = Math.max(1, Math.ceil(lineLength / maxChars));
     totalLines += wrappedLines;
   });
 
-  // The width is the longest line (up to maxChars) * charWidth
-  // We limit maxLineLength to maxChars because of the wrapping
-  const effectiveMaxChars = Math.min(maxLineLength, maxChars);
+  return { maxLineLength, totalLines };
+};
 
-  // Clamp min width to avoid tiny nodes
+const isSelectionDAGNode = (
+  node: GraphNode,
+): node is GraphNode & {
+  astData: SelectionDAGNodeAST;
+} => {
+  if (node.nodeType !== "selectionDAG-node") return false;
+  const astData = node.astData as Partial<SelectionDAGNodeAST> | undefined;
+  return Boolean(astData?.nodeId && astData?.opName && astData?.types);
+};
+
+const calculateSelectionDAGDimensions = (node: GraphNode) => {
+  const metrics = getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
+  if (!isSelectionDAGNode(node)) {
+    return calculateCodeNodeDimensions(node, metrics);
+  }
+
+  const rowWidths = estimateSelectionDAGRowWidths(node.astData, metrics.width, {
+    fragmentPaddingX: SELECTION_DAG_FRAGMENT_PADDING_X,
+    rowGap: SELECTION_DAG_ROW_GAP,
+    typesGap: SELECTION_DAG_TYPES_GAP,
+  });
+  const width = Math.max(...rowWidths) + SELECTION_DAG_PADDING_X * 2;
+
+  const rows = 3;
+  const height =
+    rows * metrics.height +
+    (rows - 1) * SELECTION_DAG_ROW_GAP +
+    SELECTION_DAG_PADDING_Y * 2;
+
+  return { width, height };
+};
+
+const calculateCodeNodeDimensions = (
+  node: GraphNode,
+  metricsParam?: {
+    width: number;
+    height: number;
+  },
+) => {
+  const metrics =
+    metricsParam ?? getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
+  const { minChars, maxChars } = getSizingConfig(node);
+  const lines = getLabelLines(node.label);
+  const { maxLineLength, totalLines } = measureWrappedLines(lines, maxChars);
+
+  const effectiveMaxChars = Math.min(maxLineLength, maxChars);
   const finalChars = Math.max(effectiveMaxChars, minChars);
 
   const width = finalChars * metrics.width + NODE_PADDING * 2;
-  // Add header offset only if blockLabel is present (not undefined).
-  // Note: null is treated as 'entry' in CodeNode so it counts as present.
   const hasLabel = node.blockLabel !== undefined;
   const height =
     totalLines * metrics.height +
@@ -68,6 +131,14 @@ export const calculateNodeDimensions = (node: GraphNode) => {
     (hasLabel ? HEADER_OFFSET : 0);
 
   return { width, height };
+};
+
+export const calculateNodeDimensions = (node: GraphNode) => {
+  if (node.nodeType === "selectionDAG-node") {
+    return calculateSelectionDAGDimensions(node);
+  }
+
+  return calculateCodeNodeDimensions(node);
 };
 
 export const createReactFlowNode = (

@@ -23,12 +23,18 @@ const RIGHT_COL_BORDER_LEFT = 1;
 /** Operand cell borderLeft (applied for i > 0): 1px solid */
 const OPERAND_CELL_BORDER_LEFT = 1;
 
+/** Horizontal padding inside CodeFragment: padding "2px 4px" → 4px per side */
+const CODE_FRAGMENT_PADDING_X = 4;
+
 export const estimateSelectionDAGRowWidths = (
   node: SelectionDAGNodeAST,
   charWidth: number,
 ) => {
   // Left column: nodeId text + cell padding
-  const leftColumnWidth = node.nodeId.length * charWidth + CELL_PADDING_X * 2;
+  const leftColumnWidth =
+    node.nodeId.length * charWidth +
+    CELL_PADDING_X * 2 +
+    CODE_FRAGMENT_PADDING_X * 2;
 
   // --- Right column rows ---
 
@@ -40,7 +46,10 @@ export const estimateSelectionDAGRowWidths = (
       const opText = formatSelectionDAGOperand(op);
       // Each cell: outer cell padding + inner item padding + text
       let cellWidth =
-        opText.length * charWidth + CELL_PADDING_X * 2 + ITEM_PADDING_X * 2;
+        opText.length * charWidth +
+        CELL_PADDING_X * 2 +
+        ITEM_PADDING_X * 2 +
+        CODE_FRAGMENT_PADDING_X * 2;
       // Non-first cells have a borderLeft separator
       if (i > 0) {
         cellWidth += OPERAND_CELL_BORDER_LEFT;
@@ -51,11 +60,16 @@ export const estimateSelectionDAGRowWidths = (
 
   // 2) Main content row (opName + details): padding applied once around the block
   const opNameLabel = buildSelectionDAGOpNameLabel(node);
-  const opNameWidth = opNameLabel.length * charWidth + CELL_PADDING_X * 2;
+  const opNameWidth =
+    opNameLabel.length * charWidth +
+    CELL_PADDING_X * 2 +
+    CODE_FRAGMENT_PADDING_X * 2;
 
   const detailsLabel = buildSelectionDAGDetailsLabel(node);
   const detailsWidth = detailsLabel
-    ? detailsLabel.length * charWidth + CELL_PADDING_X * 2
+    ? detailsLabel.length * charWidth +
+      CELL_PADDING_X * 2 +
+      CODE_FRAGMENT_PADDING_X * 2
     : 0;
 
   // 3) Types row: each type in its own cell (like operands)
@@ -63,7 +77,10 @@ export const estimateSelectionDAGRowWidths = (
   if (node.types.length > 0) {
     node.types.forEach((t, i) => {
       let cellWidth =
-        t.length * charWidth + CELL_PADDING_X * 2 + ITEM_PADDING_X * 2;
+        t.length * charWidth +
+        CELL_PADDING_X * 2 +
+        ITEM_PADDING_X * 2 +
+        CODE_FRAGMENT_PADDING_X * 2;
       if (i > 0) {
         cellWidth += OPERAND_CELL_BORDER_LEFT;
       }

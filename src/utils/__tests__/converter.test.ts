@@ -19,7 +19,7 @@ describe("createSelectionDAGReactFlowEdge", () => {
     };
     const rfEdge = createSelectionDAGReactFlowEdge(edge);
     expect(rfEdge.style).toEqual({ stroke: "#666" });
-    expect(rfEdge.markerEnd).toEqual({
+    expect(rfEdge.markerStart).toEqual({
       type: MarkerType.ArrowClosed,
       color: "#666",
     });
@@ -33,8 +33,8 @@ describe("createSelectionDAGReactFlowEdge", () => {
       isChainOrGlue: true,
     };
     const rfEdge = createSelectionDAGReactFlowEdge(edge);
-    expect(rfEdge.style).toEqual({ stroke: "#666", strokeDasharray: "5 5" });
-    expect(rfEdge.markerEnd).toEqual({
+    expect(rfEdge.style).toEqual({ stroke: "#666", strokeDasharray: "8 8" });
+    expect(rfEdge.markerStart).toEqual({
       type: MarkerType.ArrowClosed,
       color: "#666",
     });
@@ -219,7 +219,7 @@ describe("createReactFlowEdge", () => {
     expect(rfEdge.type).toBe("customBezier");
     expect(rfEdge.animated).toBe(false);
     expect(rfEdge.style).toEqual({ stroke: "#666" });
-    expect(rfEdge.markerEnd).toEqual({
+    expect(rfEdge.markerStart).toEqual({
       type: MarkerType.ArrowClosed,
       color: "#666",
     });

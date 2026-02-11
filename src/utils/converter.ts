@@ -178,7 +178,7 @@ export const createReactFlowEdge = (
     animated: false,
     type: edgeType,
     zIndex: 0,
-    markerEnd: {
+    markerStart: {
       type: MarkerType.ArrowClosed,
       color: "#666",
     },
@@ -206,7 +206,7 @@ export const createSelectionDAGReactFlowEdge = (
     animated: false,
     type: edgeType,
     zIndex: 0,
-    markerEnd: {
+    markerStart: {
       type: MarkerType.ArrowClosed,
       color: "#666",
     },

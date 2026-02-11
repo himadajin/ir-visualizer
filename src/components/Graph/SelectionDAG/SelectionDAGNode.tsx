@@ -6,6 +6,7 @@ import {
   buildSelectionDAGOpNameLabel,
   formatSelectionDAGOperand,
 } from "../../../ast/selectionDAGAST";
+import CodeFragment from "../common/CodeFragment";
 
 // --- Style constants ---
 
@@ -108,7 +109,7 @@ const SelectionDAGOperandItem = ({
           }}
         />
       )}
-      <span>{formatSelectionDAGOperand(operand)}</span>
+      <CodeFragment code={formatSelectionDAGOperand(operand)} language="llvm" />
     </div>
   );
 };
@@ -125,7 +126,7 @@ const SelectionDAGTypeItem = ({
 
   return (
     <div style={{ position: "relative", padding: "2px 2px" }}>
-      <span>{type}</span>
+      <CodeFragment code={type} language="llvm" />
       <Handle
         type="source"
         position={Position.Bottom}
@@ -155,7 +156,7 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
     <div style={ROOT_STYLE}>
       {/* Left column: nodeId */}
       <div style={LEFT_COLUMN_STYLE}>
-        <span>{node.nodeId}</span>
+        <CodeFragment code={node.nodeId} language="llvm" />
       </div>
 
       {/* Right column: operands, opName/details, types */}
@@ -182,8 +183,8 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
 
         {/* opName + details */}
         <div style={MAIN_CONTENT_STYLE}>
-          <span>{opNameLabel}</span>
-          {detailsLabel && <span>{detailsLabel}</span>}
+          <CodeFragment code={opNameLabel} language="llvm" />
+          {detailsLabel && <CodeFragment code={detailsLabel} language="llvm" />}
         </div>
 
         {/* types */}

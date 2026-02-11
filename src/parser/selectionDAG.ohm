@@ -3,7 +3,7 @@ SelectionDAG {
   Node = space* NodeLHS space* "=" space* NodeRHS space*
   Comment = (~"\n" any)+
   NodeLHS = nodeId ":" Types
-  NodeRHS = opName Details Verbose? Operands?
+  NodeRHS = opName Details Verbose? Operands? Verbose?
 
   Details = flag* Detail? Reg?
   flag
@@ -25,9 +25,10 @@ SelectionDAG {
 
   Operands = Operand ("," Operand)*
   Operand
-    = "<null>"       -- null
-    | NodeOperand    -- nodeOp
-    | InlineOperand  -- inlineOp
+    = "<null>"              -- null
+    | "<" NodeOperand ">"   -- wrappedNodeOp
+    | NodeOperand            -- nodeOp
+    | InlineOperand          -- inlineOp
   NodeOperand = nodeId NodeIndex?
   NodeIndex = ":" digit+
   InlineOperand = opName ":" Types Details

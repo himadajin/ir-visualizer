@@ -80,6 +80,49 @@ describe("parseSelectionDAGNode", () => {
     expect(result.comment).toBe("t0: ch = EntryToken,");
     expect(result.error).toBeUndefined();
   });
+
+  it("parses old-format hex id with [ORD=N] suffix", () => {
+    const result = parseSelectionDAGNode(
+      "  0x8c43010: ch = EntryToken [ORD=1]",
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x8c43010");
+    expect(result.node?.opName).toBe("EntryToken");
+    expect(result.node?.verbose).toBe("ORD=1");
+  });
+
+  it("parses [ORD=N] after operands (old format)", () => {
+    const result = parseSelectionDAGNode(
+      "  0x8c43210: i32,ch = CopyFromReg 0x8c43010, 0x8c43110 [ORD=2]",
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x8c43210");
+    expect(result.node?.opName).toBe("CopyFromReg");
+    expect(result.node?.verbose).toBe("ORD=2");
+    expect(result.node?.operands).toEqual([
+      { kind: "node", nodeId: "0x8c43010" },
+      { kind: "node", nodeId: "0x8c43110" },
+    ]);
+  });
+
+  it("parses angle-bracket wrapped operand", () => {
+    const result = parseSelectionDAGNode(
+      "  0x8c43810: ch = store 0x8c43010, 0x8c43610, 0x8c43710, <0x8c43910> [ORD=5]",
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x8c43810");
+    expect(result.node?.opName).toBe("store");
+    expect(result.node?.verbose).toBe("ORD=5");
+    expect(result.node?.operands).toEqual([
+      { kind: "node", nodeId: "0x8c43010" },
+      { kind: "node", nodeId: "0x8c43610" },
+      { kind: "node", nodeId: "0x8c43710" },
+      { kind: "node", nodeId: "0x8c43910", wrapped: true },
+    ]);
+  });
 });
 
 describe("parseSelectionDAG", () => {

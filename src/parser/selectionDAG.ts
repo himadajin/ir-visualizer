@@ -96,19 +96,28 @@ function registerSemantics(semantics: ohm.Semantics) {
         types: types.toAST() as string[],
       };
     },
-    NodeRHS(opName: any, details: any, verbose: any, operands: any) {
+    NodeRHS(
+      opName: any,
+      details: any,
+      verboseBefore: any,
+      operands: any,
+      verboseAfter: any,
+    ) {
       const operandNodes =
         operands.numChildren > 0
           ? (operands.children[0].toAST() as SelectionDAGOperand[])
           : undefined;
       const detailsNode = maybeDetails(details.toAST() as SelectionDAGDetails);
+      const verbose =
+        verboseBefore.numChildren > 0
+          ? (verboseBefore.children[0].toAST() as string)
+          : verboseAfter.numChildren > 0
+            ? (verboseAfter.children[0].toAST() as string)
+            : undefined;
       return {
         opName: opName.toAST() as string,
         details: detailsNode,
-        verbose:
-          verbose.numChildren > 0
-            ? (verbose.children[0].toAST() as string)
-            : undefined,
+        verbose,
         operands:
           operandNodes && operandNodes.length > 0 ? operandNodes : undefined,
       };
@@ -144,6 +153,10 @@ function registerSemantics(semantics: ohm.Semantics) {
     },
     Operand_null(_null: any) {
       return { kind: "null" };
+    },
+    Operand_wrappedNodeOp(_open: any, nodeOperand: any, _close: any) {
+      const inner = nodeOperand.toAST() as SelectionDAGOperand;
+      return { ...inner, wrapped: true };
     },
     Operand_nodeOp(nodeOperand: any) {
       return nodeOperand.toAST() as SelectionDAGOperand;

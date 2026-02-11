@@ -20,6 +20,7 @@ export interface SelectionDAGNodeOperand {
   kind: "node";
   nodeId: string;
   index?: number;
+  wrapped?: boolean;
 }
 
 export interface SelectionDAGInlineOperand {
@@ -59,8 +60,11 @@ export interface SelectionDAGReg {
 
 export const formatSelectionDAGOperand = (op: SelectionDAGOperand): string => {
   switch (op.kind) {
-    case "node":
-      return op.index !== undefined ? `${op.nodeId}:${op.index}` : op.nodeId;
+    case "node": {
+      const id =
+        op.index !== undefined ? `${op.nodeId}:${op.index}` : op.nodeId;
+      return op.wrapped ? `<${id}>` : id;
+    }
     case "inline": {
       const types = op.types.length > 0 ? `:${op.types.join(",")}` : "";
       const detail = op.details?.detail ? `<${op.details.detail}>` : "";

@@ -23,6 +23,7 @@ import LLVMMetadataNode from "./LLVM/LLVMMetadataNode";
 import LLVMDeclarationNode from "./LLVM/LLVMDeclarationNode";
 import LLVMExitNode from "./LLVM/LLVMExitNode";
 import MermaidNode from "./Mermaid/MermaidNode";
+import SelectionDAGNode from "./SelectionDAG/SelectionDAGNode";
 
 const edgeTypes = {
   customBezier: CustomBezierEdge,
@@ -39,6 +40,7 @@ const nodeTypes = {
   llvmDeclaration: LLVMDeclarationNode,
   llvmExit: LLVMExitNode,
   mermaidNode: MermaidNode,
+  selectionDAGNode: SelectionDAGNode,
 };
 
 interface GraphViewerProps {

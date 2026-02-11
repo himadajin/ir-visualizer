@@ -9,6 +9,10 @@ import type {
   SelectionDAGOperand,
   SelectionDAGReg,
 } from "../ast/selectionDAGAST";
+import {
+  convertASTToGraph,
+  type SelectionDAGGraphData,
+} from "../graphBuilder/selectionDAGGraphBuilder";
 
 export interface ParseResult {
   entries: SelectionDAGParseEntry[];
@@ -239,6 +243,13 @@ export function parseSelectionDAGNode(line: string): {
     return parsed;
   }
   return { comment: line };
+}
+
+export function parseSelectionDAGToGraphData(
+  input: string,
+): SelectionDAGGraphData {
+  const parseResult = parseSelectionDAG(input);
+  return convertASTToGraph(parseResult);
 }
 
 export function parseSelectionDAG(input: string): ParseResult {

@@ -6,8 +6,16 @@ import {
   useEdgesState,
 } from "@xyflow/react";
 import type { GraphData } from "../types/graph";
-import { getLayoutedElements } from "../utils/layout";
-import { createReactFlowNode, createReactFlowEdge } from "../utils/converter";
+import type { SelectionDAGGraphData } from "../graphBuilder/selectionDAGGraphBuilder";
+import {
+  getLayoutedElements,
+  getSelectionDAGLayoutedElements,
+} from "../utils/layout";
+import {
+  createReactFlowNode,
+  createReactFlowEdge,
+  createSelectionDAGReactFlowEdge,
+} from "../utils/converter";
 
 // Helper to generate a topology signature
 const getTopologySignature = (graph: GraphData) => {
@@ -27,7 +35,9 @@ export const useGraphData = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [lastSignature, setLastSignature] = useState<string>("");
 
-  const [currentGraph, setCurrentGraph] = useState<GraphData | null>(null);
+  const [currentGraph, setCurrentGraph] = useState<
+    GraphData | SelectionDAGGraphData | null
+  >(null);
 
   const updateGraph = useCallback(
     (graph: GraphData) => {
@@ -88,6 +98,56 @@ export const useGraphData = () => {
     setEdges(layoutedEdges);
   }, [currentGraph, setNodes, setEdges]);
 
+  const updateSelectionDAGGraph = useCallback(
+    (graph: SelectionDAGGraphData) => {
+      setCurrentGraph(graph);
+      const signature = getTopologySignature(graph);
+
+      const isTopologyEqual = signature === lastSignature;
+
+      if (isTopologyEqual) {
+        const positionMap = new Map(nodes.map((n) => [n.id, n.position]));
+
+        const newNodes = graph.nodes.map((node) => {
+          const existingPos = positionMap.get(node.id) || { x: 0, y: 0 };
+          return createReactFlowNode(node, existingPos);
+        });
+
+        setNodes(newNodes);
+
+        const newEdges = graph.edges.map((edge) => {
+          const sourcePos = positionMap.get(edge.source);
+          const targetPos = positionMap.get(edge.target);
+
+          let edgeType = "customBezier";
+          if (edge.source === edge.target) {
+            edgeType = "backEdge";
+          } else if (sourcePos && targetPos && sourcePos.y >= targetPos.y) {
+            edgeType = "backEdge";
+          }
+          return createSelectionDAGReactFlowEdge(edge, edgeType);
+        });
+
+        setEdges(newEdges);
+      } else {
+        const { nodes: layoutedNodes, edges: layoutedEdges } =
+          getSelectionDAGLayoutedElements(graph);
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+        setLastSignature(signature);
+      }
+    },
+    [lastSignature, nodes, setNodes, setEdges],
+  );
+
+  const resetSelectionDAGLayout = useCallback(() => {
+    if (!currentGraph) return;
+    const { nodes: layoutedNodes, edges: layoutedEdges } =
+      getSelectionDAGLayoutedElements(currentGraph as SelectionDAGGraphData);
+    setNodes(layoutedNodes);
+    setEdges(layoutedEdges);
+  }, [currentGraph, setNodes, setEdges]);
+
   return {
     nodes,
     edges,
@@ -96,6 +156,8 @@ export const useGraphData = () => {
     setNodes, // expose in case we need manual override
     setEdges,
     updateGraph,
+    updateSelectionDAGGraph,
     resetLayout,
+    resetSelectionDAGLayout,
   };
 };

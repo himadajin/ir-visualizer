@@ -110,3 +110,28 @@ export const createReactFlowEdge = (
     },
   };
 };
+
+export interface SelectionDAGReactFlowEdge {
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
+export const createSelectionDAGReactFlowEdge = (
+  edge: GraphEdge & SelectionDAGReactFlowEdge,
+  edgeType: string = "customBezier",
+): Edge => {
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    label: edge.label,
+    animated: false,
+    type: edgeType,
+    zIndex: 0,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+    },
+  };
+};

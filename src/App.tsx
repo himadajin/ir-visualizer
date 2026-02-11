@@ -18,6 +18,7 @@ import { GraphViewer } from "./components/Graph/GraphViewer";
 import { useGraphData } from "./hooks/useGraphData";
 import { parseMermaid } from "./parser/mermaid";
 import { parseLLVM } from "./parser/llvm";
+import { parseSelectionDAGToGraphData } from "./parser/selectionDAG";
 
 const DEFAULT_CODE = `graph TD
   A[Is this working?] -->|Yes| B(Great!)
@@ -57,10 +58,21 @@ const DEFAULT_LLVM_CODE = `define i32 @func(i32 %0, i32 %1, i1  %2) {
   ret i32 %19
 }`;
 
+const DEFAULT_SELECTIONDAG_CODE = `Optimized legalized selection DAG: %bb.0 'test:entry'
+SelectionDAG has 12 nodes:
+  t0: ch,glue = EntryToken
+  t2: i64,ch = CopyFromReg t0, Register:i64 %0
+  t4: i64,ch = CopyFromReg t0, Register:i64 %1
+  t6: i64 = add t2, t4
+  t10: ch = store<(store (s64) into %ir.a.addr)> t0, t2, FrameIndex:i64<0>, <null>
+  t12: ch = store<(store (s64) into %ir.b.addr)> t10, t4, FrameIndex:i64<1>, <null>
+  t22: ch = RISCVISD::RET_GLUE t12, Register:i64 $x10, t12:1
+`;
+
 const MIN_WIDTH = 200; // min px
 
 type ToolbarPaneProps = {
-  mode: "mermaid" | "llvm-ir";
+  mode: "mermaid" | "llvm-ir" | "selectionDAG";
   onModeChange: (event: SelectChangeEvent) => void;
 };
 
@@ -86,6 +98,7 @@ function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
           >
             <MenuItem value="mermaid">Mermaid</MenuItem>
             <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
+            <MenuItem value="selectionDAG">SelectionDAG</MenuItem>
           </Select>
         </FormControl>
       </Toolbar>
@@ -153,7 +166,9 @@ function GraphPane({
 }
 
 function App() {
-  const [mode, setMode] = useState<"mermaid" | "llvm-ir">("llvm-ir");
+  const [mode, setMode] = useState<"mermaid" | "llvm-ir" | "selectionDAG">(
+    "llvm-ir",
+  );
   const [code, setCode] = useState(DEFAULT_LLVM_CODE);
   const {
     nodes,
@@ -161,7 +176,9 @@ function App() {
     onNodesChange,
     onEdgesChange,
     updateGraph,
+    updateSelectionDAGGraph,
     resetLayout,
+    resetSelectionDAGLayout,
   } = useGraphData();
   const [error, setError] = useState<string | null>(null);
 
@@ -207,10 +224,14 @@ function App() {
         let graph;
         if (mode === "mermaid") {
           graph = parseMermaid(code);
+          updateGraph(graph);
+        } else if (mode === "selectionDAG") {
+          graph = parseSelectionDAGToGraphData(code);
+          updateSelectionDAGGraph(graph);
         } else {
           graph = parseLLVM(code);
+          updateGraph(graph);
         }
-        updateGraph(graph);
         setError(null);
       } catch (error: unknown) {
         // Only show error if it persists, or maybe just log it?
@@ -224,7 +245,7 @@ function App() {
     }, 750);
 
     return () => clearTimeout(timer);
-  }, [code, mode, updateGraph]);
+  }, [code, mode, updateGraph, updateSelectionDAGGraph]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     console.log(value);
@@ -234,9 +255,18 @@ function App() {
   }, []);
 
   const handleModeChange = useCallback((event: SelectChangeEvent) => {
-    const newMode = event.target.value as "mermaid" | "llvm-ir";
+    const newMode = event.target.value as
+      | "mermaid"
+      | "llvm-ir"
+      | "selectionDAG";
     setMode(newMode);
-    setCode(newMode === "mermaid" ? DEFAULT_CODE : DEFAULT_LLVM_CODE);
+    if (newMode === "mermaid") {
+      setCode(DEFAULT_CODE);
+    } else if (newMode === "selectionDAG") {
+      setCode(DEFAULT_SELECTIONDAG_CODE);
+    } else {
+      setCode(DEFAULT_LLVM_CODE);
+    }
   }, []);
 
   return (
@@ -249,7 +279,7 @@ function App() {
           width={leftPaneWidth}
           code={code}
           onChange={handleEditorChange}
-          language={mode === "llvm-ir" ? "llvm" : "mermaid"}
+          language={mode === "mermaid" ? "mermaid" : "llvm"}
         />
 
         {/* Resizer */}
@@ -270,7 +300,9 @@ function App() {
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onResetLayout={resetLayout}
+          onResetLayout={
+            mode === "selectionDAG" ? resetSelectionDAGLayout : resetLayout
+          }
           error={error}
         />
       </Box>

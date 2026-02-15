@@ -2,15 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Paper,
-  Typography,
-  AppBar,
-  Toolbar,
   Alert,
   Snackbar,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
   type SelectChangeEvent,
 } from "@mui/material";
 import { CodeEditor } from "./components/Editor/CodeEditor";
@@ -87,31 +82,67 @@ type ToolbarPaneProps = {
 
 function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
   return (
-    <AppBar position="static">
-      <Toolbar variant="dense">
-        <Typography
-          variant="h6"
-          color="inherit"
-          component="div"
-          sx={{ flexGrow: 1 }}
-        >
-          IRVisualizer
-        </Typography>
-        <FormControl variant="standard" sx={{ m: 1, minWidth: 120 }}>
-          <InputLabel sx={{ color: "white" }}>Mode</InputLabel>
-          <Select
-            value={mode}
-            onChange={onModeChange}
-            label="Mode"
-            sx={{ color: "white", ".MuiSvgIcon-root": { color: "white" } }}
-          >
-            <MenuItem value="mermaid">Mermaid</MenuItem>
-            <MenuItem value="llvm-ir">LLVM-IR</MenuItem>
-            <MenuItem value="selectionDAG">SelectionDAG</MenuItem>
-          </Select>
-        </FormControl>
-      </Toolbar>
-    </AppBar>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        px: 1.5,
+        py: 0.5,
+        borderBottom: "1px solid #e8e8e8",
+        backgroundColor: "#fafafa",
+        minHeight: 36,
+        maxHeight: 36,
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          fontSize: "16px",
+          color: "#333",
+          letterSpacing: "0.02em",
+          userSelect: "none",
+        }}
+      >
+        IR Visualizer
+      </Box>
+      <Select
+        value={mode}
+        onChange={onModeChange}
+        size="small"
+        variant="outlined"
+        sx={{
+          fontSize: "12px",
+          height: 26,
+          color: "#555",
+          backgroundColor: "#fff",
+          borderRadius: "4px",
+          ".MuiOutlinedInput-notchedOutline": {
+            borderColor: "#d0d0d0",
+          },
+          "&:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#999",
+          },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+            borderColor: "#777",
+            borderWidth: "1px",
+          },
+          ".MuiSvgIcon-root": {
+            color: "#999",
+            fontSize: "16px",
+          },
+          ".MuiSelect-select": {
+            py: "2px",
+            pr: "24px !important",
+            pl: "8px",
+          },
+        }}
+      >
+        <MenuItem value="llvm-ir" sx={{ fontSize: "12px" }}>LLVM-IR</MenuItem>
+        <MenuItem value="selectionDAG" sx={{ fontSize: "12px" }}>SelectionDAG</MenuItem>
+        <MenuItem value="mermaid" sx={{ fontSize: "12px" }}>Mermaid</MenuItem>
+      </Select>
+    </Box>
   );
 }
 

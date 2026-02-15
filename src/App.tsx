@@ -55,7 +55,8 @@ define i32 @func(i32 %0, i32 %1, i1  %2) {
 18:
   %19 = phi i32 [ %6, %4 ], [ %11, %9 ]
   ret i32 %19
-}`;
+}
+`;
 
 const DEFAULT_SELECTIONDAG_CODE = `
 Optimized legalized selection DAG: %bb.0 'test:entry'

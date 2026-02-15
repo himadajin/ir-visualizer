@@ -7,6 +7,7 @@ const BackEdge = ({
   targetY,
   style = {},
   markerStart,
+  markerEnd,
 }: EdgeProps) => {
   // parameter
   const upLength = 40;
@@ -36,7 +37,14 @@ const BackEdge = ({
         S ${cp3X} ${cp3Y} ${targetArcStartX} ${targetArcStartY}
         A ${radiusX} ${radiusY} 0 0 0 ${targetX} ${targetY}
     `;
-  return <BaseEdge path={path} markerStart={markerStart} style={style} />;
+  return (
+    <BaseEdge
+      path={path}
+      markerStart={markerStart}
+      markerEnd={markerEnd}
+      style={style}
+    />
+  );
 };
 
 export default BackEdge;

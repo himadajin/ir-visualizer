@@ -47,7 +47,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       options={{
         minimap: { enabled: false },
         fontSize: 14,
-        wordWrap: "on",
+        wordWrap: "off",
         scrollBeyondLastLine: false,
         automaticLayout: true,
         accessibilitySupport: "off",

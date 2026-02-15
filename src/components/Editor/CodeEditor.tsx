@@ -16,7 +16,7 @@ let highlighterPromise: ReturnType<typeof createHighlighter> | null = null;
 const ensureHighlighter = () => {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
-      themes: ["dark-plus"],
+      themes: ["github-light"],
       langs: ["mermaid", "llvm"],
     });
   }
@@ -42,12 +42,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       language={language}
       value={code}
       onChange={onChange}
-      theme="dark-plus"
+      theme="github-light"
       beforeMount={handleBeforeMount}
       options={{
         minimap: { enabled: false },
         fontSize: 14,
-        wordWrap: "on",
+        wordWrap: "off",
         scrollBeyondLastLine: false,
         automaticLayout: true,
         accessibilitySupport: "off",

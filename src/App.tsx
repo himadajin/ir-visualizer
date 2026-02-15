@@ -6,6 +6,9 @@ import {
   Snackbar,
   Select,
   MenuItem,
+  ToggleButtonGroup,
+  ToggleButton,
+  useMediaQuery,
   type SelectChangeEvent,
 } from "@mui/material";
 import { CodeEditor } from "./components/Editor/CodeEditor";
@@ -78,9 +81,18 @@ const MIN_WIDTH = 200; // min px
 type ToolbarPaneProps = {
   mode: "mermaid" | "llvm-ir" | "selectionDAG";
   onModeChange: (event: SelectChangeEvent) => void;
+  isNarrow: boolean;
+  activePane: "editor" | "graph";
+  onActivePaneChange: (pane: "editor" | "graph") => void;
 };
 
-function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
+function ToolbarPane({
+  mode,
+  onModeChange,
+  isNarrow,
+  activePane,
+  onActivePaneChange,
+}: ToolbarPaneProps) {
   return (
     <Box
       sx={{
@@ -106,48 +118,87 @@ function ToolbarPane({ mode, onModeChange }: ToolbarPaneProps) {
       >
         IR Visualizer
       </Box>
-      <Select
-        value={mode}
-        onChange={onModeChange}
-        size="small"
-        variant="outlined"
-        sx={{
-          fontSize: "12px",
-          height: 26,
-          color: "#555",
-          backgroundColor: "#fff",
-          borderRadius: "4px",
-          ".MuiOutlinedInput-notchedOutline": {
-            borderColor: "#d0d0d0",
-          },
-          "&:hover .MuiOutlinedInput-notchedOutline": {
-            borderColor: "#999",
-          },
-          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-            borderColor: "#777",
-            borderWidth: "1px",
-          },
-          ".MuiSvgIcon-root": {
-            color: "#999",
-            fontSize: "16px",
-          },
-          ".MuiSelect-select": {
-            py: "2px",
-            pr: "24px !important",
-            pl: "8px",
-          },
-        }}
-      >
-        <MenuItem value="llvm-ir" sx={{ fontSize: "12px" }}>LLVM-IR</MenuItem>
-        <MenuItem value="selectionDAG" sx={{ fontSize: "12px" }}>SelectionDAG</MenuItem>
-        <MenuItem value="mermaid" sx={{ fontSize: "12px" }}>Mermaid</MenuItem>
-      </Select>
+
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        {isNarrow && (
+          <ToggleButtonGroup
+            value={activePane}
+            exclusive
+            onChange={(_e, v) => {
+              if (v !== null) onActivePaneChange(v);
+            }}
+            size="small"
+            sx={{
+              height: 26,
+              "& .MuiToggleButton-root": {
+                fontSize: "11px",
+                px: 1.2,
+                py: 0,
+                textTransform: "none",
+                color: "#666",
+                borderColor: "#d0d0d0",
+                "&.Mui-selected": {
+                  backgroundColor: "#e8e8e8",
+                  color: "#222",
+                  fontWeight: 600,
+                },
+              },
+            }}
+          >
+            <ToggleButton value="editor">Code</ToggleButton>
+            <ToggleButton value="graph">Graph</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+
+        <Select
+          value={mode}
+          onChange={onModeChange}
+          size="small"
+          variant="outlined"
+          sx={{
+            fontSize: "12px",
+            height: 26,
+            color: "#555",
+            backgroundColor: "#fff",
+            borderRadius: "4px",
+            ".MuiOutlinedInput-notchedOutline": {
+              borderColor: "#d0d0d0",
+            },
+            "&:hover .MuiOutlinedInput-notchedOutline": {
+              borderColor: "#999",
+            },
+            "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+              borderColor: "#777",
+              borderWidth: "1px",
+            },
+            ".MuiSvgIcon-root": {
+              color: "#999",
+              fontSize: "16px",
+            },
+            ".MuiSelect-select": {
+              py: "2px",
+              pr: "24px !important",
+              pl: "8px",
+            },
+          }}
+        >
+          <MenuItem value="llvm-ir" sx={{ fontSize: "12px" }}>
+            LLVM-IR
+          </MenuItem>
+          <MenuItem value="selectionDAG" sx={{ fontSize: "12px" }}>
+            SelectionDAG
+          </MenuItem>
+          <MenuItem value="mermaid" sx={{ fontSize: "12px" }}>
+            Mermaid
+          </MenuItem>
+        </Select>
+      </Box>
     </Box>
   );
 }
 
 type EditorPaneProps = {
-  width: number;
+  width: number | string;
   code: string;
   language: "llvm" | "mermaid";
   onChange: (value: string | undefined) => void;
@@ -205,6 +256,8 @@ function GraphPane({
   );
 }
 
+const NARROW_BREAKPOINT = 768;
+
 function App() {
   const [mode, setMode] = useState<"mermaid" | "llvm-ir" | "selectionDAG">(
     "llvm-ir",
@@ -221,6 +274,10 @@ function App() {
     resetSelectionDAGLayout,
   } = useGraphData();
   const [error, setError] = useState<string | null>(null);
+
+  // Responsive narrow-mode detection
+  const isNarrow = useMediaQuery(`(max-width:${NARROW_BREAKPOINT}px)`);
+  const [activePane, setActivePane] = useState<"editor" | "graph">("editor");
 
   // Resizing state
   const [leftPaneWidth, setLeftPaneWidth] = useState(500);
@@ -311,40 +368,52 @@ function App() {
 
   return (
     <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <ToolbarPane mode={mode} onModeChange={handleModeChange} />
+      <ToolbarPane
+        mode={mode}
+        onModeChange={handleModeChange}
+        isNarrow={isNarrow}
+        activePane={activePane}
+        onActivePaneChange={setActivePane}
+      />
 
       <Box sx={{ flexGrow: 1, display: "flex", overflow: "hidden" }}>
-        {/* Left Panel: Editor */}
-        <EditorPane
-          width={leftPaneWidth}
-          code={code}
-          onChange={handleEditorChange}
-          language={mode === "mermaid" ? "mermaid" : "llvm"}
-        />
+        {/* Editor Pane: full-width in narrow mode, fixed-width in wide mode */}
+        {(!isNarrow || activePane === "editor") && (
+          <EditorPane
+            width={isNarrow ? "100%" : leftPaneWidth}
+            code={code}
+            onChange={handleEditorChange}
+            language={mode === "mermaid" ? "mermaid" : "llvm"}
+          />
+        )}
 
-        {/* Resizer */}
-        <Box
-          sx={{
-            width: "5px",
-            cursor: "col-resize",
-            backgroundColor: "#ccc",
-            ":hover": { backgroundColor: "#999" },
-            zIndex: 10,
-          }}
-          onMouseDown={handleMouseDown}
-        />
+        {/* Resizer: hidden in narrow mode */}
+        {!isNarrow && (
+          <Box
+            sx={{
+              width: "5px",
+              cursor: "col-resize",
+              backgroundColor: "#ccc",
+              ":hover": { backgroundColor: "#999" },
+              zIndex: 10,
+            }}
+            onMouseDown={handleMouseDown}
+          />
+        )}
 
-        {/* Right Panel: Graph */}
-        <GraphPane
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onResetLayout={
-            mode === "selectionDAG" ? resetSelectionDAGLayout : resetLayout
-          }
-          error={error}
-        />
+        {/* Graph Pane: full-width in narrow mode */}
+        {(!isNarrow || activePane === "graph") && (
+          <GraphPane
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onResetLayout={
+              mode === "selectionDAG" ? resetSelectionDAGLayout : resetLayout
+            }
+            error={error}
+          />
+        )}
       </Box>
     </Box>
   );

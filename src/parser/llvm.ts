@@ -180,13 +180,12 @@ function registerSemantics(semantics: ohm.Semantics) {
         i.toAST(),
       );
       const termNode: LLVMInstruction = terminator.toAST();
-      const allItems = [...itemNodes, termNode];
 
       return {
         type: "BasicBlock",
         id: labelNode || "entry",
         label: labelNode || null,
-        instructions: allItems,
+        instructions: itemNodes,
         terminator: termNode,
       } as LLVMBasicBlock;
     },
@@ -196,13 +195,12 @@ function registerSemantics(semantics: ohm.Semantics) {
         i.toAST(),
       );
       const termNode: LLVMInstruction = terminator.toAST();
-      const allItems = [...itemNodes, termNode];
 
       return {
         type: "BasicBlock",
         id: labelNode,
         label: labelNode,
-        instructions: allItems,
+        instructions: itemNodes,
         terminator: termNode,
       } as LLVMBasicBlock;
     },

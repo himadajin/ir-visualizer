@@ -219,7 +219,7 @@ describe("createReactFlowEdge", () => {
     expect(rfEdge.type).toBe("customBezier");
     expect(rfEdge.animated).toBe(false);
     expect(rfEdge.style).toEqual({ stroke: "#666" });
-    expect(rfEdge.markerStart).toEqual({
+    expect(rfEdge.markerEnd).toEqual({
       type: MarkerType.ArrowClosed,
       color: "#666",
     });

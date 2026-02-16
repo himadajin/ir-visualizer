@@ -52,6 +52,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         automaticLayout: true,
         accessibilitySupport: "off",
         tabSize: 2,
+        colorDecorators: false,
       }}
     />
   );

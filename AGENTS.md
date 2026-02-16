@@ -34,3 +34,9 @@ The graph is rendered using react-flow.
 - Lint code: `npm run lint`
 - Format code: `npm run format`
 - Run tests: `npm run test:run`
+
+## Rules
+
+- Always run tests after making changes.
+- Always run `npm run format` after making changes.
+- Always run `npm run lint` after making changes.

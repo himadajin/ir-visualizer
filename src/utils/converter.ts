@@ -107,7 +107,7 @@ const calculateSelectionDAGDimensions = (node: GraphNode) => {
   // Row 1 (Operands): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
   const operandsRowHeight = hasOperands
     ? codeFragmentHeight +
-    (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2
+      (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2
     : 0;
 
   // Row 2 (Main Content): Cell Padding (2) + CF Height + Cell Padding (2)

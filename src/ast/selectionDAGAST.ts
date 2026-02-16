@@ -36,6 +36,7 @@ export interface SelectionDAGDetails {
   flags: SelectionDAGFlag[];
   detail?: string;
   reg?: SelectionDAGReg;
+  vtDetail?: string;
 }
 
 export type SelectionDAGFlag =
@@ -54,7 +55,7 @@ export type SelectionDAGFlag =
   | "nofpexcept";
 
 export interface SelectionDAGReg {
-  type: "NoReg" | "Stack" | "VirtReg" | "PhysReg";
+  type: "NoReg" | "Stack" | "VirtReg" | "PhysReg" | "Numbered" | "Bare";
   value: string;
 }
 
@@ -94,7 +95,11 @@ export const buildSelectionDAGDetailsLabel = (
   }
   if (node.details?.reg) {
     const r = node.details.reg;
-    detailParts.push(`${r.type}:${r.value}`);
+    detailParts.push(r.value);
+  }
+
+  if (node.details?.vtDetail) {
+    detailParts.push(`:${node.details.vtDetail}`);
   }
 
   return detailParts.join(" ");

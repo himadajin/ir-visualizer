@@ -96,7 +96,22 @@ function registerSemantics(semantics: ohm.Semantics) {
         types: types.toAST() as string[],
       };
     },
-    NodeRHS(
+    NodeRHS_valueType(
+      _valueType: any,
+      _spaceBefore: any,
+      _colon: any,
+      _spaceAfter: any,
+      vtType: any,
+    ) {
+      return {
+        opName: "ValueType",
+        details: {
+          flags: [],
+          vtDetail: vtType.toAST() as string,
+        } as SelectionDAGDetails,
+      };
+    },
+    NodeRHS_normal(
       opName: any,
       details: any,
       verboseBefore: any,
@@ -227,6 +242,12 @@ function registerSemantics(semantics: ohm.Semantics) {
     },
     RegPhysReg(_prefix: any, _name: any) {
       return { type: "PhysReg", value: this.sourceString };
+    },
+    RegNumbered(_prefix: any, _digits: any) {
+      return { type: "Numbered", value: this.sourceString };
+    },
+    RegBare(_upper: any, _rest: any) {
+      return { type: "Bare", value: this.sourceString };
     },
     nodeId_tId(_t: any, _digits: any) {
       return this.sourceString;

@@ -3,7 +3,9 @@ SelectionDAG {
   Node = space* NodeLHS space* "=" space* NodeRHS space*
   Comment = (~"\n" any)+
   NodeLHS = nodeId ":" Types
-  NodeRHS = opName Details Verbose? Operands? Verbose?
+  NodeRHS
+    = "ValueType" space* ":" space* type  -- valueType
+    | opName Details Verbose? Operands? Verbose?  -- normal
 
   Details = flag* Detail? Reg?
   flag
@@ -50,10 +52,14 @@ SelectionDAG {
     | RegStack
     | RegVirtReg
     | RegPhysReg
+    | RegNumbered
+    | RegBare
   RegNoReg = "$noreg"
   RegStack = "SS#" digit+
   RegVirtReg = "%" identChar+
   RegPhysReg = "$" identChar+
+  RegNumbered = "#" digit+
+  RegBare = upper identChar*
 
   nodeId
     = "t" digit+      -- tId

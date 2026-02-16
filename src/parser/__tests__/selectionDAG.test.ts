@@ -123,6 +123,80 @@ describe("parseSelectionDAGNode", () => {
       { kind: "node", nodeId: "0x8c43910", wrapped: true },
     ]);
   });
+
+  it("parses Register with %RAX (virtual register)", () => {
+    const result = parseSelectionDAGNode("0x7fcbd985abcd: i64 = Register %RAX");
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x7fcbd985abcd");
+    expect(result.node?.opName).toBe("Register");
+    expect(result.node?.details).toEqual({
+      flags: [],
+      reg: { type: "VirtReg", value: "%RAX" },
+    });
+  });
+
+  it("parses Register with #1024 (numbered register)", () => {
+    const result = parseSelectionDAGNode(
+      "0x7fcbd985abcd: i64 = Register #1024",
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x7fcbd985abcd");
+    expect(result.node?.opName).toBe("Register");
+    expect(result.node?.details).toEqual({
+      flags: [],
+      reg: { type: "Numbered", value: "#1024" },
+    });
+  });
+
+  it("parses Register with bare name like R1", () => {
+    const result = parseSelectionDAGNode("0x7fcbd985abcd: i64 = Register R1");
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x7fcbd985abcd");
+    expect(result.node?.opName).toBe("Register");
+    expect(result.node?.details).toEqual({
+      flags: [],
+      reg: { type: "Bare", value: "R1" },
+    });
+  });
+
+  it("parses ValueType :i64", () => {
+    const result = parseSelectionDAGNode("0x7fcbd985abcd: ch = ValueType :i64");
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.nodeId).toBe("0x7fcbd985abcd");
+    expect(result.node?.types).toEqual(["ch"]);
+    expect(result.node?.opName).toBe("ValueType");
+    expect(result.node?.details).toEqual({
+      flags: [],
+      vtDetail: "i64",
+    });
+    expect(result.node?.operands).toBeUndefined();
+  });
+
+  it("parses ValueType :f32", () => {
+    const result = parseSelectionDAGNode("t5: ch = ValueType :f32");
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.opName).toBe("ValueType");
+    expect(result.node?.details).toEqual({
+      flags: [],
+      vtDetail: "f32",
+    });
+  });
+
+  it("parses ValueType :v4i32", () => {
+    const result = parseSelectionDAGNode("t6: ch = ValueType :v4i32");
+    expect(result.error).toBeUndefined();
+    expect(result.node).toBeDefined();
+    expect(result.node?.opName).toBe("ValueType");
+    expect(result.node?.details).toEqual({
+      flags: [],
+      vtDetail: "v4i32",
+    });
+  });
 });
 
 describe("parseSelectionDAG", () => {

@@ -74,7 +74,8 @@ export const formatSelectionDAGOperand = (op: SelectionDAGOperand): string => {
     }
     case "inline": {
       const types = op.types.length > 0 ? `:${op.types.join(",")}` : "";
-      const detail = op.details?.detail ? `<${op.details.detail}>` : "";
+      const detail =
+        op.details?.detail !== undefined ? `<${op.details.detail}>` : "";
       const reg = op.details?.reg ? ` ${op.details.reg.value}` : "";
       return `${op.opName}${types}${detail}${reg}`;
     }
@@ -98,8 +99,8 @@ export const buildSelectionDAGDetailsLabel = (
   if (node.details?.flags?.length) {
     detailParts.push(node.details.flags.join(" "));
   }
-  if (node.details?.detail) {
-    detailParts.push(node.details.detail);
+  if (node.details?.detail !== undefined) {
+    detailParts.push(`<${node.details.detail}>`);
   }
   if (node.details?.reg) {
     const r = node.details.reg;

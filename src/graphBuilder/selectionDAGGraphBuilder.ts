@@ -59,6 +59,8 @@ function formatOperand(op: SelectionDAGOperand): string {
     }
     case "null":
       return "<null>";
+    case "immediate":
+      return op.value;
   }
 }
 

@@ -10,7 +10,8 @@ export interface SelectionDAGNode {
 export type SelectionDAGOperand =
   | SelectionDAGNullOperand
   | SelectionDAGNodeOperand
-  | SelectionDAGInlineOperand;
+  | SelectionDAGInlineOperand
+  | SelectionDAGImmediateOperand;
 
 export interface SelectionDAGNullOperand {
   kind: "null";
@@ -28,6 +29,11 @@ export interface SelectionDAGInlineOperand {
   opName: string;
   types: SelectionDAGType[];
   details?: SelectionDAGDetails;
+}
+
+export interface SelectionDAGImmediateOperand {
+  kind: "immediate";
+  value: string;
 }
 
 export type SelectionDAGType = string;
@@ -74,6 +80,8 @@ export const formatSelectionDAGOperand = (op: SelectionDAGOperand): string => {
     }
     case "null":
       return "<null>";
+    case "immediate":
+      return op.value;
   }
 };
 

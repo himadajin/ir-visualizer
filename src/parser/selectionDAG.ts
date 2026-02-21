@@ -4,6 +4,7 @@ import selectionDAGGrammar from "./selectionDAG.ohm?raw";
 import type {
   SelectionDAGDetails,
   SelectionDAGFlag,
+  SelectionDAGImmediateOperand,
   SelectionDAGInlineOperand,
   SelectionDAGNode,
   SelectionDAGOperand,
@@ -116,13 +117,43 @@ function registerSemantics(semantics: ohm.Semantics) {
       details: any,
       verboseBefore: any,
       operands: any,
+      extraWrappedOperands: any,
+      tailAttrs: any,
       verboseAfter: any,
     ) {
-      const operandNodes =
+      const baseOperands =
         operands.numChildren > 0
           ? (operands.children[0].toAST() as SelectionDAGOperand[])
-          : undefined;
+          : [];
+      const wrappedOperands =
+        extraWrappedOperands.numChildren > 0
+          ? (extraWrappedOperands.children[0].toAST() as SelectionDAGOperand[])
+          : [];
+      const operandNodes = [...baseOperands, ...wrappedOperands];
       const detailsNode = maybeDetails(details.toAST() as SelectionDAGDetails);
+      const tailAttrValues =
+        tailAttrs.numChildren > 0
+          ? (tailAttrs.children[0].toAST() as string[])
+          : [];
+
+      let mergedDetails =
+        detailsNode !== undefined ? { ...detailsNode } : undefined;
+      if (tailAttrValues.length > 0) {
+        const detailText = [detailsNode?.detail, ...tailAttrValues]
+          .map((value) => value?.trim())
+          .filter(
+            (value): value is string => value !== undefined && value !== "",
+          )
+          .join(" ");
+
+        if (mergedDetails === undefined) {
+          mergedDetails = { flags: [] };
+        }
+        if (detailText.length > 0) {
+          mergedDetails.detail = detailText;
+        }
+      }
+
       const verbose =
         verboseBefore.numChildren > 0
           ? (verboseBefore.children[0].toAST() as string)
@@ -131,7 +162,7 @@ function registerSemantics(semantics: ohm.Semantics) {
             : undefined;
       return {
         opName: opName.toAST() as string,
-        details: detailsNode,
+        details: mergedDetails,
         verbose,
         operands:
           operandNodes && operandNodes.length > 0 ? operandNodes : undefined,
@@ -154,10 +185,28 @@ function registerSemantics(semantics: ohm.Semantics) {
       return this.sourceString as SelectionDAGFlag;
     },
     Detail(_open: any, text: any, _close: any) {
-      return text.sourceString;
+      return (text.toAST() as string).trim();
+    },
+    DetailBody(_chars: any) {
+      return this.sourceString;
     },
     Verbose(_open: any, text: any, _close: any) {
       return text.sourceString;
+    },
+    TailAttrs(items: any) {
+      return items.children.map((item: any) => item.toAST() as string);
+    },
+    TailAttr_detail(detail: any) {
+      return detail.toAST() as string;
+    },
+    TailAttr_assign(assign: any) {
+      return assign.toAST() as string;
+    },
+    AttrAssign(_name: any, _eq: any, _value: any) {
+      return this.sourceString;
+    },
+    AttrValue(_chars: any) {
+      return this.sourceString;
     },
     Operands(first: any, _commas: any, rest: any) {
       const firstOperand = first.toAST() as SelectionDAGOperand;
@@ -165,6 +214,15 @@ function registerSemantics(semantics: ohm.Semantics) {
         (operand: any) => operand.toAST() as SelectionDAGOperand,
       );
       return [firstOperand, ...restOperands];
+    },
+    ExtraWrappedOperands(items: any) {
+      return items.children.map(
+        (item: any) => item.toAST() as SelectionDAGOperand,
+      );
+    },
+    ExtraWrappedOperand(_open: any, nodeOperand: any, _close: any) {
+      const inner = nodeOperand.toAST() as SelectionDAGOperand;
+      return { ...inner, wrapped: true };
     },
     Operand_null(_null: any) {
       return { kind: "null" };
@@ -179,6 +237,9 @@ function registerSemantics(semantics: ohm.Semantics) {
     Operand_inlineOp(inlineOperand: any) {
       return inlineOperand.toAST() as SelectionDAGOperand;
     },
+    Operand_immediate(immediate: any) {
+      return immediate.toAST() as SelectionDAGImmediateOperand;
+    },
     NodeOperand(nodeId: any, nodeIndex: any) {
       return {
         kind: "node",
@@ -191,6 +252,12 @@ function registerSemantics(semantics: ohm.Semantics) {
     },
     NodeIndex(_colon: any, digits: any) {
       return Number(digits.sourceString);
+    },
+    Immediate(_sign: any, _digits: any) {
+      return {
+        kind: "immediate",
+        value: this.sourceString,
+      } as SelectionDAGImmediateOperand;
     },
     InlineOperand(opName: any, _colon: any, types: any, details: any) {
       return {

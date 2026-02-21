@@ -5,7 +5,7 @@ SelectionDAG {
   NodeLHS = nodeId ":" Types
   NodeRHS
     = "ValueType" space* ":" space* type  -- valueType
-    | opName Details Verbose? Operands? Verbose?  -- normal
+    | opName Details Verbose? Operands? ExtraWrappedOperands? TailAttrs? Verbose?  -- normal
 
   Details = flag* Detail? Reg?
   flag
@@ -22,17 +22,29 @@ SelectionDAG {
     | "afn"
     | "reassoc"
     | "nofpexcept"
-  Detail = "<" (~">" any)+ ">"
+  Detail = "<" DetailBody ">"
+  DetailBody = (~">" any)*
   Verbose = "[" (~"]" any)+ "]"
 
+  TailAttrs = TailAttr+
+  TailAttr
+    = Detail      -- detail
+    | AttrAssign  -- assign
+  AttrAssign = identChar+ "=" AttrValue
+  AttrValue = (~space any)+
+
   Operands = Operand ("," Operand)*
+  ExtraWrappedOperands = ExtraWrappedOperand+
+  ExtraWrappedOperand = "<" NodeOperand ">"
   Operand
     = "<null>"              -- null
     | "<" NodeOperand ">"   -- wrappedNodeOp
     | NodeOperand            -- nodeOp
     | InlineOperand          -- inlineOp
+    | Immediate              -- immediate
   NodeOperand = nodeId NodeIndex?
   NodeIndex = ":" digit+
+  Immediate = "-"? digit+
   InlineOperand = opName ":" Types Details
 
   Types = Type ("," Type)*

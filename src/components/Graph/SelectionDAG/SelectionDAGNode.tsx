@@ -188,7 +188,7 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
         {/* opName + details */}
         <div style={MAIN_CONTENT_STYLE}>
           <CodeFragment
-            code={`${opNameLabel} ${detailsLabel}`}
+            code={detailsLabel ? `${opNameLabel} ${detailsLabel}` : opNameLabel}
             language="llvm"
           />
         </div>

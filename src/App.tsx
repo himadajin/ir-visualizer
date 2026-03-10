@@ -8,6 +8,7 @@ import {
   MenuItem,
   ToggleButtonGroup,
   ToggleButton,
+  Button,
   useMediaQuery,
   type SelectChangeEvent,
 } from "@mui/material";
@@ -198,14 +199,62 @@ function ToolbarPane({
   );
 }
 
+type EditorToolbarProps = {
+  onClear: () => void;
+};
+
+function EditorToolbar({ onClear }: EditorToolbarProps) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        px: 1.5,
+        py: 0,
+        borderBottom: "1px solid #e8e8e8",
+        backgroundColor: "#fafafa",
+        minHeight: 30,
+        maxHeight: 30,
+      }}
+    >
+      <Button
+        variant="outlined"
+        size="small"
+        onClick={onClear}
+        sx={{
+          height: 26,
+          fontSize: "11px",
+          textTransform: "none",
+          color: "#666",
+          borderColor: "#d0d0d0",
+          "&:hover": {
+            backgroundColor: "#e8e8e8",
+            borderColor: "#999",
+          },
+        }}
+      >
+        Clear
+      </Button>
+    </Box>
+  );
+}
+
 type EditorPaneProps = {
   width: number | string;
   code: string;
   language: "llvm" | "mermaid";
   onChange: (value: string | undefined) => void;
+  onClear: () => void;
 };
 
-function EditorPane({ width, code, language, onChange }: EditorPaneProps) {
+function EditorPane({
+  width,
+  code,
+  language,
+  onChange,
+  onClear,
+}: EditorPaneProps) {
   return (
     <Paper
       square
@@ -215,6 +264,7 @@ function EditorPane({ width, code, language, onChange }: EditorPaneProps) {
         flexDirection: "column",
       }}
     >
+      <EditorToolbar onClear={onClear} />
       <CodeEditor code={code} onChange={onChange} language={language} />
     </Paper>
   );
@@ -352,6 +402,10 @@ function App() {
     }
   }, []);
 
+  const handleClear = useCallback(() => {
+    setCode("");
+  }, []);
+
   const handleModeChange = useCallback((event: SelectChangeEvent) => {
     const newMode = event.target.value as
       | "mermaid"
@@ -385,6 +439,7 @@ function App() {
             code={code}
             onChange={handleEditorChange}
             language={mode === "mermaid" ? "mermaid" : "llvm"}
+            onClear={handleClear}
           />
         )}
 

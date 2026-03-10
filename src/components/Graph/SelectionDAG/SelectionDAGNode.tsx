@@ -7,6 +7,7 @@ import {
   formatSelectionDAGOperand,
 } from "../../../ast/selectionDAGAST";
 import CodeFragment from "../common/CodeFragment";
+import { getSelectionDAGNodeColor } from "./selectionDAGNodeColor";
 
 // --- Style constants ---
 
@@ -39,7 +40,7 @@ const ROOT_STYLE: React.CSSProperties = {
 };
 
 /** Left column: nodeId + source handle */
-const LEFT_COLUMN_STYLE: React.CSSProperties = {
+const LEFT_COLUMN_BASE_STYLE: React.CSSProperties = {
   position: "relative",
   display: "flex",
   alignItems: "center",
@@ -47,7 +48,6 @@ const LEFT_COLUMN_STYLE: React.CSSProperties = {
   borderTopLeftRadius: "4px",
   borderBottomLeftRadius: "4px",
   padding: CELL_PADDING,
-  background: "#f4f2ff",
 };
 
 /** Right column: operands / opName+details / types */
@@ -159,7 +159,12 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
   return (
     <div style={ROOT_STYLE}>
       {/* Left column: nodeId */}
-      <div style={LEFT_COLUMN_STYLE}>
+      <div
+        style={{
+          ...LEFT_COLUMN_BASE_STYLE,
+          background: getSelectionDAGNodeColor(node.opName),
+        }}
+      >
         <CodeFragment code={node.nodeId} language="text" />
       </div>
 

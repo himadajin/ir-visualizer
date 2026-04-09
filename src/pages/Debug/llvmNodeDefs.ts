@@ -1,12 +1,12 @@
 import type { NodeDefGroup } from "./types";
 
-import LLVMBasicBlockNode from "../../components/Graph/LLVM/LLVMBasicBlockNode";
-import LLVMFunctionHeaderNode from "../../components/Graph/LLVM/LLVMFunctionHeaderNode";
-import LLVMGlobalVariableNode from "../../components/Graph/LLVM/LLVMGlobalVariableNode";
-import LLVMAttributeGroupNode from "../../components/Graph/LLVM/LLVMAttributeGroupNode";
-import LLVMMetadataNode from "../../components/Graph/LLVM/LLVMMetadataNode";
-import LLVMDeclarationNode from "../../components/Graph/LLVM/LLVMDeclarationNode";
-import LLVMExitNode from "../../components/Graph/LLVM/LLVMExitNode";
+import LLVMBasicBlockNode from "@ir-graph-react/components/Graph/LLVM/LLVMBasicBlockNode";
+import LLVMFunctionHeaderNode from "@ir-graph-react/components/Graph/LLVM/LLVMFunctionHeaderNode";
+import LLVMGlobalVariableNode from "@ir-graph-react/components/Graph/LLVM/LLVMGlobalVariableNode";
+import LLVMAttributeGroupNode from "@ir-graph-react/components/Graph/LLVM/LLVMAttributeGroupNode";
+import LLVMMetadataNode from "@ir-graph-react/components/Graph/LLVM/LLVMMetadataNode";
+import LLVMDeclarationNode from "@ir-graph-react/components/Graph/LLVM/LLVMDeclarationNode";
+import LLVMExitNode from "@ir-graph-react/components/Graph/LLVM/LLVMExitNode";
 
 export const llvmNodeGroup: NodeDefGroup = {
   nodeTypes: {

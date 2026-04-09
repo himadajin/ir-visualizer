@@ -1,9 +1,9 @@
-import type { SelectionDAGNode as SelectionDAGNodeAST } from "../../../ast/selectionDAGAST";
+import type { SelectionDAGNode as SelectionDAGNodeAST } from "@ir-graph-core";
 import {
   buildSelectionDAGDetailsLabel,
   buildSelectionDAGOpNameLabel,
   formatSelectionDAGOperand,
-} from "../../../ast/selectionDAGAST";
+} from "@ir-graph-core";
 
 // --- CSS-matching layout constants ---
 // These MUST stay in sync with the styles in SelectionDAGNode.tsx.

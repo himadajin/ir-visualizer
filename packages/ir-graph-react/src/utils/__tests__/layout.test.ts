@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getLayoutedElements } from "../layout";
-import type { GraphData } from "../../types/graph";
+import type { GraphData } from "@ir-graph-core";
 
 describe("getLayoutedElements", () => {
   it("should layout a simple graph with positions", () => {

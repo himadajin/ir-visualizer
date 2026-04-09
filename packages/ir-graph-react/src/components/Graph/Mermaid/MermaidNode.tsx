@@ -1,5 +1,5 @@
 import type { NodeProps } from "@xyflow/react";
-import type { MermaidASTNode } from "../../../ast/mermaidAST";
+import type { MermaidASTNode } from "@ir-graph-core";
 import NodeShell from "../common/NodeShell";
 
 const shapeToBorderRadius = (shape?: string): string => {

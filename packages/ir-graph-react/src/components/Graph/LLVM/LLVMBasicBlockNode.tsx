@@ -1,5 +1,5 @@
 import type { NodeProps } from "@xyflow/react";
-import type { LLVMBasicBlock } from "../../../ast/llvmAST";
+import type { LLVMBasicBlock } from "@ir-graph-core";
 import NodeShell from "../common/NodeShell";
 import HighlightedCode from "../common/HighlightedCode";
 

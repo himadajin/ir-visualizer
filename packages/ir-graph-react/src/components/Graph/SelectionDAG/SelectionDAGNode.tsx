@@ -1,11 +1,11 @@
 import type { NodeProps } from "@xyflow/react";
 import { Handle, Position } from "@xyflow/react";
-import type { SelectionDAGNode as SelectionDAGNodeAST } from "../../../ast/selectionDAGAST";
+import type { SelectionDAGNode as SelectionDAGNodeAST } from "@ir-graph-core";
 import {
   buildSelectionDAGDetailsLabel,
   buildSelectionDAGOpNameLabel,
   formatSelectionDAGOperand,
-} from "../../../ast/selectionDAGAST";
+} from "@ir-graph-core";
 import CodeFragment from "../common/CodeFragment";
 import { getSelectionDAGNodeColor } from "./selectionDAGNodeColor";
 

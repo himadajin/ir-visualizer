@@ -5,17 +5,17 @@ import {
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
-import type { GraphData } from "../types/graph";
-import type { SelectionDAGGraphData } from "../graphBuilder/selectionDAGGraphBuilder";
+import type { GraphData } from "@ir-graph-core";
+import type { SelectionDAGGraphData } from "@ir-graph-core";
 import {
   getLayoutedElements,
   getSelectionDAGLayoutedElements,
-} from "../utils/layout";
+} from "@ir-graph-react";
 import {
   createReactFlowNode,
   createReactFlowEdge,
   createSelectionDAGReactFlowEdge,
-} from "../utils/converter";
+} from "@ir-graph-react";
 
 // Helper to generate a topology signature
 const getTopologySignature = (graph: GraphData) => {

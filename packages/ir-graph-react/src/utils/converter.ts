@@ -1,6 +1,6 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
-import type { GraphNode, GraphEdge } from "../types/graph";
-import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
+import type { GraphNode, GraphEdge } from "@ir-graph-core";
+import type { SelectionDAGNode as SelectionDAGNodeAST } from "@ir-graph-core";
 import { estimateSelectionDAGRowWidths } from "../components/Graph/SelectionDAG/selectionDAGLayoutUtils";
 import { getFontMetrics } from "./fontUtils";
 

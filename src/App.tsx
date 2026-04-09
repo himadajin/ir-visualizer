@@ -13,11 +13,11 @@ import {
   type SelectChangeEvent,
 } from "@mui/material";
 import { CodeEditor } from "./components/Editor/CodeEditor";
-import { GraphViewer } from "./components/Graph/GraphViewer";
+import { GraphViewer } from "@ir-graph-react";
 import { useGraphData } from "./hooks/useGraphData";
-import { parseMermaid } from "./parser/mermaid";
-import { parseLLVM } from "./parser/llvm";
-import { parseSelectionDAGToGraphData } from "./parser/selectionDAG";
+import { parseMermaid } from "@ir-graph-core";
+import { parseLLVM } from "@ir-graph-core";
+import { parseSelectionDAGToGraphData } from "@ir-graph-core";
 
 const DEFAULT_CODE = `graph TD
   A[Is this working?] -->|Yes| B(Great!)

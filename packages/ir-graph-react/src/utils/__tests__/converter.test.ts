@@ -7,7 +7,7 @@ import {
   calculateNodeDimensions,
   NODE_PADDING,
 } from "../converter";
-import type { GraphNode, GraphEdge } from "../../types/graph";
+import type { GraphNode, GraphEdge } from "@ir-graph-core";
 
 describe("createSelectionDAGReactFlowEdge", () => {
   it("should create a normal edge when isChainOrGlue is false", () => {

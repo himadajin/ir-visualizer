@@ -1,6 +1,6 @@
 import type { NodeDefGroup } from "./types";
 
-import SelectionDAGNode from "../../components/Graph/SelectionDAG/SelectionDAGNode";
+import SelectionDAGNode from "@ir-graph-react/components/Graph/SelectionDAG/SelectionDAGNode";
 
 export const selectionDAGNodeGroup: NodeDefGroup = {
   nodeTypes: {

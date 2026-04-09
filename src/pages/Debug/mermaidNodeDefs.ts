@@ -1,6 +1,6 @@
 import type { NodeDefGroup } from "./types";
 
-import MermaidNode from "../../components/Graph/Mermaid/MermaidNode";
+import MermaidNode from "@ir-graph-react/components/Graph/Mermaid/MermaidNode";
 
 export const mermaidNodeGroup: NodeDefGroup = {
   nodeTypes: {

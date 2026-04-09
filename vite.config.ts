@@ -7,6 +7,12 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "/ir-visualizer/",
+  resolve: {
+    alias: {
+      "@ir-graph-core": resolve(__dirname, "packages/ir-graph-core/src"),
+      "@ir-graph-react": resolve(__dirname, "packages/ir-graph-react/src"),
+    },
+  },
   build: {
     rollupOptions: {
       input: {
@@ -21,7 +27,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "packages/**/*.test.ts"],
     environment: "node",
   },
 });

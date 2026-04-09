@@ -1,7 +1,7 @@
 import dagre from "dagre";
 import { type Node, type Edge } from "@xyflow/react";
-import type { GraphData } from "../types/graph";
-import type { SelectionDAGGraphData } from "../graphBuilder/selectionDAGGraphBuilder";
+import type { GraphData } from "@ir-graph-core";
+import type { SelectionDAGGraphData } from "@ir-graph-core";
 import {
   calculateNodeDimensions,
   createReactFlowNode,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseMermaid } from "../parser/mermaid";
-import { parseLLVM } from "../parser/llvm";
-import { parseSelectionDAGToGraphData } from "../parser/selectionDAG";
+import { parseMermaid } from "@ir-graph-core";
+import { parseLLVM } from "@ir-graph-core";
+import { parseSelectionDAGToGraphData } from "@ir-graph-core";
 
 describe("Integration: parseMermaid (parser + graph builder)", () => {
   it("should produce GraphData from Mermaid text", () => {

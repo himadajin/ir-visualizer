@@ -1,5 +1,5 @@
 import type { NodeProps } from "@xyflow/react";
-import type { LLVMAttributeGroup } from "../../../ast/llvmAST";
+import type { LLVMAttributeGroup } from "@ir-graph-core";
 import NodeShell from "../common/NodeShell";
 import HighlightedCode from "../common/HighlightedCode";
 

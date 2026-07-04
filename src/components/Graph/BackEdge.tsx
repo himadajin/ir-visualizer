@@ -20,10 +20,10 @@ const BackEdge = ({
   // target
   const targetArcStartX = targetX + radiusX * 2;
   const targetArcStartY = targetY;
-  // 頂点
+  // apex
   const topX = (sourceArcEndX + targetArcStartX) / 2;
   const topY = (sourceArcEndY - upLength + (targetArcStartY + upLength)) / 2;
-  // 制御点
+  // control points
   const cp1X = sourceArcEndX;
   const cp1Y = sourceArcEndY - curveIntensity;
   const cp2X = sourceArcEndX;

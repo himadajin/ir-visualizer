@@ -23,14 +23,16 @@ The graph is rendered using react-flow.
   - `src/ast`: AST definitions
   - `src/components`: UI components
     - `src/components/Editor`: Code editor components
-    - `src/components/Graph`: React Flow graph components
+    - `src/components/Graph`: React Flow graph components, colocated with `*.stories.tsx` files
   - `src/graphBuilder`: Logic to transform AST into React Flow graph data (nodes and edges)
   - `src/hooks`: Custom React hooks (e.g., `useGraphData`)
-  - `src/pages`: Page components and debug views
   - `src/parser`: Ohm-js grammar files and parser implementations
   - `src/types`: Global TypeScript type definitions
   - `src/utils`: Utility functions for layout (Dagre), and other helpers
+  - `src/test`: Shared Vitest setup (jest-dom matchers)
   - `src/__tests__`: Integration tests
+- `e2e`: Playwright smoke end-to-end tests
+- `.storybook`: Storybook configuration (component gallery for graph node components)
 
 ## Setup commands
 
@@ -38,7 +40,10 @@ The graph is rendered using react-flow.
 - Start dev server: `npm run dev`
 - Lint code: `npm run lint`
 - Format code: `npm run format`
-- Run tests: `npm run test:run`
+- Run unit/integration tests: `npm run test:run`
+- Run unit/integration tests with coverage: `npm run test:coverage`
+- Run Playwright E2E smoke tests: `npm run test:e2e`
+- Start Storybook: `npm run storybook`
 
 ## Rules
 

@@ -31,9 +31,11 @@ Requires Node.js 24 or later (see `.nvmrc`).
 npm ci                 # Install dependencies
 npm run dev            # Start dev server
 npm run build          # Production build (includes type check)
-npm run test           # Run tests (watch mode)
-npm run test:run       # Run tests once
-npm run test:coverage  # Run tests with coverage
+npm run test           # Run unit/integration tests (watch mode)
+npm run test:run       # Run unit/integration tests once
+npm run test:coverage  # Run unit/integration tests with coverage
+npm run test:e2e       # Run Playwright smoke E2E tests
+npm run storybook      # Start Storybook (component gallery for graph nodes)
 npm run lint           # ESLint
 npm run format         # Format with Prettier
 ```

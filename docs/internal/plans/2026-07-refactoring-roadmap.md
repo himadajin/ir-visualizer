@@ -1,6 +1,6 @@
 # 2026-07 Project Revival Roadmap
 
-- **Status:** Phase 0 complete (2026-07-04); Phase 1 not started
+- **Status:** Phase 0 and Phase 1 complete (2026-07-04); Phase 2 not started
 - **Created:** 2026-07-04
 - **Background:** Development of this project had been stalled for several months. A full audit was performed on 2026-07-04 to restart it. This plan is based on the findings of that audit.
 
@@ -63,18 +63,33 @@ Low-risk, immediately effective cleanup. No behavior changes.
 
 Exit criteria: CI verifies lint / format / test / build, no stale branches remain, and the README describes the actual project.
 
-### Phase 1 — Build the safety net
+### Phase 1 — Build the safety net (complete)
 
 Make refactoring regressions detectable. **Must be completed before Phase 2.**
 
-- Introduce Playwright. Smoke E2E: each of the three modes renders a graph from its default code;
-  the graph updates on editor input; parse errors are displayed.
-- Add a jsdom environment + Testing Library to vitest (switch `environment` per file).
-- Unit tests for `useGraphData` (graph updates, topology signature, position preservation, layout reset).
-- Introduce Storybook. Migrate the hand-rolled node gallery in `src/pages/Debug`
-  (NodeDebugPage / \*NodeDefs) to stories, then delete the Debug pages once migration is complete.
+- [x] Add a jsdom environment + Testing Library to vitest (`// @vitest-environment jsdom`
+      pragma per file; default environment stays `"node"` for the existing parser/graphBuilder tests)
+- [x] Unit tests for `useGraphData` (`src/hooks/__tests__/useGraphData.test.ts`): layout on first run,
+      position preservation on same-topology updates, re-layout on topology change, backEdge
+      detection, `resetLayout`/`resetSelectionDAGLayout`
+- [x] Introduce Storybook (`@storybook/react-vite`). Migrated the hand-rolled node gallery in
+      `src/pages/Debug` (NodeDebugPage / \*NodeDefs) to `*.stories.tsx` files colocated with each
+      node component, via a shared `NodeStoryCanvas` helper (node components need a real ReactFlow
+      instance for Handles to work). Deleted `src/pages/Debug`, `src/debug.tsx`, `debug.html`, and
+      the `debug` Vite build input once migration was verified in the Storybook dev server.
+      Dropped `@storybook/addon-vitest`'s browser-mode story testing after it proved flaky
+      (dynamically-imported-module fetch failures) — Storybook is a visual catalog only; behavior
+      is covered by the E2E suite below.
+- [x] Introduce Playwright (`@playwright/test`, `e2e/smoke.spec.ts`). Smoke E2E: each of the three
+      modes renders a graph from its default code; editing the code updates the graph; invalid code
+      shows a parse error. Note: Monaco's EditContext-based input surface (`.native-edit-context`)
+      has no visible size, so tests focus the editor by clicking the visible `.view-lines` area, and
+      `keyboard.type(...)` uses a small per-key delay — typing too fast drops keystrokes under this
+      Monaco version's EditContext input path.
+- [x] Wired into CI (`.github/workflows/ci.yml`): `build-storybook`, Playwright browser install, and
+      `test:e2e`, with the Playwright HTML report uploaded as an artifact on failure.
 
-Exit criteria: every node component has a story, the E2E smoke suite runs in CI, and `useGraphData` is tested.
+Exit criteria: every node component has a story, the E2E smoke suite runs in CI, and `useGraphData` is tested. — met.
 
 ### Phase 2 — The refactoring itself
 

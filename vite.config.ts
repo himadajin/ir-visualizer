@@ -1,5 +1,4 @@
 /// <reference types="vitest/config" />
-import { resolve } from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -7,27 +6,25 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "/ir-visualizer/",
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, "index.html"),
-        debug: resolve(__dirname, "debug.html"),
-      },
-    },
-  },
   server: {
     watch: {
       usePolling: true,
     },
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "node",
+    setupFiles: ["./src/test/setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/__tests__/**", "src/**/*.test.ts", "src/vite-env.d.ts"],
+      exclude: [
+        "src/**/__tests__/**",
+        "src/**/*.test.{ts,tsx}",
+        "src/vite-env.d.ts",
+        "src/test/**",
+      ],
     },
   },
 });

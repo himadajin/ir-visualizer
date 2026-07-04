@@ -14,6 +14,11 @@ The graph is rendered using react-flow.
 
 ## Directory
 
+- `docs`: Project documentation (see `docs/README.md` for the structure and rules)
+  - `docs/internal/contracts`: Interface contracts between layers
+  - `docs/internal/plans`: Plans for large-scale changes
+  - `docs/internal/specs`: Behavior specifications
+  - `docs/user`: User-facing documentation
 - `src`
   - `src/ast`: AST definitions
   - `src/components`: UI components
@@ -37,6 +42,7 @@ The graph is rendered using react-flow.
 
 ## Rules
 
+- Documentation-first: `docs/` is the source of truth. Before changing code, update the relevant document under `docs/` (create it if missing). See `docs/README.md`.
 - Always run tests after making changes.
 - Always run `npm run format` after making changes.
 - Always run `npm run lint` after making changes.

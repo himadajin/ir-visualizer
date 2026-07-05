@@ -8,6 +8,8 @@ The graph is rendered using react-flow.
 
 ### How it Works
 
+See `docs/internal/architecture.md` for the full data-flow diagram and layer map.
+
 - Parses input text into an AST using Ohm-js (`src/parser/*`).
 - Converts AST into React Flow nodes and edges via `src/graphBuilder`.
 - Renders the graph using `react-flow` and calculates layout with Dagre `src/utils/layout.ts`.

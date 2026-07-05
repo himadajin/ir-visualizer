@@ -49,5 +49,14 @@ describe("mermaid parser", () => {
       expect(ast.nodes[0].label).toBe("Standalone Node");
       expect(ast.nodes[1].label).toBe("Another Node");
     });
+
+    it("when label is double-quoted, should keep the quotes in the label text", () => {
+      // The grammar's squareQuote alternative never matches (square wins first),
+      // so quotes are not stripped. Documented in specs/mermaid.md.
+      const ast = parseMermaidToAST(`\ngraph TD\nA["Quoted label"]`);
+
+      expect(ast.nodes[0].label).toBe('"Quoted label"');
+      expect(ast.nodes[0].shape).toBe("square");
+    });
   });
 });

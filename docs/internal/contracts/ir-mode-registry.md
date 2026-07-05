@@ -1,8 +1,8 @@
 # Contract: IR mode registry
 
 - **Status:** Implemented (Phase 2, 2026-07-04)
-- **Motivation:** see `docs/internal/plans/2026-07-refactoring-roadmap.md` — adding a 4th IR
-  currently requires editing ~14 scattered call sites. This contract defines the single
+- **Motivation:** see `docs/internal/plans/2026-07-refactoring-roadmap.md` — before Phase 2,
+  adding a 4th IR required editing ~14 scattered call sites. This contract defines the single
   interface an IR mode must implement so that adding one only means adding one registry
   entry (plus the mode's own parser/AST/node-component files).
 

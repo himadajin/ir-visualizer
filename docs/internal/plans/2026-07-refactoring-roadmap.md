@@ -1,6 +1,6 @@
 # 2026-07 Project Revival Roadmap
 
-- **Status:** Phase 0, 1, and 2 complete (2026-07-04); Phase 3 not started
+- **Status:** Complete — all phases done (2026-07-05)
 - **Created:** 2026-07-04
 - **Background:** Development of this project had been stalled for several months. A full audit was performed on 2026-07-04 to restart it. This plan is based on the findings of that audit.
 
@@ -144,12 +144,22 @@ Exit criteria: adding a new IR only requires one registry entry plus the new IR'
 tests, lint, build, Storybook build, and E2E pass — verified, including a manual browser check of
 all three modes (mode switching, editing, and error display).
 
-### Phase 3 — Documentation
+### Phase 3 — Documentation (complete)
 
-- `docs/internal/specs/` — accepted syntax and graph conversion rules for each IR (derivable from parser tests)
-- `docs/internal/contracts/` — finalize the contracts written in Phase 2
-- `docs/user/` — usage, supported IR formats, known limitations
-- Update AGENTS.md (new structure, documentation-first rule), architecture overview (data-flow diagram)
+Detailed plan and completion notes: **`2026-07-phase3-documentation.md`** (written after a
+post-Phase 2 re-audit of the codebase). Delivered:
+
+- [x] `docs/internal/architecture.md` — data-flow diagram and layer-responsibility overview
+- [x] `docs/internal/specs/` — four behavior specs (`llvm-ir.md`, `mermaid.md`,
+      `selectiondag.md`, `graph-view.md`), every normative claim carrying a "Pinned by" test
+      reference or an explicit "observed, untested" marker
+- [x] `docs/internal/contracts/` — the two Phase 2 contracts re-verified against merged `main`
+- [x] `docs/user/` — `getting-started.md` and `supported-formats.md` (examples verified
+      through the real parse pipeline)
+- [x] Maintenance: link updates in README.md / AGENTS.md / docs/README.md
+
+Byproduct: spec-writing uncovered a Mermaid `%%`-comment runtime crash (grammar accepts,
+semantics missing) — documented in `specs/mermaid.md` and queued as a follow-up fix.
 
 ## 4. Out of scope
 

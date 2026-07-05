@@ -44,7 +44,12 @@ Pushes to `main` are automatically deployed to GitHub Pages (`.github/workflows/
 
 ## Documentation
 
-Design docs, specs, and plans live in [docs/](docs/README.md). Documentation is the source of truth: update the relevant document before changing code. See [AGENTS.md](AGENTS.md) for agent-facing development rules.
+- **Users**: [Getting started](docs/user/getting-started.md) ·
+  [Supported input formats](docs/user/supported-formats.md)
+- **Developers**: start with the [architecture overview](docs/internal/architecture.md);
+  contracts, specs, and plans live in [docs/](docs/README.md).
+
+Documentation is the source of truth: update the relevant document before changing code. See [AGENTS.md](AGENTS.md) for agent-facing development rules.
 
 ## License
 

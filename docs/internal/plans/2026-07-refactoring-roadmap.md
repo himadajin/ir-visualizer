@@ -116,7 +116,7 @@ Implementation:
        `IREdgeBuilder` in `src/utils/layout.ts` for why edge classification is mode-supplied
        rather than one universal algorithm.
 3. [x] `astData` is a discriminated union (`src/types/graph.ts`); the `as unknown as
-   Record<string, unknown>` casts in all three graphBuilders are gone. Node components still
+Record<string, unknown>` casts in all three graphBuilders are gone. Node components still
        do one cast at the React Flow `NodeProps.data` boundary — that's consuming a third-party
        API's loose typing, not the hole this closes (see `contracts/graph-data.md`).
 4. [x] `App.tsx` is 477 → ~95 lines. `useIRWorkspace` (mode/code/debounced parse/error) and

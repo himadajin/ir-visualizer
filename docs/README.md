@@ -6,14 +6,18 @@ All project documentation lives here. **Documentation is the source of truth: wh
 
 ```
 docs/
-├── internal/          # Developer-facing documentation
-│   ├── contracts/     # Contracts: interfaces, types, and invariants between layers.
-│   │                  # Code that violates a contract is considered a bug in the code.
-│   ├── plans/         # Plans: execution plans for refactorings and large-scale changes.
-│   │                  # Completed plans are kept (with their status recorded), not deleted.
-│   └── specs/         # Specs: behavior specifications for features and IR support.
-│                      # Syntax accepted by parsers, graph conversion rules, etc.
-└── user/              # User-facing documentation: usage, supported IR formats, known limitations.
+├── internal/            # Developer-facing documentation
+│   ├── architecture.md  # One-page orientation: data flow, layers, where behavior is specified.
+│   │                    # Read this first.
+│   ├── contracts/       # Contracts: interfaces, types, and invariants between layers.
+│   │                    # Code that violates a contract is considered a bug in the code.
+│   ├── plans/           # Plans: execution plans for refactorings and large-scale changes.
+│   │                    # Completed plans are kept (with their status recorded), not deleted.
+│   └── specs/           # Specs: behavior specifications for features and IR support.
+│                        # Syntax accepted by parsers, graph conversion rules, etc.
+│                        # Every normative claim carries a "Pinned by" test reference or an
+│                        # explicit "observed, untested" marker.
+└── user/                # User-facing documentation: usage, supported IR formats, known limitations.
 ```
 
 ## Rules

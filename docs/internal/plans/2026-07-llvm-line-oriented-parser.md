@@ -1,10 +1,14 @@
 # 2026-07 LLVM-IR Line-Oriented Parser Rewrite
 
-- **Status:** Planned (not started)
+- **Status:** In progress (step 1 done)
 - **Created:** 2026-07-06
-- **Branch:** one feature branch; each numbered step below is exactly one commit
-- **Owner commits/PRs:** agents prepare the working tree; the owner reviews and commits
-  (see repo conventions). "One commit" below means "one reviewable unit the owner commits".
+- **Branch:** one feature branch — `fix-parser`; each numbered step below is exactly one
+  commit
+- **Commit workflow (owner decision, 2026-07-06):** for this plan, agents commit to the
+  local branch themselves — a deviation from the usual owner-commits convention — under
+  one condition: **every commit must first pass a subagent review** (§6.0). The owner
+  reviews the branch and performs the push (and PR) after all steps are complete. Never
+  push from an agent.
 
 ## 1. Background and goals
 
@@ -300,6 +304,34 @@ are pure functions; this is cheap to reach and keeps refactors honest).
 Every commit ends with `npm run format && npm run lint && npm run test:run` green (repo
 rule). Doc edits land in the same commit as the code they govern, spec-first within the
 commit.
+
+### 6.0 Per-step workflow (mandatory for every step)
+
+1. **Implement** the step's scope on the feature branch (working tree only).
+2. **Verify locally:** `npm run format && npm run lint && npm run test:run` all green
+   (plus `npm run build` for steps 9–10 and `npm run test:e2e` for step 12).
+3. **Subagent review (required before commit).** Spawn a fresh-context review subagent
+   with: this plan document, the step number, and the full diff (`git diff` of the working
+   tree). The reviewer checks, at minimum:
+   - the diff implements the referenced plan sections (e.g. §3.1 for step 5) — no more,
+     no less; flag scope creep per §7;
+   - **test quality, not just presence**: assertions pin the behavior the plan's spec
+     sections describe; projections rather than AST dumps (§5 principles); failure cases
+     and edge cases from the relevant §5 suite description are actually present;
+   - code quality: naming/idiom consistent with the codebase, no leftover debug code,
+     comments state constraints only;
+   - for steps that touch specs: every changed normative sentence has a Pinned-by
+     reference to a test in the diff.
+4. **Address findings**, re-run the checks in item 2, and re-review if the fix was more
+   than mechanical.
+5. **Commit** to the local branch with the step's conventional-commit subject and a
+   `Co-Authored-By: <agent> <noreply@anthropic.com>` footer identifying the agent. One
+   step = one commit; if a step turns out to need a preparatory refactor, ask the owner
+   before splitting.
+6. **Never push.** The owner reviews the branch and pushes/opens the PR after step 12.
+
+Owner-directed plan amendments (like the one introducing this section) are committed as
+standalone `docs:` commits outside the step numbering, following the same review rule.
 
 ### Step 1 — `docs: add line-oriented LLVM parser plan`
 

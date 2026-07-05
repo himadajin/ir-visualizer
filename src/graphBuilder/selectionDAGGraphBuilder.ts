@@ -1,21 +1,9 @@
-import type { GraphNode, GraphEdge } from "../types/graph";
+import type { GraphData, GraphNode } from "../types/graph";
 import type { ParseResult } from "../parser/selectionDAG";
 import type {
   SelectionDAGNode,
   SelectionDAGOperand,
 } from "../ast/selectionDAGAST";
-
-export interface SelectionDAGEdge extends GraphEdge {
-  sourceHandle?: string;
-  targetHandle?: string;
-  isChainOrGlue?: boolean;
-}
-
-export interface SelectionDAGGraphData {
-  nodes: GraphNode[];
-  edges: SelectionDAGEdge[];
-  direction?: string;
-}
 
 /**
  * Build a compact label string for a SelectionDAG node.
@@ -65,11 +53,9 @@ function formatOperand(op: SelectionDAGOperand): string {
   }
 }
 
-export function convertASTToGraph(
-  parseResult: ParseResult,
-): SelectionDAGGraphData {
+export function convertASTToGraph(parseResult: ParseResult): GraphData {
   const nodes: GraphNode[] = [];
-  const edges: SelectionDAGEdge[] = [];
+  const edges: GraphData["edges"] = [];
 
   // Collect all parsed nodes
   const dagNodes = parseResult.entries
@@ -86,7 +72,7 @@ export function convertASTToGraph(
       label: buildNodeLabel(dagNode),
       nodeType: "selectionDAG-node",
       language: "llvm",
-      astData: dagNode as unknown as Record<string, unknown>,
+      astData: dagNode,
     });
 
     // Generate edges from operands

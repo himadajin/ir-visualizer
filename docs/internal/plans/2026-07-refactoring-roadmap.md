@@ -1,6 +1,6 @@
 # 2026-07 Project Revival Roadmap
 
-- **Status:** Phase 0 and Phase 1 complete (2026-07-04); Phase 2 not started
+- **Status:** Phase 0, 1, and 2 complete (2026-07-04); Phase 3 not started
 - **Created:** 2026-07-04
 - **Background:** Development of this project had been stalled for several months. A full audit was performed on 2026-07-04 to restart it. This plan is based on the findings of that audit.
 
@@ -91,29 +91,58 @@ Make refactoring regressions detectable. **Must be completed before Phase 2.**
 
 Exit criteria: every node component has a story, the E2E smoke suite runs in CI, and `useGraphData` is tested. — met.
 
-### Phase 2 — The refactoring itself
+### Phase 2 — The refactoring itself (complete)
 
-The core is **centralizing IR mode definitions**. Before implementation, write the following under
-`docs/internal/contracts/` and get agreement (documentation-first):
+The core was **centralizing IR mode definitions**. Contracts were written first
+(documentation-first) and implemented as designed:
 
-- `contracts/ir-mode-registry.md` — the interface every IR mode must provide:
-  parser, graphBuilder, layout config, nodeTypes, editor language, default code.
-  Goal: adding a new IR = adding one registry entry.
-- `contracts/graph-data.md` — the type contract for `GraphData` / node `data`.
-  Replace `astData: Record<string, any>` with a discriminated union.
+- [x] `contracts/ir-mode-registry.md` — the `IRModeDefinition` interface every IR mode
+      implements (parser, nodeTypes, editorLanguage, defaultCode, edgeBuilder, dagreOptions),
+      aggregated in `src/irModes/` (`llvmMode.ts`, `mermaidMode.ts`, `selectionDAGMode.ts`,
+      `index.ts`).
+- [x] `contracts/graph-data.md` — `GraphNode.astData` is now a discriminated union keyed on
+      `nodeType`; `GraphEdge` absorbed SelectionDAG's extra optional fields
+      (`sourceHandle`/`targetHandle`/`isChainOrGlue`) so `GraphData` is one type for every mode.
 
-Implementation tasks (ordering to be detailed after the contracts are settled):
+Implementation:
 
-1. Introduce the IR mode registry and replace the ~14 scattered branches with registry lookups
-2. Unify the SelectionDAG-specific paths in `useGraphData` / `layout.ts`
-3. Type `astData` (union types) and eliminate `as` casts
-4. Decompose `App.tsx` (extract a parser-selection hook, the toolbar, and the resize logic)
-5. Centralize style/layout constants (remove the manual-sync comments)
-6. Unify the parser layer (common grammar caching and error handling. SelectionDAG's silent
-   fallback that demotes parse failures to comments must either be documented in specs as intended
-   behavior or removed)
+1. [x] IR mode registry (`src/irModes/`) replaces the ~14 scattered branches. `App.tsx`,
+       `useGraphData`, and `GraphViewer` all look up behavior from the active mode object instead
+       of branching on a string. Adding a 4th IR now means one registry entry plus that IR's own
+       parser/AST/graphBuilder/node-component files.
+2. [x] `useGraphData`'s `updateGraph(graph, mode)`/`resetLayout()` are single functions for every
+       mode; `layout.ts`'s `getLayoutedElements(graph, options)` takes an `edgeBuilder` +
+       `dagreOptions` per mode instead of a separate SelectionDAG function. See
+       `IREdgeBuilder` in `src/utils/layout.ts` for why edge classification is mode-supplied
+       rather than one universal algorithm.
+3. [x] `astData` is a discriminated union (`src/types/graph.ts`); the `as unknown as
+   Record<string, unknown>` casts in all three graphBuilders are gone. Node components still
+       do one cast at the React Flow `NodeProps.data` boundary — that's consuming a third-party
+       API's loose typing, not the hole this closes (see `contracts/graph-data.md`).
+4. [x] `App.tsx` is 477 → ~95 lines. `useIRWorkspace` (mode/code/debounced parse/error) and
+       `usePaneResize` (drag-to-resize) hooks extracted to `src/hooks/`; `ToolbarPane`,
+       `EditorToolbar`, `EditorPane`, `GraphPane` extracted to `src/components/AppShell/`.
+5. [x] Style constants centralized: `src/components/Graph/common/nodeTextStyle.ts` (font),
+       `src/components/Graph/SelectionDAG/selectionDAGStyleConstants.ts` (border/cell/item
+       padding), and `CodeFragment.tsx`'s own exported padding constants. `converter.ts`,
+       `NodeShell.tsx`, `SelectionDAGNode.tsx`, and `selectionDAGLayoutUtils.ts` import from these
+       instead of duplicating pixel values behind "MUST stay in sync" comments.
+6. [x] Parser layer unified via `src/parser/grammarCache.ts`'s `createLazyGrammar` (used by all
+       three parsers; `mermaid.ts` was previously eager and is now lazy like the others). Removed
+       redundant `console.error` calls (the caller already surfaces parse errors to the user).
+       SelectionDAG's per-line tolerant fallback (unparseable lines become comments) is documented
+       in place as intentional, not removed — see the code comment in `parseSelectionDAGNode` and
+       "Known behavior difference" in `contracts/ir-mode-registry.md`.
 
-Exit criteria: adding a new IR only requires one registry entry plus the new IR's own files. All tests and E2E pass.
+Notable implementation detail not anticipated in the original plan: `IRModeDefinition.key` needed
+`as const` (not just a `satisfies IRModeDefinition` assertion) for `IRModeKey` to resolve to a
+literal union instead of `string` — otherwise MUI's `Select` generic inference broke. `IR_MODES`
+in `src/irModes/index.ts` also uses explicit string-literal object keys rather than computed
+`[mode.key]:` keys, so the exported `IRModeKey` type is reliably a literal union.
+
+Exit criteria: adding a new IR only requires one registry entry plus the new IR's own files. All
+tests, lint, build, Storybook build, and E2E pass — verified, including a manual browser check of
+all three modes (mode switching, editing, and error display).
 
 ### Phase 3 — Documentation
 

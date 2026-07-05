@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import LLVMFunctionHeaderNode from "./LLVMFunctionHeaderNode";
 import { NodeStoryCanvas } from "../common/NodeStoryCanvas";
+import type { LLVMFunctionHeaderData } from "../../../ast/llvmAST";
 
 interface StoryArgs {
-  astData: { name: string; definition: string };
+  astData: LLVMFunctionHeaderData;
 }
 
 const meta = {

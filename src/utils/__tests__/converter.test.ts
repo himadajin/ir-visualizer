@@ -5,6 +5,7 @@ import {
   createReactFlowEdge,
   createSelectionDAGReactFlowEdge,
   calculateNodeDimensions,
+  nodeTypeToReactFlowType,
   NODE_PADDING,
 } from "../converter";
 import type { GraphNode, GraphEdge } from "../../types/graph";
@@ -147,6 +148,17 @@ describe("calculateNodeDimensions", () => {
 
 describe("createReactFlowNode", () => {
   it("should create a ReactFlow node from GraphNode", () => {
+    const astData = {
+      type: "BasicBlock" as const,
+      id: "entry",
+      label: "entry",
+      instructions: [],
+      terminator: {
+        type: "Instruction" as const,
+        opcode: "ret" as const,
+        originalText: "ret void",
+      },
+    };
     const graphNode: GraphNode = {
       id: "test-node",
       label: "Test Label",
@@ -154,7 +166,7 @@ describe("createReactFlowNode", () => {
       language: "llvm",
       nodeType: "llvm-basicBlock",
       blockLabel: "entry",
-      astData: { foo: "bar" },
+      astData,
     };
 
     const rfNode = createReactFlowNode(graphNode, { x: 100, y: 200 });
@@ -165,26 +177,18 @@ describe("createReactFlowNode", () => {
     expect(rfNode.data.shape).toBe("square");
     expect(rfNode.data.language).toBe("llvm");
     expect(rfNode.data.blockLabel).toBe("entry");
-    expect(rfNode.data.astData).toEqual({ foo: "bar" });
+    expect(rfNode.data.astData).toEqual(astData);
     // nodeType should be converted: "llvm-basicBlock" -> "llvmBasicBlock"
     expect(rfNode.type).toBe("llvmBasicBlock");
   });
 
   it("should convert kebab-case nodeType to camelCase", () => {
-    const tests = [
-      { nodeType: "llvm-basicBlock", expected: "llvmBasicBlock" },
-      { nodeType: "mermaid-node", expected: "mermaidNode" },
-      { nodeType: "llvm-functionHeader", expected: "llvmFunctionHeader" },
-      { nodeType: "llvm-exit", expected: "llvmExit" },
-    ];
-
-    for (const { nodeType, expected } of tests) {
-      const rfNode = createReactFlowNode(
-        { id: "x", label: "x", nodeType },
-        { x: 0, y: 0 },
-      );
-      expect(rfNode.type).toBe(expected);
-    }
+    expect(nodeTypeToReactFlowType("llvm-basicBlock")).toBe("llvmBasicBlock");
+    expect(nodeTypeToReactFlowType("mermaid-node")).toBe("mermaidNode");
+    expect(nodeTypeToReactFlowType("llvm-functionHeader")).toBe(
+      "llvmFunctionHeader",
+    );
+    expect(nodeTypeToReactFlowType("llvm-exit")).toBe("llvmExit");
   });
 
   it("should default to codeNode when nodeType is not set", () => {

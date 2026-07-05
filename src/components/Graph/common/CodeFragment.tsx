@@ -1,5 +1,10 @@
 import HighlightedCode from "./HighlightedCode";
 
+// Consumed by selectionDAGLayoutUtils.ts and converter.ts to size SelectionDAG
+// nodes, which are the only current consumer of CodeFragment.
+export const CODE_FRAGMENT_PADDING_X = 4;
+export const CODE_FRAGMENT_PADDING_Y = 2;
+
 interface CodeFragmentProps {
   code: string;
   language?: string;
@@ -14,7 +19,7 @@ const CodeFragment = ({
   return (
     <div
       style={{
-        padding: "2px 4px",
+        padding: `${CODE_FRAGMENT_PADDING_Y}px ${CODE_FRAGMENT_PADDING_X}px`,
         borderRadius: "2px",
         fontSize: "13px",
         display: "inline-flex",

@@ -15,33 +15,20 @@ import CustomBezierEdge from "./CustomBezierEdge";
 import BackEdge from "./BackEdge";
 
 import CodeNode from "./CodeNode";
-import LLVMBasicBlockNode from "./LLVM/LLVMBasicBlockNode";
-import LLVMFunctionHeaderNode from "./LLVM/LLVMFunctionHeaderNode";
-import LLVMGlobalVariableNode from "./LLVM/LLVMGlobalVariableNode";
-import LLVMAttributeGroupNode from "./LLVM/LLVMAttributeGroupNode";
-import LLVMMetadataNode from "./LLVM/LLVMMetadataNode";
-import LLVMDeclarationNode from "./LLVM/LLVMDeclarationNode";
-import LLVMExitNode from "./LLVM/LLVMExitNode";
-import MermaidNode from "./Mermaid/MermaidNode";
-import SelectionDAGNode from "./SelectionDAG/SelectionDAGNode";
+import { IR_MODE_LIST } from "../../irModes";
 
 const edgeTypes = {
   customBezier: CustomBezierEdge,
   backEdge: BackEdge,
 };
 
-const nodeTypes = {
-  codeNode: CodeNode,
-  llvmBasicBlock: LLVMBasicBlockNode,
-  llvmFunctionHeader: LLVMFunctionHeaderNode,
-  llvmGlobalVariable: LLVMGlobalVariableNode,
-  llvmAttributeGroup: LLVMAttributeGroupNode,
-  llvmMetadata: LLVMMetadataNode,
-  llvmDeclaration: LLVMDeclarationNode,
-  llvmExit: LLVMExitNode,
-  mermaidNode: MermaidNode,
-  selectionDAGNode: SelectionDAGNode,
-};
+// codeNode is the mode-agnostic fallback (used when a GraphNode has no
+// nodeType); every other renderer comes from the IR mode registry, so this
+// component never needs to know about a specific IR.
+const nodeTypes = IR_MODE_LIST.reduce(
+  (acc, mode) => ({ ...acc, ...mode.nodeTypes }),
+  { codeNode: CodeNode },
+);
 
 interface GraphViewerProps {
   nodes: Node[];

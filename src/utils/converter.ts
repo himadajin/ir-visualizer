@@ -1,7 +1,17 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import type { GraphNode, GraphEdge } from "../types/graph";
-import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
 import { estimateSelectionDAGRowWidths } from "../components/Graph/SelectionDAG/selectionDAGLayoutUtils";
+import {
+  SELECTION_DAG_BORDER_WIDTH,
+  SELECTION_DAG_CELL_PADDING,
+  SELECTION_DAG_ITEM_PADDING,
+} from "../components/Graph/SelectionDAG/selectionDAGStyleConstants";
+import {
+  NODE_FONT_FAMILY,
+  NODE_FONT_SIZE,
+  NODE_LINE_HEIGHT,
+} from "../components/Graph/common/nodeTextStyle";
+import { CODE_FRAGMENT_PADDING_Y } from "../components/Graph/common/CodeFragment";
 import { getFontMetrics } from "./fontUtils";
 
 export const NODE_PADDING = 20;
@@ -14,28 +24,17 @@ const MAX_CHARS_LLVM = 80;
 const MIN_CHARS_SELECTION_DAG = 12;
 const MAX_CHARS_SELECTION_DAG = 50;
 
-// SelectionDAG specific layout constants (must match SelectionDAGNode.tsx)
-const SELECTION_DAG_ROOT_BORDER = 1;
-const SELECTION_DAG_ROW_BORDER = 1;
-const SELECTION_DAG_CELL_PADDING_Y = 2;
-const SELECTION_DAG_ITEM_PADDING_Y = 2;
-const SELECTION_DAG_CODE_FRAGMENT_PADDING_Y = 2;
+const HEADER_OFFSET = 24;
 
 /**
  * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
  * Falls back to "codeNode" when nodeType is not set.
  */
-const nodeTypeToReactFlowType = (nodeType?: string): string => {
+export const nodeTypeToReactFlowType = (nodeType?: string): string => {
   if (!nodeType) return "codeNode";
   // Convert "llvm-basicBlock" → "llvmBasicBlock", "mermaid-node" → "mermaidNode"
   return nodeType.replace(/-([a-zA-Z])/g, (_, c: string) => c.toUpperCase());
 };
-
-// Font configuration - must match CSS
-const FONT_FAMILY = "monospace";
-const FONT_SIZE = "14px";
-const LINE_HEIGHT = "20px";
-const HEADER_OFFSET = 24;
 
 type NodeSizingConfig = {
   minChars: number;
@@ -76,22 +75,14 @@ const measureWrappedLines = (lines: string[], maxChars: number) => {
   return { maxLineLength, totalLines };
 };
 
-const isSelectionDAGNode = (
-  node: GraphNode,
-): node is GraphNode & {
-  astData: SelectionDAGNodeAST;
-} => {
-  if (node.nodeType !== "selectionDAG-node") return false;
-  const astData = node.astData as Partial<SelectionDAGNodeAST> | undefined;
-  return Boolean(astData?.nodeId && astData?.opName && astData?.types);
-};
-
-const calculateSelectionDAGDimensions = (node: GraphNode) => {
-  const metrics = getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
-  if (!isSelectionDAGNode(node)) {
-    return calculateCodeNodeDimensions(node, metrics);
-  }
-
+const calculateSelectionDAGDimensions = (
+  node: GraphNode & { nodeType: "selectionDAG-node" },
+) => {
+  const metrics = getFontMetrics(
+    NODE_FONT_FAMILY,
+    NODE_FONT_SIZE,
+    NODE_LINE_HEIGHT,
+  );
   const ast = node.astData;
   const rowWidths = estimateSelectionDAGRowWidths(ast, metrics.width);
   const width = Math.max(...rowWidths);
@@ -100,31 +91,30 @@ const calculateSelectionDAGDimensions = (node: GraphNode) => {
   const operands = ast.operands ?? [];
   const hasOperands = operands.length > 0;
 
-  // Each CodeFragment has padding-y: 2px
-  const codeFragmentHeight =
-    metrics.height + SELECTION_DAG_CODE_FRAGMENT_PADDING_Y * 2;
+  // Each CodeFragment has vertical padding on both sides.
+  const codeFragmentHeight = metrics.height + CODE_FRAGMENT_PADDING_Y * 2;
 
-  // Row 1 (Operands): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
+  // Row 1 (Operands): Cell Padding + Item Padding + CF Height + Item Padding + Cell Padding
   const operandsRowHeight = hasOperands
     ? codeFragmentHeight +
-      (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2
+      (SELECTION_DAG_CELL_PADDING + SELECTION_DAG_ITEM_PADDING) * 2
     : 0;
 
-  // Row 2 (Main Content): Cell Padding (2) + CF Height + Cell Padding (2)
+  // Row 2 (Main Content): Cell Padding + CF Height + Cell Padding
   const mainContentRowHeight =
-    codeFragmentHeight + SELECTION_DAG_CELL_PADDING_Y * 2;
+    codeFragmentHeight + SELECTION_DAG_CELL_PADDING * 2;
 
-  // Row 3 (Types): Cell Padding (2) + Item Padding (2) + CF Height + Item Padding (2) + Cell Padding (2)
+  // Row 3 (Types): Cell Padding + Item Padding + CF Height + Item Padding + Cell Padding
   // Types are always present in SelectionDAG nodes
   const typesRowHeight =
     codeFragmentHeight +
-    (SELECTION_DAG_CELL_PADDING_Y + SELECTION_DAG_ITEM_PADDING_Y) * 2;
+    (SELECTION_DAG_CELL_PADDING + SELECTION_DAG_ITEM_PADDING) * 2;
 
   const totalHeight =
-    SELECTION_DAG_ROOT_BORDER * 2 +
-    (hasOperands ? operandsRowHeight + SELECTION_DAG_ROW_BORDER : 0) +
+    SELECTION_DAG_BORDER_WIDTH * 2 +
+    (hasOperands ? operandsRowHeight + SELECTION_DAG_BORDER_WIDTH : 0) +
     mainContentRowHeight +
-    SELECTION_DAG_ROW_BORDER +
+    SELECTION_DAG_BORDER_WIDTH +
     typesRowHeight;
 
   return { width, height: totalHeight };
@@ -138,7 +128,8 @@ const calculateCodeNodeDimensions = (
   },
 ) => {
   const metrics =
-    metricsParam ?? getFontMetrics(FONT_FAMILY, FONT_SIZE, LINE_HEIGHT);
+    metricsParam ??
+    getFontMetrics(NODE_FONT_FAMILY, NODE_FONT_SIZE, NODE_LINE_HEIGHT);
   const { minChars, maxChars } = getSizingConfig(node);
   const lines = getLabelLines(node.label);
   const { maxLineLength, totalLines } = measureWrappedLines(lines, maxChars);
@@ -207,14 +198,8 @@ export const createReactFlowEdge = (
   };
 };
 
-export interface SelectionDAGReactFlowEdge {
-  sourceHandle?: string;
-  targetHandle?: string;
-  isChainOrGlue?: boolean;
-}
-
 export const createSelectionDAGReactFlowEdge = (
-  edge: GraphEdge & SelectionDAGReactFlowEdge,
+  edge: GraphEdge,
   edgeType: string = "customBezier",
 ): Edge => {
   return {

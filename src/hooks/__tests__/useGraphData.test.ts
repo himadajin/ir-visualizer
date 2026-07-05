@@ -2,15 +2,15 @@
 import { describe, it, expect } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useGraphData } from "../useGraphData";
+import { llvmMode, selectionDAGMode } from "../../irModes";
 import type { GraphData } from "../../types/graph";
-import type { SelectionDAGGraphData } from "../../graphBuilder/selectionDAGGraphBuilder";
 
 function twoNodeGraph(labelA = "A", labelB = "B"): GraphData {
   return {
     direction: "TD",
     nodes: [
-      { id: "n1", label: labelA, nodeType: "codeNode" },
-      { id: "n2", label: labelB, nodeType: "codeNode" },
+      { id: "n1", label: labelA },
+      { id: "n2", label: labelB },
     ],
     edges: [{ id: "n1-n2", source: "n1", target: "n2" }],
   };
@@ -20,9 +20,9 @@ function threeNodeGraph(): GraphData {
   return {
     direction: "TD",
     nodes: [
-      { id: "n1", label: "A", nodeType: "codeNode" },
-      { id: "n2", label: "B", nodeType: "codeNode" },
-      { id: "n3", label: "C", nodeType: "codeNode" },
+      { id: "n1", label: "A" },
+      { id: "n2", label: "B" },
+      { id: "n3", label: "C" },
     ],
     edges: [
       { id: "n1-n2", source: "n1", target: "n2" },
@@ -31,7 +31,7 @@ function threeNodeGraph(): GraphData {
   };
 }
 
-function selectionDAGGraph(): SelectionDAGGraphData {
+function selectionDAGGraph(): GraphData {
   return {
     direction: "TD",
     nodes: [
@@ -62,7 +62,7 @@ describe("useGraphData", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateGraph(twoNodeGraph());
+      result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
 
     expect(result.current.nodes).toHaveLength(2);
@@ -76,13 +76,16 @@ describe("useGraphData", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateGraph(twoNodeGraph());
+      result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
 
     act(() => {
       // Same node/edge ids -> same topology signature, only labels differ.
-      result.current.updateGraph(twoNodeGraph("A changed", "B changed"));
+      result.current.updateGraph(
+        twoNodeGraph("A changed", "B changed"),
+        llvmMode,
+      );
     });
 
     const positionsAfterSecond = result.current.nodes.map((n) => n.position);
@@ -97,11 +100,11 @@ describe("useGraphData", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateGraph(twoNodeGraph());
+      result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
 
     act(() => {
-      result.current.updateGraph(threeNodeGraph());
+      result.current.updateGraph(threeNodeGraph(), llvmMode);
     });
 
     expect(result.current.nodes).toHaveLength(3);
@@ -112,11 +115,14 @@ describe("useGraphData", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateGraph({
-        direction: "TD",
-        nodes: [{ id: "n1", label: "A", nodeType: "codeNode" }],
-        edges: [{ id: "self", source: "n1", target: "n1" }],
-      });
+      result.current.updateGraph(
+        {
+          direction: "TD",
+          nodes: [{ id: "n1", label: "A" }],
+          edges: [{ id: "self", source: "n1", target: "n1" }],
+        },
+        llvmMode,
+      );
     });
 
     expect(result.current.edges[0].type).toBe("backEdge");
@@ -126,7 +132,7 @@ describe("useGraphData", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateGraph(twoNodeGraph());
+      result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
     act(() => {
       result.current.setNodes(
@@ -164,28 +170,28 @@ describe("useGraphData", () => {
     expect(result.current.edges).toHaveLength(0);
   });
 
-  it("updateSelectionDAGGraph lays out SelectionDAG nodes", () => {
+  it("lays out SelectionDAG nodes via the SelectionDAG mode", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateSelectionDAGGraph(selectionDAGGraph());
+      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
 
     expect(result.current.nodes).toHaveLength(2);
     expect(result.current.edges).toHaveLength(1);
   });
 
-  it("updateSelectionDAGGraph preserves positions and edge types on content-only update", () => {
+  it("preserves positions and edge types on a SelectionDAG content-only update", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateSelectionDAGGraph(selectionDAGGraph());
+      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
     const edgeTypesAfterFirst = result.current.edges.map((e) => e.type);
 
     act(() => {
-      result.current.updateSelectionDAGGraph(selectionDAGGraph());
+      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
 
     expect(result.current.nodes.map((n) => n.position)).toEqual(
@@ -196,11 +202,11 @@ describe("useGraphData", () => {
     );
   });
 
-  it("resetSelectionDAGLayout re-applies the SelectionDAG layout", () => {
+  it("resetLayout re-applies the SelectionDAG layout", () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
-      result.current.updateSelectionDAGGraph(selectionDAGGraph());
+      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
     act(() => {
       result.current.setNodes(
@@ -212,7 +218,7 @@ describe("useGraphData", () => {
     });
 
     act(() => {
-      result.current.resetSelectionDAGLayout();
+      result.current.resetLayout();
     });
 
     expect(

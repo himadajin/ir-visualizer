@@ -14,7 +14,7 @@ export function convertASTToGraph(ast: MermaidAST): GraphData {
     type: nodeShapeToGraphType(node.shape),
     language: "mermaid",
     nodeType: "mermaid-node",
-    astData: node as unknown as Record<string, unknown>,
+    astData: node,
   }));
 
   const edges: GraphEdge[] = ast.edges.map((edge, i) => ({

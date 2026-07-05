@@ -10,10 +10,9 @@ import type {
   SelectionDAGOperand,
   SelectionDAGReg,
 } from "../ast/selectionDAGAST";
-import {
-  convertASTToGraph,
-  type SelectionDAGGraphData,
-} from "../graphBuilder/selectionDAGGraphBuilder";
+import type { GraphData } from "../types/graph";
+import { convertASTToGraph } from "../graphBuilder/selectionDAGGraphBuilder";
+import { createLazyGrammar } from "./grammarCache";
 
 export interface ParseResult {
   entries: SelectionDAGParseEntry[];
@@ -22,25 +21,6 @@ export interface ParseResult {
 export type SelectionDAGParseEntry =
   | { kind: "node"; node: SelectionDAGNode; line: number }
   | { kind: "comment"; comment: string; line: number };
-
-let _grammar: ohm.Grammar | null = null;
-let _semantics: ohm.Semantics | null = null;
-
-function getGrammarAndSemantics() {
-  if (!_grammar) {
-    try {
-      _grammar = ohm.grammar(selectionDAGGrammar);
-      _semantics = _grammar.createSemantics();
-      registerSemantics(_semantics);
-    } catch (error) {
-      _grammar = null;
-      _semantics = null;
-      throw error;
-    }
-  }
-
-  return { grammar: _grammar, semantics: _semantics! };
-}
 
 function maybeDetails(
   details: SelectionDAGDetails,
@@ -325,6 +305,11 @@ function registerSemantics(semantics: ohm.Semantics) {
   });
 }
 
+const getGrammarAndSemantics = createLazyGrammar(
+  selectionDAGGrammar,
+  registerSemantics,
+);
+
 export function parseSelectionDAGNode(line: string): {
   node?: SelectionDAGNode;
   comment?: string;
@@ -333,6 +318,10 @@ export function parseSelectionDAGNode(line: string): {
   const { grammar, semantics } = getGrammarAndSemantics();
   const match = grammar.match(line, "Line");
   if (match.failed()) {
+    // Intentional, not a bug: real SelectionDAG dumps mix a free-text header
+    // ("Optimized legalized selection DAG: ...") with `tN: ... = ...` node
+    // lines. Parsing is per-line, so a line that isn't a node is just
+    // non-graph text to skip, not a parse error for the whole input.
     return { comment: line };
   }
 
@@ -346,9 +335,7 @@ export function parseSelectionDAGNode(line: string): {
   return { comment: line };
 }
 
-export function parseSelectionDAGToGraphData(
-  input: string,
-): SelectionDAGGraphData {
+export function parseSelectionDAGToGraphData(input: string): GraphData {
   const parseResult = parseSelectionDAG(input);
   return convertASTToGraph(parseResult);
 }

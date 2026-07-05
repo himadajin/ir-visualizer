@@ -36,7 +36,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         type: "square",
         language: "llvm",
         nodeType: "llvm-globalVariable",
-        astData: gVar as unknown as Record<string, unknown>,
+        astData: gVar,
       });
     });
   }
@@ -50,7 +50,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         type: "square",
         language: "llvm",
         nodeType: "llvm-attributeGroup",
-        astData: attr as unknown as Record<string, unknown>,
+        astData: attr,
       });
     });
   }
@@ -64,7 +64,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         type: "square",
         language: "llvm",
         nodeType: "llvm-metadata",
-        astData: meta as unknown as Record<string, unknown>,
+        astData: meta,
       });
     });
   }
@@ -78,7 +78,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         type: "square",
         language: "llvm",
         nodeType: "llvm-declaration",
-        astData: decl as unknown as Record<string, unknown>,
+        astData: decl,
       });
     });
   }
@@ -121,7 +121,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         type: "square",
         language: "llvm",
         nodeType: "llvm-basicBlock",
-        astData: block as unknown as Record<string, unknown>,
+        astData: block,
       });
 
       if (block.terminator) {

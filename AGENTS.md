@@ -11,6 +11,12 @@ The graph is rendered using react-flow.
 - Parses input text into an AST using Ohm-js (`src/parser/*`).
 - Converts AST into React Flow nodes and edges via `src/graphBuilder`.
 - Renders the graph using `react-flow` and calculates layout with Dagre `src/utils/layout.ts`.
+- Everything that differs per IR (parser, default code, editor language, node
+  components, edge/layout behavior) is centralized in the IR mode registry
+  (`src/irModes`) — see `docs/internal/contracts/ir-mode-registry.md`. Adding
+  a new IR should mean adding one registry entry plus that IR's own
+  parser/AST/graphBuilder/node-component files, not editing scattered
+  `if (mode === ...)` branches.
 
 ## Directory
 
@@ -22,10 +28,12 @@ The graph is rendered using react-flow.
 - `src`
   - `src/ast`: AST definitions
   - `src/components`: UI components
+    - `src/components/AppShell`: Top-level layout components (toolbar, editor/graph panes)
     - `src/components/Editor`: Code editor components
     - `src/components/Graph`: React Flow graph components, colocated with `*.stories.tsx` files
   - `src/graphBuilder`: Logic to transform AST into React Flow graph data (nodes and edges)
-  - `src/hooks`: Custom React hooks (e.g., `useGraphData`)
+  - `src/hooks`: Custom React hooks (e.g., `useGraphData`, `useIRWorkspace`)
+  - `src/irModes`: The IR mode registry — one file per IR plus the aggregating `index.ts`
   - `src/parser`: Ohm-js grammar files and parser implementations
   - `src/types`: Global TypeScript type definitions
   - `src/utils`: Utility functions for layout (Dagre), and other helpers

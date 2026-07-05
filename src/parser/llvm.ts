@@ -15,23 +15,7 @@ import type {
   LLVMOperand,
 } from "../ast/llvmAST";
 import { convertASTToGraph } from "../graphBuilder/llvmGraphBuilder";
-
-let _grammar: ohm.Grammar | null = null;
-let _semantics: ohm.Semantics | null = null;
-
-function getGrammarAndSemantics() {
-  if (!_grammar) {
-    try {
-      _grammar = ohm.grammar(llvmGrammar);
-      _semantics = _grammar.createSemantics();
-      registerSemantics(_semantics);
-    } catch (error) {
-      console.error("Failed to initialize LLVM grammar:", error);
-      throw error;
-    }
-  }
-  return { grammar: _grammar, semantics: _semantics! };
-}
+import { createLazyGrammar } from "./grammarCache";
 
 function registerSemantics(semantics: ohm.Semantics) {
   semantics.addOperation<any>("toAST", {
@@ -518,11 +502,15 @@ function registerSemantics(semantics: ohm.Semantics) {
   });
 }
 
+const getGrammarAndSemantics = createLazyGrammar(
+  llvmGrammar,
+  registerSemantics,
+);
+
 export function parseLLVM(input: string): GraphData {
   const { grammar, semantics } = getGrammarAndSemantics();
   const match = grammar.match(input);
   if (match.failed()) {
-    console.error("LLVM Parse Error:", match.message);
     throw new Error(match.message);
   }
   const nodes = semantics(match).toAST() as LLVMModule;

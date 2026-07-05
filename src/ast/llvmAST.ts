@@ -18,6 +18,12 @@ export interface LLVMFunction {
   entry: LLVMBasicBlock;
 }
 
+/** astData shape for the synthetic function-header node (not a distinct AST node in its own right). */
+export interface LLVMFunctionHeaderData {
+  definition: string;
+  name: string;
+}
+
 export interface LLVMParam {
   type: string;
   name: string | null;

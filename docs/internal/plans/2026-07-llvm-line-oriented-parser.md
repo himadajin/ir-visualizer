@@ -6,9 +6,11 @@
   commit
 - **Commit workflow (owner decision, 2026-07-06):** for this plan, agents commit to the
   local branch themselves — a deviation from the usual owner-commits convention — under
-  one condition: **every commit must first pass a subagent review** (§6.0). The owner
-  reviews the branch and performs the push (and PR) after all steps are complete. Never
-  push from an agent.
+  one condition: **every substantive change must pass a review by a party that did not
+  write it** (§6.0 — which also defines the narrow mechanical-fix exemption). By default
+  a fresh subagent implements each step and the plan-owning orchestrator agent reviews.
+  The owner reviews the branch and performs the push (and PR) after all steps are
+  complete. Never push from an agent.
 
 ## 1. Background and goals
 
@@ -307,31 +309,69 @@ commit.
 
 ### 6.0 Per-step workflow (mandatory for every step)
 
-1. **Implement** the step's scope on the feature branch (working tree only).
-2. **Verify locally:** `npm run format && npm run lint && npm run test:run` all green
-   (plus `npm run build` for steps 9–10 and `npm run test:e2e` for step 12).
-3. **Subagent review (required before commit).** Spawn a fresh-context review subagent
-   with: this plan document, the step number, and the full diff (`git diff` of the working
-   tree). The reviewer checks, at minimum:
+Two roles, chosen so that the party with the most accumulated plan context sits at the
+review gate, and so that **no substantive diff is ever reviewed only by its author**.
+"Mechanical" is defined narrowly: a change is mechanical only if it alters neither
+runtime behavior nor what any test assertion pins (typos, naming, comment wording,
+formatting); when in doubt, it is substantive. Mechanical fixes by the reviewer are the
+single, deliberate exemption from the non-author-review rule — everything else in this
+section preserves it.
+
+- **Orchestrator** — the long-lived session agent that owns this plan's context (the
+  investigation, the design rationale, all prior steps). Reviews, fixes mechanically,
+  and commits. Does not implement substantive step code except where noted below.
+- **Implementer** — a fresh-context subagent spawned per step with: this plan document,
+  the step number, and the plan sections that step references. Writes the step's code
+  and tests in the working tree. May be resumed (same context) for rework.
+
+Default flow (steps 2, 4–11):
+
+1. **Delegate.** Orchestrator spawns the implementer for the step. The implementer works
+   on the feature branch working tree only, runs the repo checks itself, and reports
+   what it did and any deviations from the plan.
+2. **Independent verification.** The orchestrator re-runs
+   `npm run format && npm run lint && npm run test:run` itself (plus `npm run build` for
+   steps 9–10 and `npm run test:e2e` for step 12) — the implementer's claims are not
+   trusted; the results are re-derived.
+3. **Orchestrator review** of the full diff. Checklist, at minimum:
    - the diff implements the referenced plan sections (e.g. §3.1 for step 5) — no more,
      no less; flag scope creep per §7;
    - **test quality, not just presence**: assertions pin the behavior the plan's spec
      sections describe; projections rather than AST dumps (§5 principles); failure cases
      and edge cases from the relevant §5 suite description are actually present;
+   - cross-step consistency: module boundaries match what later steps expect
+     (e.g. the step-4 tokenizer API is what step 7 consumes);
    - code quality: naming/idiom consistent with the codebase, no leftover debug code,
      comments state constraints only;
    - for steps that touch specs: every changed normative sentence has a Pinned-by
      reference to a test in the diff.
-4. **Address findings**, re-run the checks in item 2, and re-review if the fix was more
-   than mechanical.
-5. **Commit** to the local branch with the step's conventional-commit subject and a
+4. **Findings routing.** Mechanical fixes (per the definition above) the orchestrator
+   applies directly, then re-runs item 2. Substantive rework — including missing or
+   wrong test cases — goes back to the same implementer via resume, then re-verify
+   (item 2) and re-review (item 3). If the orchestrator ends up writing substantive
+   code itself, that portion must get an independent fresh-context subagent review
+   before commit, so that no author reviews their own substantive work.
+5. **Commit** by the orchestrator, with the step's conventional-commit subject and a
    `Co-Authored-By: <agent> <noreply@anthropic.com>` footer identifying the agent. One
    step = one commit; if a step turns out to need a preparatory refactor, ask the owner
    before splitting.
 6. **Never push.** The owner reviews the branch and pushes/opens the PR after step 12.
 
+Intensity adjustments:
+
+- **Steps 8 and 9 (highest risk — module assembly; the switch + spec rewrite):** in
+  addition to the orchestrator review, an independent fresh-context subagent review is
+  required. Both approvals must cover the **final pre-commit diff**: any change applied
+  after an approval — even a mechanical one — reopens that approval.
+- **Steps 3 and 12 (mechanical move / docs + E2E scenario):** the orchestrator may
+  implement directly; an independent fresh-context subagent review is then required
+  before commit (the inverse role split, preserving the same invariant), and items 2, 5,
+  and 6 of the default flow still apply. If the orchestrator does not implement
+  directly, the default flow applies unchanged.
+
 Owner-directed plan amendments (like the one introducing this section) are committed as
-standalone `docs:` commits outside the step numbering, following the same review rule.
+standalone `docs:` commits outside the step numbering, under the same invariant: authored
+by the orchestrator → reviewed by an independent subagent.
 
 ### Step 1 — `docs: add line-oriented LLVM parser plan`
 

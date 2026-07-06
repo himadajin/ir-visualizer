@@ -184,6 +184,57 @@ next:
       expect(module.diagnostics).toBeUndefined();
     });
 
+    it("when a hint-less implicit block follows a hinted one, it should take the hint-resynced counter value", () => {
+      // Discriminates the hint's counter resync (N+1): without it the
+      // hint-less block would take counter value 1, not 6.
+      const module = buildModule(`define void @f() {
+  br label %5
+
+; <label>:5
+  br label %6
+
+  ret void
+}`);
+      expect(module.functions[0].blocks.map((b) => b.id)).toEqual([
+        "0",
+        "5",
+        "6",
+      ]);
+      expect(module.diagnostics).toBeUndefined();
+    });
+
+    it("when a hint-less implicit block follows a %N result, it should take the result-resynced counter value", () => {
+      // Discriminates the `%N = ...` counter resync (N+1): without it the
+      // hint-less block would take counter value 1, not 3.
+      const module = buildModule(`define void @f() {
+  %2 = add i32 0, 1
+  br label %3
+
+  ret void
+}`);
+      expect(module.functions[0].blocks.map((b) => b.id)).toEqual(["0", "3"]);
+      expect(module.diagnostics).toBeUndefined();
+    });
+
+    it("when a hint-less implicit block follows a printed numeric label, it should take the label-resynced counter value", () => {
+      // Discriminates the printed `N:` counter resync (N+1): without it the
+      // hint-less block would take counter value 1, not 8.
+      const module = buildModule(`define void @f() {
+  br label %7
+
+7:
+  br label %8
+
+  ret void
+}`);
+      expect(module.functions[0].blocks.map((b) => b.id)).toEqual([
+        "0",
+        "7",
+        "8",
+      ]);
+      expect(module.diagnostics).toBeUndefined();
+    });
+
     it("when only phi incoming refs use numeric labels, entry should still take the counter", () => {
       const module = buildModule(`define void @f(i1 %c) {
   br i1 %c, label %a, label %a
@@ -336,6 +387,14 @@ attributes #0 = { nounwind }
         "!llvm.module.flags",
       ]);
       expect(module.metadata[1].value).toBe("!{!0}");
+    });
+
+    it("when an attribute group id is a quoted string, should keep the sigiled quoted text as its id", () => {
+      const module = buildModule('attributes #"a b" = { nounwind }');
+      expect(module.attributes[0]).toMatchObject({
+        id: '#"a b"',
+        value: "{ nounwind }",
+      });
     });
 
     it("when module has typeAlias/comdat/moduleAsm/uselistorder, should drop them without diagnostics", () => {

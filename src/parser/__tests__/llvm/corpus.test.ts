@@ -63,22 +63,9 @@ function assertMatchesProjection(entry: CorpusEntry): void {
 describe("llvm parser", () => {
   describe("acceptance corpus", () => {
     for (const entry of corpusEntries) {
-      if (entry.expectedToFail) {
-        // Known old-parser gap (named in the manifest's expectedToFail
-        // reason). The assertion body is identical to the passing path;
-        // step 9 deletes the flag and this entry runs as a plain `it`.
-        it.fails(
-          `when ${entry.title} is parsed, should match its CFG projection ` +
-            `(expected to fail: ${entry.expectedToFail.reason})`,
-          () => {
-            assertMatchesProjection(entry);
-          },
-        );
-      } else {
-        it(`when ${entry.title} is parsed, should match its CFG projection`, () => {
-          assertMatchesProjection(entry);
-        });
-      }
+      it(`when ${entry.title} is parsed, should match its CFG projection`, () => {
+        assertMatchesProjection(entry);
+      });
     }
   });
 });

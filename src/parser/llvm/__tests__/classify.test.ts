@@ -66,6 +66,7 @@ describe("llvm classify", () => {
         'attributes #0 = { noinline nounwind "no-trapping-math"="true" }',
         "attributes",
       ],
+      ['attributes #"a b" = { nounwind }', "attributes"],
       ['target triple = "x86_64-pc-linux-gnu"', "target"],
       ['target datalayout = "e-m:e-i64:64"', "target"],
       ['source_filename = "main.c"', "sourceFilename"],

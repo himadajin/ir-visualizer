@@ -1,14 +1,12 @@
 /**
- * Acceptance corpus manifest for the LLVM parser rewrite
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md, step 2).
+ * Acceptance corpus manifest for the line-oriented LLVM parser
+ * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md, steps 2 and 9).
  *
- * Every `expected` projection describes what the future line-oriented parser
- * must produce per plan section 3.2 (terminator successor rules) and section
- * 3.3 (implicit block numbering). For `expectedToFail` entries the projection
- * is derived from those rules, not from the old parser's output; entries
- * without `expectedToFail` pin current behavior that must survive the rewrite.
- * Step 9 deletes the `expectedToFail` flags — nothing else may need to change
- * then.
+ * Every `expected` projection describes what the parser must produce per
+ * plan section 3.2 (terminator successor rules) and section 3.3 (implicit
+ * block numbering). Every entry must pass — the step-2 `expectedToFail`
+ * flags marking old-parser gaps were deleted in step 9 when the
+ * line-oriented parser became the entry point.
  */
 
 /**
@@ -45,11 +43,6 @@ export interface CorpusExpectation {
 export interface CorpusEntry {
   file: string;
   title: string;
-  /**
-   * Present while the old Ohm parser cannot produce `expected`; `reason`
-   * names the old-parser gap. Deleted wholesale in step 9.
-   */
-  expectedToFail?: { reason: string };
   expected: CorpusExpectation;
 }
 
@@ -69,9 +62,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-02-varargs-printf-call.ll",
     title: "the classic hello world with a varargs printf call",
-    expectedToFail: {
-      reason: "parens and varargs function type in call arguments",
-    },
     expected: {
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
@@ -85,9 +75,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-03-gep-constexpr-call-arg.ll",
     title: "a call with a getelementptr constant-expression argument",
-    expectedToFail: {
-      reason: "parens (getelementptr constant expression) in call arguments",
-    },
     expected: {
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
@@ -101,9 +88,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-04-unreachable.ll",
     title: "an unreachable terminator",
-    expectedToFail: {
-      reason: "unreachable is not in the terminator grammar",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       // unreachable has no successors and no exit edge (plan section 3.2).
@@ -114,9 +98,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-05-negative-ret-value.ll",
     title: "a negative integer in ret",
-    expectedToFail: {
-      reason: "negative integer is not accepted as a ret value",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -129,9 +110,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-06-br-literal-true-condition.ll",
     title: "a conditional br on the literal true",
-    expectedToFail: {
-      reason: "literal true is not accepted as a br condition",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "b"] }],
       edges: [
@@ -147,9 +125,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-07-constexpr-add-operand.ll",
     title: "a ptrtoint constant expression as an add operand",
-    expectedToFail: {
-      reason: "parens (ptrtoint constant expression) in instruction operands",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -163,9 +138,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-08-br-loop-metadata.ll",
     title: "an unconditional br with !llvm.loop metadata",
-    expectedToFail: {
-      reason: "metadata suffix after br targets",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "loop"] }],
       edges: [
@@ -180,9 +152,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-09-br-prof-metadata.ll",
     title: "a conditional br with !prof metadata",
-    expectedToFail: {
-      reason: "metadata suffix after conditional br targets",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "b"] }],
       edges: [
@@ -199,9 +168,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-10-unnamed-params.ll",
     title: "a define with unnamed parameters",
-    expectedToFail: {
-      reason: "parameters without a name are not accepted",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -214,9 +180,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-11-function-pointer-param.ll",
     title: "a function-pointer parameter type",
-    expectedToFail: {
-      reason: "parens in a function-pointer parameter type",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -229,9 +192,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-12-aggregate-return-type.ll",
     title: "an aggregate return type",
-    expectedToFail: {
-      reason: "aggregate types containing spaces are not accepted in ret",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -244,9 +204,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-13-switch-negative-case.ll",
     title: "a switch with a negative case value",
-    expectedToFail: {
-      reason: "negative switch case value",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "d"] }],
       edges: [
@@ -262,9 +219,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-14-invoke-landingpad.ll",
     title: "an invoke with a landingpad (C++ EH)",
-    expectedToFail: {
-      reason: "invoke/landingpad/resume are not supported",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "cont", "lpad"] }],
       // invoke: `to` edge labeled "to", `unwind` edge labeled "unwind";
@@ -347,11 +301,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-20-callbr-asm-goto.ll",
     title: "a callbr (asm goto)",
-    expectedToFail: {
-      reason:
-        "silent misparse: callbr parsed as a call and the cont: label " +
-        "absorbed as an instruction, dropping block cont",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "cont", "alt"] }],
       // callbr: fallthrough `to` edge and indirect-target edges, all
@@ -397,9 +346,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-23-vector-types.ll",
     title: "vector types in parameters, arithmetic, and ret",
-    expectedToFail: {
-      reason: "vector types containing spaces are not accepted in ret",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -412,9 +358,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "probe-24-ret-null-pointer.ll",
     title: "a ret of a null pointer",
-    expectedToFail: {
-      reason: "null is not accepted as a ret value",
-    },
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
@@ -442,9 +385,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "era-2x-hello-invoke.ll",
     title: "an LLVM 2.x hello world with one-line invoke and unwind",
-    expectedToFail: {
-      reason: "invoke and the LLVM 2.x unwind terminator are not supported",
-    },
     expected: {
       functions: [{ name: "@main", blockIds: ["entry", "ok", "err"] }],
       // unwind (like resume) has no successors and no exit edge (plan
@@ -462,11 +402,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "era-3x-loop-unnamed-blocks.ll",
     title: "an LLVM 3.x loop with ; <label>:N unnamed blocks",
-    expectedToFail: {
-      reason:
-        "unnamed blocks introduced only by ; <label>:N comments, plus a " +
-        "metadata suffix on br",
-    },
     expected: {
       // Entry block: unlabeled and the body references numeric labels, so it
       // takes the unnamed-value counter start (0); the other block ids come
@@ -486,11 +421,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "era-current-clang-o0.ll",
     title: "modern clang -O0 output with printed numeric labels",
-    expectedToFail: {
-      reason:
-        "silent misparse: the unlabeled numeric entry block is hardcoded " +
-        "to id entry instead of 0",
-    },
     expected: {
       functions: [{ name: "@main", blockIds: ["0", "5", "8", "9"] }],
       edges: [
@@ -508,9 +438,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "era-cpp-eh.ll",
     title: "C++ EH with two invokes sharing one landing pad",
-    expectedToFail: {
-      reason: "invoke/landingpad/resume are not supported",
-    },
     expected: {
       functions: [
         { name: "@run", blockIds: ["entry", "cont1", "cont2", "lpad"] },
@@ -530,9 +457,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "era-switch-heavy.ll",
     title: "a switch with negative and large case values",
-    expectedToFail: {
-      reason: "negative switch case value",
-    },
     expected: {
       functions: [
         {
@@ -562,9 +486,6 @@ export const corpusEntries: CorpusEntry[] = [
   {
     file: "era-vectors-aggregates.ll",
     title: "vector arithmetic with aggregate insertvalue/extractvalue",
-    expectedToFail: {
-      reason: "aggregate and vector types containing spaces are not accepted",
-    },
     expected: {
       functions: [
         { name: "@pack", blockIds: ["entry"] },

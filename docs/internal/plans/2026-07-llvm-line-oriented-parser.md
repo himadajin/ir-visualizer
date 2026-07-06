@@ -1,6 +1,6 @@
 # 2026-07 LLVM-IR Line-Oriented Parser Rewrite
 
-- **Status:** In progress (steps 1–2 done)
+- **Status:** In progress (steps 1–9 done)
 - **Created:** 2026-07-06
 - **Branch:** one feature branch — `fix-parser`; each numbered step below is exactly one
   commit
@@ -193,9 +193,10 @@ never fail the parse. This one property fixes probe failures 05/06/08/09/12/13/2
   at EOF, unbalanced `[`) — throw, with a message naming the 1-based source line and the
   problem in plain words (not Ohm's "Expected …"). Unbalanced `[` is detected as a
   layer-1 diagnostic (§3.1) and escalated to this throw by module assembly in step 8.
-- **Recoverable oddities** (implicit-id fallback, dropped comdat) — recorded in
-  `LLVMModule.diagnostics` (new optional field), not thrown. UI consumption is out of
-  scope.
+- **Recoverable oddities** (implicit-id fallback, dangling terminator targets,
+  label-after-unterminated-block recovery) — recorded in `LLVMModule.diagnostics` (new
+  optional field), not thrown. UI consumption is out of scope. (Comdat lines are dropped
+  diagnostic-free, per §3.5.)
 
 ### 3.5 Old-LLVM compatibility matrix (acceptance targets)
 

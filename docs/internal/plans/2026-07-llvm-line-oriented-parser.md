@@ -62,11 +62,12 @@ input text
   │            • string-aware comment stripping (keep raw text + stripped text)
   │            • join continuation lines (rules in §3.1)
   │            • record 1-based source line numbers
+  │            • blank and comment-only lines are dropped here (never reach Layer 2)
   │
   ├─ Layer 2  classify.ts       logical line → LineKind (deterministic, keyword-driven)
   │            top level: define / close-brace / declare / global / metadata-def /
   │                       attributes / target / source_filename / type-alias /
-  │                       comdat / module-asm / uselistorder / blank / unknown
+  │                       comdat / module-asm / uselistorder / unknown
   │            in function: label / terminator (keyword table §3.2) / debug-record /
   │                       instruction (fallback — never fails)
   │

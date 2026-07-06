@@ -1,10 +1,5 @@
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
-import type {
-  LLVMModule,
-  LLVMBasicBlock,
-  LLVMBrInstruction,
-  LLVMSwitchInstruction,
-} from "../ast/llvmAST";
+import type { LLVMModule, LLVMBasicBlock } from "../ast/llvmAST";
 
 /**
  * Build the label text from a BasicBlock's instructions and terminator.
@@ -127,52 +122,53 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
       if (block.terminator) {
         const terminator = block.terminator;
 
-        if (terminator.opcode === "br") {
-          const br = terminator as LLVMBrInstruction;
-          if (br.condition) {
-            // Conditional Branch
-            const trueTarget = br.trueTarget!;
-            const falseTarget = br.falseTarget!;
+        // Terminator dispatch narrows on SHAPE (field presence), not on
+        // opcode alone: the parser degrades a br / switch / invoke whose
+        // structure it cannot find to an LLVMOpaqueTerminator that keeps
+        // the opcode but carries only `successors` (spec §3.2). An
+        // opcode-based switch would read fields such a node does not have.
+        if ("condition" in terminator && terminator.condition !== undefined) {
+          // Conditional branch: true / false labeled edges.
+          const trueId = `${funcPrefix}_block_${terminator.trueTarget ?? ""}`;
+          const falseId = `${funcPrefix}_block_${terminator.falseTarget ?? ""}`;
 
-            const trueId = `${funcPrefix}_block_${trueTarget}`;
-            const falseId = `${funcPrefix}_block_${falseTarget}`;
-
-            edges.push({
-              id: `e-${blockId}-${trueId}-true`,
-              source: blockId,
-              target: trueId,
-              label: "true",
-              type: "arrow",
-            });
-            edges.push({
-              id: `e-${blockId}-${falseId}-false`,
-              source: blockId,
-              target: falseId,
-              label: "false",
-              type: "arrow",
-            });
-          } else if (br.destination) {
-            // Unconditional Branch
-            const target = br.destination;
-            const targetId = `${funcPrefix}_block_${target}`;
-            edges.push({
-              id: `e-${blockId}-${targetId}`,
-              source: blockId,
-              target: targetId,
-              type: "arrow",
-            });
-          }
+          edges.push({
+            id: `e-${blockId}-${trueId}-true`,
+            source: blockId,
+            target: trueId,
+            label: "true",
+            type: "arrow",
+          });
+          edges.push({
+            id: `e-${blockId}-${falseId}-false`,
+            source: blockId,
+            target: falseId,
+            label: "false",
+            type: "arrow",
+          });
+        } else if (
+          "destination" in terminator &&
+          terminator.destination !== undefined
+        ) {
+          // Unconditional branch: one unlabeled edge.
+          const targetId = `${funcPrefix}_block_${terminator.destination}`;
+          edges.push({
+            id: `e-${blockId}-${targetId}`,
+            source: blockId,
+            target: targetId,
+            type: "arrow",
+          });
         } else if (terminator.opcode === "ret") {
-          // Unique exit per function? Or shared exit?
-          // Typically CFG has unique exit per function.
+          // ret has no positive shape marker; the parser never produces an
+          // opaque node with opcode "ret", so the opcode check is exact.
+          // One shared exit node per function, created on first ret.
           const exitId = `${funcPrefix}_exit`;
 
-          // Check if exit node exists for this function, if not add it
           if (!nodes.find((n) => n.id === exitId)) {
             nodes.push({
               id: exitId,
               label: "exit",
-              type: "round", // Exit is usually round
+              type: "round",
               language: "text",
               nodeType: "llvm-exit",
               astData: {},
@@ -185,12 +181,9 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
             target: exitId,
             type: "arrow",
           });
-        } else if (terminator.opcode === "switch") {
-          const sw = terminator as LLVMSwitchInstruction;
-
-          // Default case
-          const defaultTarget = sw.defaultTarget;
-          const defaultId = `${funcPrefix}_block_${defaultTarget}`;
+        } else if ("defaultTarget" in terminator) {
+          // Structured switch: default edge + one labeled edge per case.
+          const defaultId = `${funcPrefix}_block_${terminator.defaultTarget}`;
           edges.push({
             id: `e-${blockId}-${defaultId}-default`,
             source: blockId,
@@ -199,17 +192,45 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
             type: "arrow",
           });
 
-          // Other cases
-          sw.cases.forEach((c) => {
-            const val = c.value;
-            const target = c.target;
-            const targetId = `${funcPrefix}_block_${target}`;
-
+          terminator.cases.forEach((c) => {
+            const targetId = `${funcPrefix}_block_${c.target}`;
             edges.push({
-              id: `e-${blockId}-${targetId}-case-${val}`,
+              id: `e-${blockId}-${targetId}-case-${c.value}`,
               source: blockId,
               target: targetId,
-              label: val,
+              label: c.value,
+              type: "arrow",
+            });
+          });
+        } else if ("normalTarget" in terminator) {
+          // Structured invoke: `to`- and `unwind`-labeled edges.
+          const toId = `${funcPrefix}_block_${terminator.normalTarget}`;
+          const unwindId = `${funcPrefix}_block_${terminator.unwindTarget}`;
+          edges.push({
+            id: `e-${blockId}-${toId}-to`,
+            source: blockId,
+            target: toId,
+            label: "to",
+            type: "arrow",
+          });
+          edges.push({
+            id: `e-${blockId}-${unwindId}-unwind`,
+            source: blockId,
+            target: unwindId,
+            label: "unwind",
+            type: "arrow",
+          });
+        } else if ("successors" in terminator) {
+          // Uniform successor rule: one unlabeled edge per successor
+          // (callbr, indirectbr, catchret, cleanupret, catchswitch, and
+          // degraded br/switch/invoke). unreachable / resume / unwind
+          // arrive with successors: [] and correctly gain no edge.
+          terminator.successors.forEach((successor, index) => {
+            const targetId = `${funcPrefix}_block_${successor}`;
+            edges.push({
+              id: `e-${blockId}-${targetId}-s${String(index)}`,
+              source: blockId,
+              target: targetId,
               type: "arrow",
             });
           });

@@ -1,11 +1,11 @@
 import type {
   LLVMBasicBlock,
-  LLVMBrInstruction,
   LLVMFunction,
   LLVMGenericInstruction,
   LLVMModule,
+  LLVMOpaqueTerminator,
   LLVMRetInstruction,
-  LLVMSwitchInstruction,
+  LLVMTerminator,
 } from "../../../ast/llvmAST";
 
 export function createModule(overrides: Partial<LLVMModule> = {}): LLVMModule {
@@ -31,9 +31,22 @@ export function createRetTerminator(): LLVMRetInstruction {
   };
 }
 
+export function createOpaqueTerminator(
+  opcode: string,
+  successors: string[],
+  originalText: string,
+): LLVMOpaqueTerminator {
+  return {
+    type: "Instruction",
+    opcode,
+    successors,
+    originalText,
+  };
+}
+
 export function createBlock(
   id: string,
-  terminator: LLVMBrInstruction | LLVMRetInstruction | LLVMSwitchInstruction,
+  terminator: LLVMTerminator,
   instructions: LLVMGenericInstruction[] = [],
 ): LLVMBasicBlock {
   return {

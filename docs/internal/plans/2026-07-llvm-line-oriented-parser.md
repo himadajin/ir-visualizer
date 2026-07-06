@@ -103,8 +103,10 @@ Applied only inside a function body, after string-aware comment stripping:
 
 1. **Bracket continuation.** If a line has unbalanced `[` (outside strings), join following
    lines until balanced. Covers multi-line `switch` (LLVM prints one case per line) and any
-   multi-line `callbr`/`indirectbr` target lists. Unbalanced at `}` or EOF → diagnostic,
-   treat the collected text as one opaque line.
+   multi-line `callbr`/`indirectbr` target lists. Unbalanced at `}` or EOF → the reader
+   records a diagnostic and emits the collected text as one opaque line; it never throws.
+   Module assembly (step 8) escalates that diagnostic to the §3.4 structural throw — the
+   reader stays pure, the module-level contract stays strict.
 2. **`to`-continuation.** If the _next_ line starts with `to label` or `unwind label`
    (after trim), join it. Covers the modern two-line `invoke` printing:
    `invoke void @g()` ⏎ `        to label %cont unwind label %lpad`.
@@ -188,10 +190,11 @@ never fail the parse. This one property fixes probe failures 05/06/08/09/12/13/2
   E2E smoke test).
 - **Structural errors** (no terminator before `}`, `}` without `define`, unclosed function
   at EOF, unbalanced `[`) — throw, with a message naming the 1-based source line and the
-  problem in plain words (not Ohm's "Expected …").
-- **Recoverable oddities** (implicit-id fallback, dropped comdat, joined-line EOF) —
-  recorded in `LLVMModule.diagnostics` (new optional field), not thrown. UI consumption is
-  out of scope.
+  problem in plain words (not Ohm's "Expected …"). Unbalanced `[` is detected as a
+  layer-1 diagnostic (§3.1) and escalated to this throw by module assembly in step 8.
+- **Recoverable oddities** (implicit-id fallback, dropped comdat) — recorded in
+  `LLVMModule.diagnostics` (new optional field), not thrown. UI consumption is out of
+  scope.
 
 ### 3.5 Old-LLVM compatibility matrix (acceptance targets)
 
@@ -427,8 +430,10 @@ by the orchestrator → reviewed by an independent subagent.
 
 ### Step 8 — `feat: assemble LLVM modules from classified lines`
 
-- `module.ts` (state machine, blocks incl. §3.3 numbering, §3.4 error policy) +
-  new-parser entry points in `llvm/parse.ts` (not yet exported by index).
+- `module.ts` (state machine, blocks incl. §3.3 numbering, §3.4 error policy — including
+  escalating the layer-1 unbalanced-`[` diagnostic, currently the reader's only
+  diagnostic, to the §3.4 structural throw) + new-parser entry points in `llvm/parse.ts`
+  (not yet exported by index).
 - Temporarily point a copied run of the existing six compatibility suites at it, or
   parameterize those suites over both parsers — either way:
 - Exit: **existing suites pass against the new parser**; corpus manifest passes with the

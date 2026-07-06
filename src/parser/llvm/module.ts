@@ -214,7 +214,7 @@ function parseDefineLine(line: LogicalLine): DefineHeader {
   );
 
   // Legacy definition string: `define <header> @name (<params>) <attrs>`,
-  // whitespace collapsed to single spaces (legacy.ts Function semantics).
+  // whitespace collapsed to single spaces (legacy Function semantics).
   const header = text.slice(tokens[0].end, nameToken.start);
   const paramsText = text.slice(tokens[open].end, tokens[close].start).trim();
   const attrs = text.slice(tokens[close].end, text.length - 1);

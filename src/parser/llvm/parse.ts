@@ -2,7 +2,7 @@
  * Entry points for the line-oriented LLVM parser
  * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §3, steps 8–9).
  *
- * Same signatures as the legacy exports in ./legacy.ts; re-exported by
+ * Same signatures as the removed Ohm-based parser's exports; re-exported by
  * ./index.ts since step 9. Edge emission for every terminator kind —
  * including invoke and opaque-successor terminators — lives in
  * `convertASTToGraph` (src/graphBuilder/llvmGraphBuilder.ts).

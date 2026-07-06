@@ -7,6 +7,18 @@ export interface LLVMModule {
   declarations: LLVMDeclaration[];
   targets: LLVMTarget[];
   sourceFilenames: LLVMSourceFilename[];
+  /**
+   * Recoverable parse oddities (plan §3.4) recorded by the line-oriented
+   * parser; absent for a clean parse. Structural errors still throw.
+   */
+  diagnostics?: LLVMParseDiagnostic[];
+}
+
+/** One recoverable parse diagnostic (plan §4, step 7). */
+export interface LLVMParseDiagnostic {
+  /** 1-based physical source line number. */
+  line: number;
+  message: string;
 }
 
 export interface LLVMFunction {
@@ -47,6 +59,8 @@ export type LLVMInstruction =
   | LLVMRetInstruction
   | LLVMSwitchInstruction
   | LLVMCallInstruction
+  | LLVMInvokeInstruction
+  | LLVMOpaqueTerminator
   | LLVMGenericInstruction;
 
 // Base interface for shared properties if needed,
@@ -96,7 +110,33 @@ export type LLVMTerminator =
   | LLVMRetInstruction
   | LLVMSwitchInstruction
   | LLVMCallInstruction
+  | LLVMInvokeInstruction
+  | LLVMOpaqueTerminator
   | LLVMGenericInstruction;
+
+export interface LLVMInvokeInstruction extends LLVMInstructionBase {
+  opcode: "invoke";
+  /** Callee name without its sigil (legacy `LLVMCallInstruction` convention). */
+  callee: string;
+  /** Block id after `to label` (without the `%` sigil). */
+  normalTarget: string;
+  /** Block id after `unwind label` (without the `%` sigil). */
+  unwindTarget: string;
+  /** Result local (without the `%` sigil), for `%x = invoke ...`. */
+  result?: string;
+}
+
+/**
+ * Any terminator understood only through the §3.2 uniform successor rule
+ * (callbr / indirectbr / resume / unreachable / cleanupret / catchret /
+ * catchswitch / unwind), plus the documented degradation target for a
+ * br / switch / invoke whose expected structure cannot be found.
+ */
+export interface LLVMOpaqueTerminator extends LLVMInstructionBase {
+  opcode: string;
+  /** Ordered `label %x` occurrences (without `%` sigils); may be empty. */
+  successors: string[];
+}
 
 export interface LLVMBrInstruction extends LLVMInstructionBase {
   opcode: "br";

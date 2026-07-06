@@ -1,6 +1,6 @@
 # 2026-07 LLVM-IR Line-Oriented Parser Rewrite
 
-- **Status:** In progress (steps 1–11 done)
+- **Status:** Complete — all 12 steps done (2026-07-06)
 - **Created:** 2026-07-06
 - **Branch:** one feature branch — `fix-parser`; each numbered step below is exactly one
   commit
@@ -471,6 +471,19 @@ by the orchestrator → reviewed by an independent subagent.
 
 Steps 4–7 are pure additions (old parser still serves the app), so the branch is safe to
 pause at any commit; the only behavior-changing commits are 9 and 10.
+
+### Deviations
+
+- Step 2: the corpus manifest carries 22 `expectedToFail` entries, not the 14 originally
+  estimated (the plan text above was corrected in place when the baseline was measured).
+- Step 8: added the label-after-unterminated-block recovery (now spec §3.4) beyond the
+  original error policy, and delivered the entry points as a `llvm/parse.ts` shim that
+  step 9 kept as the permanent module behind `index.ts` (only the dual-run test shim was
+  deleted).
+- Step 9: took a double review round — the second round added mutation tests pinning the
+  §3.3 counter-resynchronization behavior.
+- The LLVM mode's `DEFAULT_CODE` sample now renders its unlabeled entry block with id `3`
+  (the §3.3 unnamed-value counter after three unnamed parameters), no longer `entry`.
 
 ## 7. Risks and mitigations
 

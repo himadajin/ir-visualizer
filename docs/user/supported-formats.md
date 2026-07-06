@@ -7,9 +7,11 @@ practical summary.
 ## LLVM-IR
 
 Textual LLVM-IR modules: function definitions plus module-level entries (global variables,
-`declare` lines, metadata, attribute groups, `target ...`, `source_filename`).
+`declare` lines, metadata, attribute groups, `target ...`, `source_filename`, type aliases,
+comdats, `module asm`).
 
-**Get it from:** `clang -S -emit-llvm -o out.ll input.c`, or `opt -S` on bitcode.
+**Get it from:** `clang -S -emit-llvm -o out.ll input.c`, or `opt -S` on bitcode. Output
+from old LLVM releases works too — see the version table below.
 
 **Example** (paste into the app in LLVM-IR mode):
 
@@ -29,13 +31,39 @@ else:
 }
 ```
 
-**Limitations to know about:**
+**Version coverage:** parsing is line-oriented and only reads the structure the graph
+needs — block labels and terminators; instruction bodies are kept as text. That makes the
+parser insensitive to most syntax differences between LLVM releases, so printer output from
+LLVM ~2.x through current is accepted:
 
-- Blocks must end with `br`, `ret`, or `switch`. Functions using other terminators
-  (`invoke`, `unreachable`, ...) fail to parse — and a parse failure rejects the whole input.
-- Instruction bodies are mostly treated as text; the graph structure comes from block labels
-  and terminators only. Exotic instruction syntax occasionally trips the parser; if it does,
-  simplify or remove the offending line.
+| LLVM version | Era-specific syntax that is accepted                                                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~2.x         | typed pointers (`i8*`), function-pointer call types, one-line `invoke`, the old `unwind` terminator                                                                         |
+| 3.x–6.x      | unnamed blocks printed only as `; <label>:N` comments, old-style `load i8* %p` / `getelementptr` (no separate pointee type), `!llvm.loop` / `!prof` suffixes on terminators |
+| 7.x–13.x     | printed numeric block labels (`7:`), explicit pointee types                                                                                                                 |
+| 14+          | opaque `ptr`, `#dbg_value(...)` debug records, `callbr`                                                                                                                     |
+| any          | `comdat`, `module asm`, `uselistorder` — accepted and ignored                                                                                                               |
+
+**Graph structure:** every basic block becomes a node and every terminator becomes the
+block's outgoing edges. Conditional `br` edges are labeled `true` / `false`; `switch` gets a
+`default` edge plus one edge per case, labeled with the case value; `invoke` gets a `to`
+edge (normal path) and an `unwind` edge (exception path); `ret` connects to a shared
+per-function exit node; `unreachable`, `resume`, and the old `unwind` end their block as a
+dead end — no outgoing edge, not even to the exit node. Other terminators (`callbr`,
+`indirectbr`, ...) get one unlabeled edge per `label %target` they mention.
+
+**Error recovery:**
+
+- A line **inside a function** that the parser does not recognize never fails the parse: it
+  is kept as an opaque instruction in its block. The graph still renders; that line just
+  contributes text, not structure.
+- Anything **outside a function** that is not a recognized module entry is a parse error and
+  rejects the whole input — pasting non-IR shows an error instead of a misleading graph.
+- Structural problems (a block without a terminator before `}`, an unclosed function, ...)
+  are parse errors that name the offending line.
+
+The precise, test-backed rules live in the
+[LLVM-IR spec](../internal/specs/llvm-ir.md).
 
 ## SelectionDAG
 

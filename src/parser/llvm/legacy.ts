@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import * as ohm from "ohm-js";
 import llvmGrammar from "./llvm.ohm?raw";
-import type { GraphData } from "../types/graph";
+import type { GraphData } from "../../types/graph";
 import type {
   LLVMModule,
   LLVMFunction,
@@ -13,9 +13,9 @@ import type {
   LLVMRetInstruction,
   LLVMSwitchInstruction,
   LLVMOperand,
-} from "../ast/llvmAST";
-import { convertASTToGraph } from "../graphBuilder/llvmGraphBuilder";
-import { createLazyGrammar } from "./grammarCache";
+} from "../../ast/llvmAST";
+import { convertASTToGraph } from "../../graphBuilder/llvmGraphBuilder";
+import { createLazyGrammar } from "../grammarCache";
 
 function registerSemantics(semantics: ohm.Semantics) {
   semantics.addOperation<any>("toAST", {
@@ -321,16 +321,7 @@ function registerSemantics(semantics: ohm.Semantics) {
         callee: callee,
         args: callArgs,
         dest: dest,
-        operands: [], // Keeping base interface happy if needed, or we can populate it with all args?
-        // The base `LLVMInstruction` union type doesn't enforce `operands` on `CallInstruction` specifically
-        // if we defined `LLVMCallInstruction` to extend `LLVMInstructionBase` and not `LLVMGenericInstruction`.
-        // But let's check LLVMInstruction type definition.
-        // It is a union. `LLVMCallInstruction` has `args`.
-        // `LLVMStoreInstruction` has `operands`.
-        // Generic `LLVMInstruction` interface in `llvmAST.ts` (the old one) had `operands`.
-        // But I replaced the type alias.
-        // So I don't need 'operands' here if `LLVMCallInstruction` interface doesn't require it.
-        // I checked `llvmAST.ts` content I wrote. `LLVMCallInstruction` does NOT have `operands`.
+        operands: [],
         originalText: this.sourceString,
       } as LLVMInstruction;
     },

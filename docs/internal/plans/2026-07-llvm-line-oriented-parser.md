@@ -1,6 +1,6 @@
 # 2026-07 LLVM-IR Line-Oriented Parser Rewrite
 
-- **Status:** In progress (step 1 done)
+- **Status:** In progress (steps 1–2 done)
 - **Created:** 2026-07-06
 - **Branch:** one feature branch — `fix-parser`; each numbered step below is exactly one
   commit
@@ -15,7 +15,7 @@
 ## 1. Background and goals
 
 An investigation on 2026-07-06 ran 25 real-world LLVM-IR snippets through the current
-Ohm-based parser (`src/parser/llvm.ohm` / `llvm.ts`). 14 failed, including the classic
+Ohm-based parser (`src/parser/llvm.ohm` / `llvm.ts`). 15 failed, including the classic
 LLVM 2.x–3.x "hello world" (`call i32 (i8*, ...) @printf(...)` with a `getelementptr`
 constant-expression argument) and any `br` carrying `!llvm.loop` metadata. One input
 (`callbr`) parsed _silently wrong_: the following `cont:` label line was absorbed into the
@@ -108,7 +108,10 @@ Applied only inside a function body, after string-aware comment stripping:
 2. **`to`-continuation.** If the _next_ line starts with `to label` or `unwind label`
    (after trim), join it. Covers the modern two-line `invoke` printing:
    `invoke void @g()` ⏎ `        to label %cont unwind label %lpad`.
-3. Nothing else joins. LLVM's printers never wrap other instructions.
+3. Nothing else joins. In particular, `landingpad` clause continuation lines
+   (`cleanup` / `catch …` / `filter …` printed on their own line) deliberately do not
+   join: each becomes a separate opaque instruction, which is harmless for the CFG and
+   for defs/uses (the landingpad result is defined on the first line).
 
 Comment stripping must be string-aware: `c"...;[..."` contains `;` and `[` that are data.
 LLVM string literals cannot contain a raw `"` (quotes are escaped as `\22`), so "scan to
@@ -134,8 +137,11 @@ edge labels where the opcode is structurally understood:
   `false`. Accept any `<ty>` token (old IR used `bool`), and any value token
   (`%x`, `true`, `false`, digits).
 - **`br` (unconditional)** — one unlabeled edge.
-- **`switch`** — `default` edge + one edge per case, labeled with the case's raw value
-  text (anything up to the `,` — handles negative/hex values).
+- **`switch`** — `default` edge + one edge per case, labeled with the case's **value
+  text only** (the raw token(s) after the case's type, up to the `,` — e.g. `-1`, not
+  `i64 -1`; handles negative/hex values). This matches how the current graphBuilder
+  labels case edges from `LLVMSwitchCase.value`, and the step-2 corpus projections pin
+  this reading.
 - **`ret`** — no `label` successors; graphBuilder keeps its shared per-function exit node.
 - **`invoke`** — `to` edge labeled `to`, `unwind` edge labeled `unwind`.
 - **`callbr`** — fallthrough `to` edge unlabeled, indirect targets unlabeled.
@@ -158,15 +164,20 @@ never fail the parse. This one property fixes probe failures 05/06/08/09/12/13/2
 - Implicit block id resolution, in priority order:
   1. the `N` from an adjacent `; <label>:N` boundary comment;
   2. an unnamed-value counter: starts at the number of unnamed parameters; the unlabeled
-     entry block takes the counter value; thereafter, seeing `%N = ...` (numeric N) sets
-     the counter to N+1, and each implicit block boundary takes the current counter value.
-     This exactly reproduces LLVM's printer numbering for printer-generated input;
+     entry block itself consumes a counter value (its id is the counter value at function
+     start — `0` for a function whose parameters are all named); thereafter, seeing
+     `%N = ...` (numeric N) sets the counter to N+1, and each implicit block boundary
+     takes the current counter value. This exactly reproduces LLVM's printer numbering
+     for printer-generated input;
   3. fallback `implicit_<k>` plus a diagnostic (edges targeting a number that no block
      claims also produce a diagnostic — never a silent dangling edge).
 - Unlabeled entry block id defaults to `entry` **only when the function body never
-  references numeric labels** — otherwise the counter value is used. (Today's hardcoded
-  `entry` is why the default sample works; keep that behavior for named-label functions to
-  avoid churn in existing tests.)
+  references numeric labels** — otherwise the counter value is used. "References numeric
+  labels" means label _uses_: `label %N` in a terminator, a `; <label>:N` hint, or a phi
+  incoming-block reference `[ v, %N ]`; numeric instruction results (`%1 = ...`) do not
+  count (so a modern `-O0` body full of `%1`/`%2` temporaries but with no numeric branch
+  targets keeps id `entry`). (Today's hardcoded `entry` is why the default sample works;
+  keep that behavior for named-label functions to avoid churn in existing tests.)
 
 ### 3.4 Error policy (decided)
 
@@ -200,7 +211,7 @@ never fail the parse. This one property fixes probe failures 05/06/08/09/12/13/2
   _Handled by:_ classified, parsed-and-dropped (like today's TypeAlias), diagnostic-free.
 
 The 25 probe snippets from the 2026-07-06 investigation become the acceptance corpus
-(§5, step 2); all 25 must pass after step 9.
+(§5, step 2); all 31 corpus entries (25 probes + 6 era files) must pass after step 9.
 
 ## 4. AST changes (additive only)
 
@@ -280,8 +291,10 @@ topLevelDecls, terminators, instructions, invariants, graphData}.test.ts` must p
    the 25 probe snippets plus one realistic file per era entry of §3.5 (2.x hello-world with
    invoke/unwind; 3.x loop with `; <label>:N` + old load/gep; current clang -O0 opaque-ptr;
    C++ EH with invoke/landingpad/resume; switch-heavy; vectors/aggregates). Each entry in
-   a `manifest.ts` with its expected projection. Until step 9 the manifest marks known-old-
-   parser failures `expectedToFail: true`; step 9 deletes that flag (all must pass).
+   a `manifest.ts` with its expected projection. Until step 9 the manifest marks the 22
+   entries the old parser cannot reproduce with `expectedToFail: { reason }` (15 probes
+   throw, probe 20 and the modern-clang era file misparse silently, and the other era
+   files throw); step 9 deletes those flags (all entries must then pass).
 8. Invariants (extend `__tests__/llvm/invariants.test.ts`):
    - **line conservation:** every non-comment, non-blank body line of every corpus file
      appears in exactly one instruction/terminator `originalText` of exactly one block
@@ -380,7 +393,8 @@ by the orchestrator → reviewed by an independent subagent.
 ### Step 2 — `test: add LLVM IR acceptance corpus with expected-failure manifest`
 
 - §5.7 corpus files + manifest + `corpus.test.ts`, running against the **old** parser.
-- The 14 known failures are `expectedToFail: true` (use `it.fails`). Establishes the
+- The 22 entries the old parser cannot reproduce carry `expectedToFail: { reason }` and
+  run via `it.fails` with the same assertion body as passing entries. Establishes the
   baseline the rewrite must beat.
 - Exit: suite green, failures documented in the manifest.
 
@@ -418,12 +432,12 @@ by the orchestrator → reviewed by an independent subagent.
 - Temporarily point a copied run of the existing six compatibility suites at it, or
   parameterize those suites over both parsers — either way:
 - Exit: **existing suites pass against the new parser**; corpus manifest passes with the
-  14 flags flipped locally (do not flip in this commit).
+  22 `expectedToFail` flags removed locally (do not remove them in this commit).
 
 ### Step 9 — `feat!: switch LLVM mode to the line-oriented parser`
 
 - `llvm/index.ts` exports the new implementation; delete the dual-run shim from step 8;
-  flip the 14 corpus flags; update `errors.test.ts` per §3.4.
+  delete the 22 corpus `expectedToFail` flags; update `errors.test.ts` per §3.4.
 - **Rewrite `docs/internal/specs/llvm-ir.md`** (§2 unchanged sections, new §3
   terminators, §3.4 error policy, §3.3 numbering — every claim Pinned-by).
 - Update graphBuilder for new terminators: invoke `to`/`unwind` edges, opaque-successor

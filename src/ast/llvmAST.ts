@@ -69,6 +69,24 @@ export type LLVMInstruction =
 interface LLVMInstructionBase {
   type: "Instruction";
   originalText: string;
+  /**
+   * Use-def foundation (plan step 11, parser-only — no consumer yet).
+   * SSA local names this line defines: the `%x =` assignment result exactly,
+   * so 0 or 1 entry (invoke/callbr results included). Names carry no sigil.
+   * Never globals. Absent only on nodes with no source line (the §3.4
+   * synthetic empty terminator).
+   */
+  defs?: string[];
+  /**
+   * Local value names this line actually READS, deduplicated in
+   * first-occurrence order, no sigils. Excluded: block labels (`label %x`
+   * pairs), phi incoming-block refs, type-alias names (via the module's
+   * `%T = type …` table), string contents, and the line's own def. Globals
+   * are never uses (locals only). The pointer a `store` writes through IS
+   * read (as an address) and is included. Absent only on nodes with no
+   * source line.
+   */
+  uses?: string[];
 }
 
 export interface LLVMGenericInstruction extends LLVMInstructionBase {

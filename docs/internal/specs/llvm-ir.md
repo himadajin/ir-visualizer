@@ -236,6 +236,43 @@ them yet (see the plan's follow-ups).
 
 > Pinned by: `module.test.ts` (diagnostic cases assert line and message)
 
+### 3.5 Use-def foundation
+
+**Parser-only.** Every instruction and terminator parsed from a source line carries two
+extra fields, `defs` and `uses` (possibly empty arrays of sigil-free local names). No
+consumer exists yet: the graphBuilder and UI ignore both fields (the use-def graph view is
+a separate future plan). SSA values only — memory dependence (store→load) is out of scope,
+permanently. The one node without the fields is the synthetic empty terminator of the
+§3.4 label recovery, which has no source line.
+
+> Pinned by: `src/parser/llvm/__tests__/useDef.test.ts` ("attachment coverage",
+> "corpus-wide properties")
+
+**`defs`** is the `%x =` assignment result exactly: 0 or 1 entry, including invoke and
+callbr results. Globals are never defs.
+
+> Pinned by: `useDef.test.ts` ("defs (assignment result exactly)"); the defs-equals-result
+> consistency corpus-wide by "corpus-wide properties"
+
+**`uses`** are the local value names the line actually READS, deduplicated in
+first-occurrence order:
+
+| Rule                                                                                                                                                                                                                        | Pinned by (`useDef.test.ts`)                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Block labels are not uses: any `label %x` pair (br/switch targets, invoke `to`/`unwind`, callbr/indirectbr lists)                                                                                                           | "labels are not uses", "defs" (invoke/callbr cases) |
+| phi incoming VALUES are uses; incoming-block refs (`[ v, %bb ]` second slot) are not                                                                                                                                        | "phi lines"                                         |
+| Type-alias names (`%struct.T`) are excluded via a module-wide `%T = type …` name table, position-independent (an alias printed after the function still applies); the alias lines themselves stay dropped from the AST (§2) | "type-alias table"                                  |
+| Globals (`@g`) are never uses (locals only); string contents (`c"%d"`) never match — strings are opaque tokens                                                                                                              | "defs" (global case), "string contents"             |
+| The line's own def is never a use                                                                                                                                                                                           | "dedup and self-reference"                          |
+| br/switch conditions, ret values, call/invoke arguments, and operands of generic instructions are uses                                                                                                                      | "labels are not uses", "ret", "calls"               |
+| A local callee (`%fp(...)`) is a use — the function pointer is read                                                                                                                                                         | "calls"                                             |
+| **Store-pointer decision:** the pointer a `store` writes through IS a use — the address itself is read to perform the store; only the pointed-to memory is written                                                          | "store pointer decision"                            |
+
+Extraction is total (never throws) and token-based; it does not validate SSA form.
+
+> Pinned by: `useDef.test.ts` ("corpus-wide properties" — every corpus file parses with
+> well-formed defs/uses on every node)
+
 ## 4. CFG construction rules
 
 Node kinds produced (see `contracts/graph-data.md` for the `nodeType`↔`astData` mapping):
@@ -305,10 +342,13 @@ The produced graph always has `direction: "TD"`.
 - `phi` instructions do not contribute edges (they are generic instructions textually).
   > Pinned by: `classify.test.ts` ("when a phi uses bracketed block refs, should classify
   > instruction")
-- Operand classification is heuristic; it exists for potential future use (e.g. def-use
-  highlighting), and only the write-target marking of `store`/`cmpxchg`/`atomicrmw` is
-  exercised. The callee-extraction heuristic (§3) is deliberately unchanged from the legacy
-  parser.
+- Operand classification is heuristic, and only the write-target marking of
+  `store`/`cmpxchg`/`atomicrmw` is exercised; use-def consumers should read the dedicated
+  `defs`/`uses` fields (§3.5) instead of operands. The callee-extraction heuristic (§3) is
+  deliberately unchanged from the legacy parser.
+- The type-alias exclusion in `uses` (§3.5) is name-based: a local _value_ that shares its
+  name with a declared type alias would be excluded too (_observed, untested_ — printer
+  output does not produce such collisions).
 - Comments (`;`) are stripped and not preserved anywhere (label hints excepted, §1).
 - `LLVMModule.diagnostics` is recorded but not surfaced in the UI.
 - Extracting declaration names is still not done (`LLVMDeclaration.name` is always the

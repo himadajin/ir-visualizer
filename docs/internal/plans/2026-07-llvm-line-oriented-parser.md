@@ -1,6 +1,6 @@
 # 2026-07 LLVM-IR Line-Oriented Parser Rewrite
 
-- **Status:** In progress (steps 1–10 done)
+- **Status:** In progress (steps 1–11 done)
 - **Created:** 2026-07-06
 - **Branch:** one feature branch — `fix-parser`; each numbered step below is exactly one
   commit

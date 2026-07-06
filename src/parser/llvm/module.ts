@@ -8,6 +8,12 @@
  * (layer 2) → `parseInstruction` / `parseTerminator` (layer 3). Every line
  * is consumed exactly once; there is no backtracking.
  *
+ * Use-def foundation (step 11): every instruction and terminator parsed
+ * from a source line additionally gets `defs`/`uses` attached via
+ * `extractUseDef` (./useDef.ts), using the module-wide `%T = type ...`
+ * name table. The only node without them is the §3.4 synthetic empty
+ * terminator, which has no source line.
+ *
  * Error policy (§3.4):
  * - Unrecognized top-level line → throw, naming the 1-based line.
  * - Structural errors (no terminator before `}`, `}` without `define`,
@@ -91,6 +97,7 @@ import type { LogicalLine } from "./logicalLines";
 import { parseTerminator } from "./terminators";
 import { tokenizeLine } from "./tokenizer";
 import type { Token } from "./tokenizer";
+import { collectTypeAliasNames, extractUseDef } from "./useDef";
 
 const NUMERIC = /^\d+$/;
 
@@ -337,6 +344,7 @@ function assembleFunction(
   bodyLines: LogicalLine[],
   closeLine: number,
   diagnostics: LLVMParseDiagnostic[],
+  typeAliases: ReadonlySet<string>,
 ): LLVMFunction {
   const numericLabelUse = referencesNumericLabels(bodyLines);
   let counter = initialCounter(header.params);
@@ -418,6 +426,9 @@ function assembleFunction(
           observeNumericDefinition(tokens[0].value);
         }
         const terminator = parseTerminator(line, classified.opcode);
+        const terminatorUseDef = extractUseDef(line, typeAliases);
+        terminator.defs = terminatorUseDef.defs;
+        terminator.uses = terminatorUseDef.uses;
         for (const target of targetsOf(terminator)) {
           targets.push({ target, line: line.lineNumber });
         }
@@ -435,6 +446,9 @@ function assembleFunction(
         if ("result" in instruction && instruction.result !== undefined) {
           observeNumericDefinition(instruction.result);
         }
+        const useDef = extractUseDef(line, typeAliases);
+        instruction.defs = useDef.defs;
+        instruction.uses = useDef.uses;
         (current as OpenBlock).instructions.push(instruction);
         break;
       }
@@ -509,6 +523,9 @@ export function buildModule(input: string): LLVMModule {
     sourceFilenames: [],
   };
   const diagnostics: LLVMParseDiagnostic[] = [];
+  // Use-def foundation (step 11): the module-wide `%T = type ...` name
+  // table, fed into per-line defs/uses extraction inside every function.
+  const typeAliases = collectTypeAliasNames(lines);
 
   let i = 0;
   while (i < lines.length) {
@@ -538,7 +555,13 @@ export function buildModule(input: string): LLVMModule {
           );
         }
         module.functions.push(
-          assembleFunction(header, bodyLines, closeLine, diagnostics),
+          assembleFunction(
+            header,
+            bodyLines,
+            closeLine,
+            diagnostics,
+            typeAliases,
+          ),
         );
         break;
       }

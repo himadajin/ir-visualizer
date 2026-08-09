@@ -43,9 +43,7 @@ example already loaded.
 
 **Known limitation:** edge routing avoids node boxes, and nothing else. If you drag one node
 onto or nearly onto another, an edge can visibly cut between the two boxes instead of routing
-around them. Two edges in the default LLVM-IR example do this too, without any dragging — the
-automatic layout leaves a gap a couple of pixels narrower than routing needs there. Both are
-about the layout, not something you did wrong.
+around them. That's about the layout, not something you did wrong.
 
 - **Narrow screens** (≤ 768 px): the editor and graph become a single pane; use the
   **Code / Graph** toggle in the toolbar to switch between them.

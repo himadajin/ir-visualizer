@@ -413,7 +413,7 @@ export interface RouteRequest {
 }
 
 export interface EdgeRouterOptions {
-  nodeMargin?: number; // default 16
+  nodeMargin?: number; // default 12
   bendPenalty?: number; // default 30
   selfLoopGap?: number; // default 24
 }

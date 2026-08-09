@@ -133,7 +133,7 @@ function outwardNormal(side: RouteSide): Point {
 function isFallbackShape(
   points: Point[],
   request: RouteRequest,
-  nodeMargin = 16,
+  nodeMargin = 12,
   selfLoopGap = 24,
 ): boolean {
   if (points.length < 3) return false;
@@ -381,7 +381,7 @@ describe("routeEdges — tie-breaking (plan §3.1 'Tie-breaking', D3)", () => {
 describe("routeEdges — self-loops hug the node's right side (plan §3.1 'Self-loops', D1; arbitration-B R1/R2)", () => {
   it("produces the documented six-point right-side loop shape, derived from the rect and not from sourcePoint/targetPoint", () => {
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 100, height: 50 };
-    const nodeMargin = 16; // default per plan §3.2 EdgeRouterOptions
+    const nodeMargin = 12; // default per plan §3.2 EdgeRouterOptions
     const selfLoopGap = 24; // default per plan §3.2 EdgeRouterOptions
     const laneX = rect.x + rect.width + selfLoopGap;
 
@@ -448,7 +448,7 @@ describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladd
   const b: RouteNodeRect = { id: "B", x: 900, y: 900, width: 10, height: 10 };
   const nodes = [a, b, wall];
 
-  const nodeMargin = 16; // default per plan §3.2
+  const nodeMargin = 12; // default per plan §3.2
   const g = 24; // selfLoopGap default per plan §3.2 — also the ladder's own gap
 
   // Every expected polyline below is hand-computed directly from plan §3.1's
@@ -739,7 +739,7 @@ describe("routeEdges — pushed points survive collinear collapse (plan §3.1 'E
   // be targetPoint pushed outward along targetSide, even when those pushed
   // points are collinear with everything around them — the case a naive
   // "collapse all collinear points" pass would break.
-  const nodeMargin = 16; // default per plan §3.2
+  const nodeMargin = 12; // default per plan §3.2
 
   it("keeps points[1] / second-to-last as the pushed points on a dead-straight route", () => {
     // simpleTwoNodeCase: A's right-center to B's left-center, both at y=20 —

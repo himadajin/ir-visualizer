@@ -99,7 +99,7 @@ notion of geometry that can go out of date.
   not called per edge. `src/hooks/useEdgeRoutes.ts` reads React Flow's store, calls the
   router once per pass, and publishes the resulting `Map<edgeId, Point[]>` through a React
   context; `RoutedEdge` looks up its own entry by edge id.
-- **Algorithm:** a sparse Hanan grid over node rects inflated by `nodeMargin` (default 16),
+- **Algorithm:** a sparse Hanan grid over node rects inflated by `nodeMargin` (default 12),
   seeded per edge from the rect lines plus that edge's own endpoints. A grid segment is
   traversable when it does not cross the interior of an inflated rect. The endpoint-node
   exemption is **per endpoint**: the source node's rect is exempt only for the segments
@@ -145,10 +145,8 @@ notion of geometry that can go out of date.
     nodes whose inflated boxes overlap. _(observed, untested)_
   - ELK's placement can still leave two _unrelated_ node rects closer than `2 × nodeMargin`
     apart with no drag at all, closing the corridor a third edge would otherwise route
-    through and forcing that edge to the fallback. The shipped default LLVM-IR CFG has two
-    such edges, from a ~30 px gap where the router needs 32 px — a layout-constant question
-    (`docs/user/getting-started.md`), not a router defect. Measured 2026-08-09 from the
-    rendered default graph's node rects.
+    through and forcing that edge to the fallback — a layout-constant question, not a router
+    defect. _(observed, untested)_
 - **No immediate reversals:** no returned polyline — searched, self-loop or fallback — has
   an interior vertex whose arriving and leaving segments run along the same axis in
   opposite directions. This is the checkable form of "never a degenerate hook", and it is

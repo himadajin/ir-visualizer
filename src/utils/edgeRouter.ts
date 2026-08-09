@@ -15,7 +15,7 @@ import type {
  */
 
 /** Clearance kept around every node rect, px. */
-export const DEFAULT_NODE_MARGIN = 16;
+export const DEFAULT_NODE_MARGIN = 12;
 /** Price of one bend, expressed in px of path length (`length + bendPenalty * turns`). */
 export const DEFAULT_BEND_PENALTY = 30;
 /** Distance from a node's right edge to its self-loop lane, px. */

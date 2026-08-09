@@ -1,12 +1,10 @@
 /**
  * Acceptance corpus manifest for the line-oriented LLVM parser
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md, steps 2 and 9).
+ * (docs/internal/specs/llvm-ir.md).
  *
  * Every `expected` projection describes what the parser must produce per
- * plan section 3.2 (terminator successor rules) and section 3.3 (implicit
- * block numbering). Every entry must pass — the step-2 `expectedToFail`
- * flags marking old-parser gaps were deleted in step 9 when the
- * line-oriented parser became the entry point.
+ * spec section 3.2 (terminator successor rules) and section 3.3 (implicit
+ * block numbering). Every entry must pass the line-oriented parser.
  */
 
 /**
@@ -90,7 +88,7 @@ export const corpusEntries: CorpusEntry[] = [
     title: "an unreachable terminator",
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
-      // unreachable has no successors and no exit edge (plan section 3.2).
+      // unreachable has no successors and no exit edge (spec section 3.2).
       edges: [["func_f_header", "func_f_block_entry"]],
       terminatorOpcodes: { "@f": ["unreachable"] },
     },
@@ -222,7 +220,7 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "cont", "lpad"] }],
       // invoke: `to` edge labeled "to", `unwind` edge labeled "unwind";
-      // resume has no successors and no exit edge (plan section 3.2).
+      // resume has no successors and no exit edge (spec section 3.2).
       edges: [
         ["func_f_header", "func_f_block_entry"],
         ["func_f_block_entry", "func_f_block_cont", "to"],
@@ -304,7 +302,7 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "cont", "alt"] }],
       // callbr: fallthrough `to` edge and indirect-target edges, all
-      // unlabeled (plan section 3.2).
+      // unlabeled (spec section 3.2).
       edges: [
         ["func_f_header", "func_f_block_entry"],
         ["func_f_block_entry", "func_f_block_cont"],
@@ -320,7 +318,7 @@ export const corpusEntries: CorpusEntry[] = [
     title: "an opaque-pointer modern clang -O0 style body",
     expected: {
       // The unlabeled entry block keeps id "entry" because the body never
-      // references numeric block labels (plan section 3.3); %1/%2 are
+      // references numeric block labels (spec section 3.3); %1/%2 are
       // instruction results, not labels.
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
@@ -387,7 +385,7 @@ export const corpusEntries: CorpusEntry[] = [
     title: "an LLVM 2.x hello world with one-line invoke and unwind",
     expected: {
       functions: [{ name: "@main", blockIds: ["entry", "ok", "err"] }],
-      // unwind (like resume) has no successors and no exit edge (plan
+      // unwind (like resume) has no successors and no exit edge (spec
       // section 3.2).
       edges: [
         ["func_main_header", "func_main_block_entry"],
@@ -405,7 +403,7 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       // Entry block: unlabeled and the body references numeric labels, so it
       // takes the unnamed-value counter start (0); the other block ids come
-      // from the ; <label>:N boundary hints (plan section 3.3).
+      // from the ; <label>:N boundary hints (spec section 3.3).
       functions: [{ name: "@loop", blockIds: ["0", "1", "6"] }],
       edges: [
         ["func_loop_header", "func_loop_block_0"],

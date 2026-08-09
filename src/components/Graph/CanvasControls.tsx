@@ -21,7 +21,7 @@ interface CanvasControlsProps {
    * the sheet never covers it (`specs/graph-view.md` §6.4).
    */
   bottomInset: number;
-  /** Re-runs the Dagre layout and re-fits the viewport (owned by GraphViewer). */
+  /** Re-runs the ELK layout and re-fits the viewport (owned by GraphViewer). */
   onResetLayout: () => void;
 }
 

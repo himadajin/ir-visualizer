@@ -1,8 +1,8 @@
 /**
  * Logical-line reader for LLVM IR — physical lines → logical lines.
  *
- * Layer 1 of the line-oriented parser
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §3, §3.1, step 5).
+ * Logical-line layer of the line-oriented parser
+ * (docs/internal/specs/llvm-ir.md §3.1).
  * Pure function; reuses the tokenizer's `stripComment` for string-aware
  * comment stripping and `tokenizeLine` for exact bracket counting (brackets
  * inside string literals sit inside `string` tokens, so they are never

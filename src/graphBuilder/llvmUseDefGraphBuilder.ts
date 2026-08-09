@@ -14,9 +14,9 @@ import type {
  * names with no known def, and one edge per (defining line → reading line).
  *
  * Consumes the §3.5 `defs`/`uses` fields. The graph is deliberately FLAT:
- * no container nodes and no `parentId`, so Dagre ranks instruction nodes by
- * their use-def edges and vertical position means dataflow depth (see the
- * plan's §2 for why compound layout was rejected). Module-level items —
+ * no container nodes and no `parentId`, so layered ELK layout ranks instruction nodes by
+ * their use-def edges and vertical position means dataflow depth. Compound nodes were
+ * rejected because estimated parent sizes and React Flow clamping caused overlap. Module-level items —
  * globals, metadata, attribute groups, declarations, targets, debug records
  * — never participate in SSA dataflow and contribute nothing here.
  */

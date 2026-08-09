@@ -69,7 +69,7 @@ describe("llvm tokenizer", () => {
     });
 
     it("when a type alias %struct.T and a value %val appear, should give both the local kind", () => {
-      // The type-alias vs value distinction is a later pass (plan step 11),
+      // The type-alias vs value distinction belongs to the use-def pass,
       // deliberately NOT the tokenizer's concern.
       const tokens = tokenizeLine("%p = getelementptr %struct.T, ptr %val");
 

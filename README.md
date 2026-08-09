@@ -1,25 +1,25 @@
 # IR Visualizer
 
-A web application that visualizes compiler intermediate representations (IR) as graphs. Type IR text into the editor on the left, and the graph is rendered on the right.
+A web application that visualizes compiler intermediate representations (IR) as graphs. Type IR text into the floating editor panel and explore the result on the full-viewport canvas.
 
 Demo: https://himadajin.github.io/ir-visualizer/
 
 ## Supported formats
 
-| Mode         | Input                                                                | Graph                    |
-| ------------ | -------------------------------------------------------------------- | ------------------------ |
-| LLVM-IR      | LLVM-IR module (functions, basic blocks, global variables, metadata) | Control flow graph (CFG) |
-| Mermaid      | Mermaid flowchart notation (subset)                                  | Flowchart                |
-| SelectionDAG | LLVM SelectionDAG dump output                                        | DAG                      |
+| Mode         | Input                                                                | Graph               |
+| ------------ | -------------------------------------------------------------------- | ------------------- |
+| LLVM-IR      | LLVM-IR module (functions, basic blocks, global variables, metadata) | CFG / Use-Def graph |
+| Mermaid      | Mermaid flowchart notation (subset)                                  | Flowchart           |
+| SelectionDAG | LLVM SelectionDAG dump output                                        | DAG                 |
 
 ## How it works
 
 ```
 Input text
-  → Parsed with Ohm-js (src/parser)
+  → Parsed by the active IR mode (src/parser)
   → AST (src/ast)
   → Converted to React Flow nodes/edges (src/graphBuilder)
-  → Layout computed with Dagre (src/utils/layout.ts)
+  → Layout and edge routes computed with ELK (src/utils/layout.ts)
   → Rendered with React Flow (src/components/Graph)
 ```
 
@@ -47,7 +47,7 @@ Pushes to `main` are automatically deployed to GitHub Pages (`.github/workflows/
 - **Users**: [Getting started](docs/user/getting-started.md) ·
   [Supported input formats](docs/user/supported-formats.md)
 - **Developers**: start with the [architecture overview](docs/internal/architecture.md);
-  contracts, specs, and plans live in [docs/](docs/README.md).
+  contracts and specs live in [docs/](docs/README.md).
 
 Documentation is the source of truth: update the relevant document before changing code. See [AGENTS.md](AGENTS.md) for agent-facing development rules.
 

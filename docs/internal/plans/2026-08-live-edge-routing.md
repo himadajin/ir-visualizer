@@ -421,8 +421,9 @@ export const routeEdges: (
 
 - `getLayoutedElements` keeps running ELK asynchronously and keeps returning node
   positions and `data.isBackEdge`.
-- It **stops** writing `edge.data.route`. The `{ points, sourcePos, targetPos }`
-  shape and the layout-position bookkeeping it existed for are removed.
+- It no longer writes `edge.data.route`. The `{ points, sourcePos, targetPos }`
+  shape and the ELK-section bookkeeping (`sectionPoints`) it existed for have been
+  removed; `RoutedEdgeData` no longer has a `route` field at all.
 - ELK options are unchanged (§2 decision 7), including the Use-Def view's
   `FIXED_POS` operand ports: ports still shape placement and still determine which
   handle an edge attaches to.
@@ -460,9 +461,10 @@ The design is **one routing pass per graph**:
 
 ### 3.6 Graph updates (`useGraphData`)
 
-- `inheritRoutedEdgeData` no longer carries a route forward — only `isBackEdge`
-  survives a content-only update, and it is the structural flag from the last full
-  layout.
+- The route-carrying helper (formerly `inheritRoutedEdgeData`, now
+  `inheritBackEdgeFlag` in `layout.ts` since it no longer has a route to carry)
+  only carries `isBackEdge` forward on a content-only update; that flag is the
+  structural one from the last full layout.
 - The `nodesRef`/`edgesRef` mirroring stays. `updateGraph` must not depend on
   `nodes`/`edges` state directly: an unstable `updateGraph` identity previously
   caused an infinite re-parse loop.

@@ -10,18 +10,6 @@ import { useEdgeRoute } from "../../hooks/useEdgeRoutes";
  * not live here — it comes from `useEdgeRoutes`.
  */
 export interface RoutedEdgeData extends Record<string, unknown> {
-  /**
-   * Vestigial: ELK's route points, still written by `layout.ts` and still
-   * inherited on content-only updates, but read by nothing. The renderer
-   * ignores it. Removed together with its producers by the follow-up task
-   * that drops route storage from `layout.ts` / `useGraphData`
-   * (plans/2026-08-live-edge-routing.md §3.3, §3.6).
-   */
-  route?: {
-    points: { x: number; y: number }[];
-    sourcePos: { x: number; y: number };
-    targetPos: { x: number; y: number };
-  };
   isBackEdge?: boolean;
 }
 

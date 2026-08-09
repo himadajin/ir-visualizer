@@ -21,7 +21,7 @@ import {
  * How a mode turns a GraphEdge into a React Flow edge — see
  * docs/internal/contracts/ir-mode-registry.md. Whether an edge is a back
  * edge is no longer classified up front: the ELK layout derives it from the
- * final geometry and attaches it (with the route) to `edge.data`.
+ * final geometry and attaches it to `edge.data`.
  */
 export interface IREdgeBuilder {
   buildReactFlowEdge(edge: GraphEdge): Edge;
@@ -141,11 +141,11 @@ const applyRoutedData = (rfEdge: Edge, data: RoutedEdgeData): Edge => {
 
 /**
  * Content-only updates (specs/graph-view.md §2) rebuild edges without
- * re-running ELK: the rebuilt edge inherits the previous edge's stored route
- * and back-edge flag (positions were preserved, so the route is still where
- * the nodes are).
+ * re-running ELK: the rebuilt edge inherits the previous edge's back-edge
+ * flag by id. Edge geometry is never inherited — it is recomputed from the
+ * live node rectangles on every render (useEdgeRoutes).
  */
-export const inheritRoutedEdgeData = (
+export const inheritBackEdgeFlag = (
   rfEdge: Edge,
   previous: Edge | undefined,
 ): Edge => {
@@ -153,17 +153,8 @@ export const inheritRoutedEdgeData = (
   const prevData = previous.data as RoutedEdgeData;
   return applyRoutedData(rfEdge, {
     ...(rfEdge.data as RoutedEdgeData | undefined),
-    route: prevData.route,
     isBackEdge: prevData.isBackEdge,
   });
-};
-
-const sectionPoints = (
-  elkEdge: ElkExtendedEdge | undefined,
-): { x: number; y: number }[] | null => {
-  const section = elkEdge?.sections?.[0];
-  if (section === undefined) return null;
-  return [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
 };
 
 export const getLayoutedElements = async (
@@ -193,19 +184,13 @@ export const getLayoutedElements = async (
   const layoutById = new Map(
     (layouted.children ?? []).map((child) => [child.id, child]),
   );
-  const elkEdgeByIndex = new Map(
-    (layouted.edges ?? []).map((elkEdge) => [
-      Number(elkEdge.id.slice(1)),
-      elkEdge,
-    ]),
-  );
 
   const nodes: Node[] = graph.nodes.map((node) => {
     const layout = layoutById.get(node.id);
     return createReactFlowNode(node, { x: layout?.x ?? 0, y: layout?.y ?? 0 });
   });
 
-  const edges: Edge[] = graph.edges.map((edge, i) => {
+  const edges: Edge[] = graph.edges.map((edge) => {
     const rfEdge = edgeBuilder.buildReactFlowEdge(edge);
     if (rfEdge.type !== "routed") return rfEdge;
 
@@ -219,18 +204,9 @@ export const getLayoutedElements = async (
         target?.y !== undefined &&
         target.y + (target.height ?? 0) <= source.y);
 
-    const points = sectionPoints(elkEdgeByIndex.get(i));
     return applyRoutedData(rfEdge, {
       ...(rfEdge.data as RoutedEdgeData | undefined),
       isBackEdge,
-      route:
-        points !== null && source !== undefined && target !== undefined
-          ? {
-              points,
-              sourcePos: { x: source.x ?? 0, y: source.y ?? 0 },
-              targetPos: { x: target.x ?? 0, y: target.y ?? 0 },
-            }
-          : undefined,
     });
   });
 

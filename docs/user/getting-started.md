@@ -24,6 +24,9 @@ example already loaded.
 - **Mode selector** (top right): switch between **LLVM-IR**, **SelectionDAG**, and **Mermaid**.
   Switching loads that mode's example code, so you always start from something that renders.
   See [supported-formats.md](supported-formats.md) for what each mode accepts.
+- **View toggle** (next to the mode selector, LLVM-IR only): switch between the **CFG** and
+  **Use-Def** views of the same code. Unlike switching modes, switching views keeps what you
+  typed. See [supported-formats.md](supported-formats.md#llvm-ir).
 - **Editor**: type or paste IR. The graph re-renders about a second after you stop typing.
   If the input doesn't parse, an error message pops up over the graph and the previous graph
   stays until the input parses again.

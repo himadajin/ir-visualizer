@@ -23,8 +23,13 @@ interface GraphEdge {
   sourceHandle?: string; // SelectionDAG only
   targetHandle?: string; // SelectionDAG only
   isChainOrGlue?: boolean; // SelectionDAG only
+  dashed?: boolean; // render with strokeDasharray (LLVM use-def phi edges)
 }
 ```
+
+`dashed` is mode-agnostic: the standard edge factory (`createReactFlowEdge`) applies a dash
+pattern when it is set. The LLVM Use-Def view sets it on phi incoming-value edges
+(`specs/llvm-use-def-view.md` §3.1).
 
 This is what let `useGraphData` and `layout.ts` collapse their SelectionDAG-specific code paths
 (`updateSelectionDAGGraph`, `getSelectionDAGLayoutedElements`) into the single `updateGraph`/
@@ -44,6 +49,8 @@ type GraphNode = GraphNodeBase &
     | { nodeType: "llvm-metadata"; astData: LLVMMetadata }
     | { nodeType: "llvm-declaration"; astData: LLVMDeclaration }
     | { nodeType: "llvm-exit"; astData: Record<string, never> }
+    | { nodeType: "llvm-useDefInstruction"; astData: LLVMUseDefInstructionData }
+    | { nodeType: "llvm-useDefValue"; astData: LLVMUseDefValueData }
     | { nodeType: "mermaid-node"; astData: MermaidASTNode }
     | { nodeType: "selectionDAG-node"; astData: SelectionDAGNode }
     | { nodeType?: undefined; astData?: undefined } // codeNode fallback, no specialized renderer
@@ -51,7 +58,14 @@ type GraphNode = GraphNodeBase &
 ```
 
 `GraphNodeBase` holds the fields every node has regardless of mode: `id`, `label`, `type?`,
-`language?`, `blockLabel?`.
+`language?`, `blockLabel?`. There is **no container/parent field**: every graph this contract
+describes is flat, including the LLVM Use-Def view (see its plan's §2 for why compound layout
+was rejected).
+
+The `llvm-useDef*` astData shapes (`LLVMUseDefInstructionData`, `LLVMUseDefValueData`) are
+view-data shapes living in `src/ast/llvmAST.ts` next to `LLVMFunctionHeaderData`, which set
+the precedent: not AST nodes of their own, just the typed payload a renderer expects.
+Conversion rules: `specs/llvm-use-def-view.md`.
 
 **What this buys:** a graphBuilder pushing `{ ..., nodeType: "llvm-globalVariable", astData: gVar }`
 is checked against the `LLVMGlobalVariable` shape at the call site — no cast needed, and pushing the

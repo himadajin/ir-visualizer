@@ -48,6 +48,7 @@ UI-free pipeline to its React components.
 - `contracts/graph-data.md` — the `GraphData` shape and the `nodeType`↔`astData` union.
 - `specs/llvm-ir.md`, `specs/mermaid.md`, `specs/selectiondag.md` — accepted input syntax and
   graph conversion rules per IR.
+- `specs/llvm-use-def-view.md` — the LLVM-IR mode's second view (SSA dataflow projection).
 - `specs/graph-view.md` — mode-independent viewer behavior (debounce, position preservation,
   layout, sizing, responsive mode).
 

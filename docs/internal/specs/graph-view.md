@@ -10,12 +10,15 @@ covering test.
 
 ## 1. Parse cycle
 
-- Editing the code (or switching modes) schedules a parse of the active mode after a
-  **750 ms debounce** (`PARSE_DEBOUNCE_MS` in `useIRWorkspace`); intermediate keystrokes cancel
-  the pending parse.
+- Editing the code (or switching modes or views) schedules a parse of the active mode's
+  active view after a **750 ms debounce** (`PARSE_DEBOUNCE_MS` in `useIRWorkspace`);
+  intermediate keystrokes cancel the pending parse.
 - On success the graph updates and any error clears. On failure the **previous graph stays**
   and the error message is shown in a snackbar (truncated to 100 characters).
-- Switching modes replaces the editor content with the new mode's `defaultCode`.
+- Switching modes replaces the editor content with the new mode's `defaultCode` and resets
+  the active view to the mode's default view.
+- Switching views (modes with `views`, see `contracts/ir-mode-registry.md`) **keeps the
+  editor content** and re-parses it with the new view's `parse`.
 
 > Pinned by (end-to-end): `e2e/smoke.spec.ts` — "editing the code updates the graph",
 > "invalid code shows a parse error", the two mode-switching tests. The exact debounce value
@@ -23,7 +26,9 @@ covering test.
 
 ## 2. Graph updates — topology signature
 
-`useGraphData.updateGraph(graph, mode)` computes a **topology signature**:
+`useGraphData.updateGraph(graph, behavior)` (where `behavior` is the active view's
+`edgeBuilder`/`dagreOptions`, structurally satisfied by a mode object — see
+`contracts/ir-mode-registry.md`) computes a **topology signature**:
 `direction | sorted node ids | sorted source-target pairs`.
 
 - **Signature changed** (first parse, node/edge added or removed, direction changed):
@@ -32,6 +37,10 @@ covering test.
   node **positions are preserved**, labels/content update in place, and each edge's rendered
   type is re-derived by the mode's `IREdgeBuilder` with the previous type available
   (SelectionDAG keeps types stable; LLVM/Mermaid re-classify from current positions).
+- Switching views always changes the signature (the two projections emit different node id
+  namespaces), so each view switch performs a full re-layout; **positions are not preserved
+  across view switches**. This is intended: the two projections have unrelated topologies, so
+  there is nothing meaningful to carry over.
 
 > Pinned by: `src/hooks/__tests__/useGraphData.test.ts` (layout on first call, position
 > preservation, re-layout on topology change, SelectionDAG position/edge-type stability)
@@ -92,6 +101,10 @@ Dagre needs node sizes before React renders anything, so `converter.ts` estimate
   (LLVM-IR, SelectionDAG, Mermaid).
   > Pinned by: `e2e/smoke.spec.ts` (selects each mode by visible label). Order:
   > _observed, untested_.
+- **View toggle**: when the active mode defines `views`, a `ToggleButtonGroup` next to the
+  mode selector lists them in registry order (LLVM-IR: CFG, Use-Def) with the active view
+  selected; it is absent for single-view modes.
+  > Pinned by: `e2e/smoke.spec.ts` ("LLVM-IR use-def view").
 - **Clear** empties the editor (the subsequent parse of the empty string follows §1: e.g.
   an empty module is valid LLVM-IR, but empty Mermaid input is a parse error).
   _(observed, untested)_

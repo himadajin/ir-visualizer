@@ -1,8 +1,8 @@
 /**
  * Diagnostic helpers for the line-oriented LLVM parser
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §3.4, §4, step 7).
+ * (docs/internal/specs/llvm-ir.md §3.4).
  *
- * `LLVMParseDiagnostic` (plan §4) lives in the AST module because it is part
+ * `LLVMParseDiagnostic` lives in the AST module because it is part
  * of `LLVMModule`; this file gives the parser layers one local name for it.
  * The logical-line reader's structural `LogicalLineDiagnostic` is the same
  * shape, so its diagnostics are assignable here without conversion — module

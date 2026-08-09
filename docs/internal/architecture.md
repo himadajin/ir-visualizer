@@ -8,7 +8,7 @@ One-page orientation for the codebase. Read this first; follow the links for the
 flowchart TD
   Editor["CodeEditor (Monaco + Shiki)"] -->|"onChange(text)"| Workspace["useIRWorkspace<br/>(mode state + 750ms debounce)"]
   Registry["IR mode registry (src/irModes)<br/>parser / defaultCode / editorLanguage /<br/>nodeTypes / edgeBuilder / layoutOptions"] -.->|"active mode"| Workspace
-  Workspace -->|"mode.parse(code)"| Parser["Parser (src/parser, Ohm-js)"]
+  Workspace -->|"mode.parse(code)"| Parser["Mode-specific parser (src/parser)"]
   Parser -->|AST| Builder["graphBuilder (src/graphBuilder)"]
   Builder -->|GraphData| GraphHook["useGraphData<br/>(topology signature,<br/>position preservation)"]
   GraphHook -->|"getLayoutedElements"| Layout["layout.ts (ELK placement) +<br/>converter.ts (sizing)"]
@@ -38,7 +38,7 @@ flowchart TD
 
 | Layer               | Directory                  | Responsibility                                                                                                                                                                      | React?      |
 | ------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Grammar + parser    | `src/parser`               | Ohm-js grammars (`*.ohm`) and semantics producing ASTs; lazy compile via `grammarCache.ts`                                                                                          | no          |
+| Grammar + parser    | `src/parser`               | Mode-specific text-to-AST parsing; Ohm-js grammars use lazy compilation via `grammarCache.ts`                                                                                       | no          |
 | AST types           | `src/ast`                  | Per-IR AST type definitions and small formatting helpers                                                                                                                            | no          |
 | Graph builder       | `src/graphBuilder`         | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                                                                                                                   | no          |
 | Graph types         | `src/types/graph.ts`       | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                                                                                                                 | no          |
@@ -55,7 +55,7 @@ The shell is **canvas-first**: `App.tsx` composes two layers — `CanvasShell`, 
 React Flow canvas) holding the mode selector, the view toggle, Clear, the Monaco editor, and a
 status footer that reports parse success/failure. There is no app toolbar, editor toolbar, or
 error snackbar; viewport and layout controls live in a `CanvasControls` cluster inside the
-canvas. See `specs/graph-view.md` §6 and `plans/2026-08-canvas-first-shell.md`.
+canvas. See `specs/graph-view.md` §6.
 
 Dependency direction: everything above the hooks row is UI-free and imports downward only
 (parser → ast, graphBuilder → ast + types). The registry is the one place that ties an IR's

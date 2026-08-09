@@ -171,7 +171,7 @@ describe("llvm classify", () => {
         "catchswitch within none [label %handler] unwind to caller",
         "catchswitch",
       ],
-      // LLVM <= 2.x terminator (plan §3.5 old-IR goal).
+      // LLVM <= 2.x terminator (spec §1 version coverage).
       ["unwind", "unwind"],
       // invoke/callbr are the only terminators that carry a `%x =` result.
       ["%x = invoke i32 @f() to label %a unwind label %b", "invoke"],
@@ -185,7 +185,7 @@ describe("llvm classify", () => {
       },
     );
 
-    it("when the keyword set is inspected, should contain exactly the 12 plan opcodes", () => {
+    it("when the keyword set is inspected, should contain exactly the 12 specified opcodes", () => {
       expect([...TERMINATOR_OPCODES].sort()).toEqual(
         [
           "br",

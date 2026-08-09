@@ -10,7 +10,7 @@ import type { IREdgeBuilder } from "../utils/layout";
  * parser/AST/graphBuilder/node-component files — nothing else.
  */
 export interface IRModeDefinition {
-  /** Stable identifier, also the toolbar <Select> value. */
+  /** Stable identifier, also the editor-panel <Select> value. */
   key: string;
   /** Toolbar display label, e.g. "LLVM-IR". */
   label: string;
@@ -32,7 +32,7 @@ export interface IRModeDefinition {
   /**
    * Optional alternative projections of the same text (e.g. LLVM's CFG vs
    * Use-Def). When present: >= 2 entries, views[0] is the default and must
-   * behave identically to the top-level parse/edgeBuilder/dagreOptions
+   * behave identically to the top-level parse/edgeBuilder/layoutOptions
    * (share the function references). See the registry contract, "Views".
    */
   views?: IRViewDefinition[];

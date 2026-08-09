@@ -58,9 +58,10 @@ re-fits the viewport (after a 50 ms delay — _observed, untested_).
 
 ## 3. Layout (ELK — node placement)
 
-Node placement is computed by ELK (`elkjs`, layered algorithm), replacing Dagre — see
-`plans/2026-08-elk-edge-routing.md` for that rationale. ELK computes **placement only**;
-edge geometry is not taken from it (§4, `plans/2026-08-live-edge-routing.md`).
+Node placement is computed by ELK (`elkjs`, layered algorithm). ELK is the single placement
+engine because its ports, cycle handling and layer ordering keep node geometry connected to
+what React Flow renders. It computes **placement only** — edge geometry is not taken from it
+(§4).
 
 - `getLayoutedElements` is **async**: the elkjs bundle is dynamically imported on first use
   and layout runs on the main thread (graphs are small; no worker).
@@ -246,8 +247,7 @@ ELK needs node sizes before React renders anything, so `converter.ts` estimates 
   owns the whole node frame (font 12 px / line height 16 px, paddings 8×6, border 1 px, radius
   2 px, header band 20 px), with `SelectionDAG/selectionDAGStyleConstants.ts` and
   `CodeFragment.tsx`'s exported paddings for their structures. When changing node styling,
-  change the constant, never a literal, or layout spacing silently drifts from rendering
-  (see `plans/2026-08-node-visual-compaction.md`).
+  change the constant, never a literal, or layout spacing silently drifts from rendering.
 - Every LLVM node body and the Use-Def instruction card render their code line(s) through
   `HighlightedCode.tsx`, which wraps Shiki's own `<pre>` output (block mode; SelectionDAG's
   `CodeFragment.tsx` uses the same component in `inline` mode instead, which strips the
@@ -264,8 +264,8 @@ ELK needs node sizes before React renders anything, so `converter.ts` estimates 
 ## 6. Shell UI (canvas-first shell)
 
 The shell is **canvas-first**: the graph canvas fills the viewport and every other surface
-floats above it. See `plans/2026-08-canvas-first-shell.md` for the rationale and the agreed
-design decisions this section encodes.
+floats above it. This keeps the visualization as the primary workspace while the editor and
+controls remain available as overlays.
 
 ### 6.1 Full-bleed canvas
 
@@ -351,8 +351,7 @@ drag-resizer is wide-mode-only. _(observed, untested)_
 Floating chrome — editor panel, collapsed pill, control cluster — uses the quiet gray
 language: neutral grays, sans-serif type, and light borders, distinct from the graph nodes'
 own grammar in `src/components/Graph/common/NodeShell.tsx` (`1px solid #777` border, `2px`
-radius, white surface, dense 12 px monospace, full-width header band —
-`plans/2026-08-node-visual-compaction.md`). That NodeShell grammar — including the header
+radius, white surface, dense 12 px monospace, full-width header band). That NodeShell grammar — including the header
 band — remains exclusively a graph-node affordance; the shell chrome does not borrow it, and
 the editor panel is chrome around the canvas, not a node itself.
 

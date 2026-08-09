@@ -1,9 +1,8 @@
 /**
  * Line classifier for LLVM IR — one logical line → line kind.
  *
- * Layer 2 of the line-oriented parser
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §3, §3.2–§3.5,
- * step 6). Both classifiers are pure and total: they never throw, on any
+ * Classification layer of the line-oriented parser
+ * (docs/internal/specs/llvm-ir.md §1–§3). Both classifiers are pure and total: they never throw, on any
  * input string. Classification is keyword-driven over `tokenizeLine` tokens —
  * never regexes over raw text — so string-literal contents can never
  * confuse it.

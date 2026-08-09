@@ -2,9 +2,9 @@
 
 Behavior specification for the `llvm-ir` mode: which subset of LLVM-IR the line-oriented
 parser accepts (`src/parser/llvm/`) and how the AST becomes a control-flow graph
-(`src/graphBuilder/llvmGraphBuilder.ts`). The design and its rationale live in
-`docs/internal/plans/2026-07-llvm-line-oriented-parser.md`; this spec pins the resulting
-behavior.
+(`src/graphBuilder/llvmGraphBuilder.ts`). The parser intentionally favors a total,
+line-oriented pipeline over full LLVM conformance: it extracts only the structure needed by
+the CFG and Use-Def views and preserves the rest as source text. This spec pins that behavior.
 
 Conventions: every normative statement carries a **Pinned by** reference to the test(s) that
 fix the behavior. Statements marked _observed, untested_ describe current behavior with no
@@ -231,8 +231,9 @@ normally.
 > Pinned by: `module.test.ts` ("label follows an unterminated block"); the no-edge half
 > follows from the empty-successors rule in §4
 
-`LLVMModule.diagnostics` entries carry a 1-based `line` and a `message`. No UI consumes
-them yet (see the plan's follow-ups).
+`LLVMModule.diagnostics` entries carry a 1-based `line` and a `message`. The editor does not
+surface them yet; that work is tracked by
+[Issue #64](https://github.com/himadajin/ir-visualizer/issues/64).
 
 > Pinned by: `module.test.ts` (diagnostic cases assert line and message)
 
@@ -241,7 +242,7 @@ them yet (see the plan's follow-ups).
 Every instruction and terminator parsed from a source line carries two extra fields,
 `defs` and `uses` (possibly empty arrays of sigil-free local names). The consumer is the
 **Use-Def view** (`specs/llvm-use-def-view.md`, built by
-`plans/2026-08-llvm-use-def-view.md`); the CFG graphBuilder described in §4 still ignores
+`src/graphBuilder/llvmUseDefGraphBuilder.ts`); the CFG graphBuilder described in §4 still ignores
 both fields. SSA values only — memory dependence (store→load) is out of scope,
 permanently. The one node without the fields is the synthetic empty terminator of the
 §3.4 label recovery, which has no source line (and, having neither defs nor uses, gets no

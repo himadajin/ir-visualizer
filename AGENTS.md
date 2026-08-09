@@ -3,14 +3,15 @@
 ## Project Overview
 
 This project is an application that displays Intermediate Representation (IR) as a graph.
-When you input into the editor on the left, Ohm-js is used to parse the syntax, and the graph is displayed in the viewer on the right.
+When you enter text in the editor, the active IR mode parses it and displays the resulting graph.
 The graph is rendered using react-flow.
 
 ### How it Works
 
 See `docs/internal/architecture.md` for the full data-flow diagram and layer map.
 
-- Parses input text into an AST using Ohm-js (`src/parser/*`).
+- Parses input text into an AST with the active mode's parser (`src/parser/*`). Mermaid and
+  SelectionDAG use Ohm-js grammars; LLVM-IR uses a line-oriented parser.
 - Converts AST into React Flow nodes and edges via `src/graphBuilder`.
 - Renders the graph using `react-flow` and calculates layout and edge routes with ELK (elkjs) `src/utils/layout.ts`.
 - Everything that differs per IR (parser, default code, editor language, node
@@ -24,19 +25,18 @@ See `docs/internal/architecture.md` for the full data-flow diagram and layer map
 
 - `docs`: Project documentation (see `docs/README.md` for the structure and rules)
   - `docs/internal/contracts`: Interface contracts between layers
-  - `docs/internal/plans`: Plans for large-scale changes
   - `docs/internal/specs`: Behavior specifications
   - `docs/user`: User-facing documentation
 - `src`
   - `src/ast`: AST definitions
   - `src/components`: UI components
-    - `src/components/AppShell`: Top-level layout components (toolbar, editor/graph panes)
+    - `src/components/AppShell`: Full-canvas shell and floating editor panel components
     - `src/components/Editor`: Code editor components
     - `src/components/Graph`: React Flow graph components, colocated with `*.stories.tsx` files
   - `src/graphBuilder`: Logic to transform AST into React Flow graph data (nodes and edges)
   - `src/hooks`: Custom React hooks (e.g., `useGraphData`, `useIRWorkspace`)
   - `src/irModes`: The IR mode registry — one file per IR plus the aggregating `index.ts`
-  - `src/parser`: Ohm-js grammar files and parser implementations
+  - `src/parser`: Mode-specific parser implementations and Ohm-js grammar files
   - `src/types`: Global TypeScript type definitions
   - `src/utils`: Utility functions for layout (ELK), and other helpers
   - `src/test`: Shared Vitest setup (jest-dom matchers)
@@ -58,6 +58,7 @@ See `docs/internal/architecture.md` for the full data-flow diagram and layer map
 ## Rules
 
 - Documentation-first: `docs/` is the source of truth. Before changing code, update the relevant document under `docs/` (create it if missing). See `docs/README.md`.
+- Track proposed work and implementation progress in GitHub Issues. Issue titles must be English Conventional Commit messages suitable for the eventual squash commit.
 - Always run tests after making changes.
 - Always run `npm run format` after making changes.
 - Always run `npm run lint` after making changes.

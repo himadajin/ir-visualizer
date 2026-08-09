@@ -1,7 +1,7 @@
 # Getting started
 
 IR Visualizer turns compiler intermediate representations (IR) into interactive graphs.
-Paste IR text into the editor on the left; the graph appears on the right.
+Paste IR text into the floating editor panel; the graph fills the canvas behind it.
 
 **Try it now:** https://himadajin.github.io/ir-visualizer/ — it opens with a working LLVM-IR
 example already loaded.
@@ -10,26 +10,26 @@ example already loaded.
 
 ```
 ┌───────────────────────────────────────────────┐
-│ IR Visualizer            [Code|Graph] [Mode ▾] │  ← toolbar
-├─────────────────────┬─────────────────────────┤
-│              [Clear]│           [Reset Layout] │
-│                     │                          │
-│   Code editor       ║   Graph view             │
-│                     ║                          │
-│                     │   [zoom / fit controls]  │
-└─────────────────────┴─────────────────────────┘
-                      ↑ drag to resize
+│ ┌─ Editor panel ─────┐                      │
+│ │ IR Visualizer [Mode ▾]│   Full graph canvas  │
+│ │ [CFG|Use-Def] [Clear]│                      │
+│ │                       │                      │
+│ │ Code editor           │                      │
+│ │                       │      [+−][Fit]│Reset│
+│ │ ✓ parsed · nodes · edges│                      │
+│ └───────────────────────┘                      │
+└───────────────────────────────────────────────┘
 ```
 
-- **Mode selector** (top right): switch between **LLVM-IR**, **SelectionDAG**, and **Mermaid**.
+- **Mode selector** (panel header): switch between **LLVM-IR**, **SelectionDAG**, and **Mermaid**.
   Switching loads that mode's example code, so you always start from something that renders.
   See [supported-formats.md](supported-formats.md) for what each mode accepts.
 - **View toggle** (next to the mode selector, LLVM-IR only): switch between the **CFG** and
   **Use-Def** views of the same code. Unlike switching modes, switching views keeps what you
   typed. See [supported-formats.md](supported-formats.md#llvm-ir).
 - **Editor**: type or paste IR. The graph re-renders about a second after you stop typing.
-  If the input doesn't parse, an error message pops up over the graph and the previous graph
-  stays until the input parses again.
+  If the input doesn't parse, the panel's status footer shows the full error and the previous
+  graph stays until the input parses again.
 - **Clear**: empties the editor.
 - **Graph view**: scroll/pinch to zoom, drag the background to pan, drag nodes to rearrange
   them. Node positions survive edits that don't change the graph's structure (e.g. editing an
@@ -40,13 +40,14 @@ example already loaded.
 - **Reset Layout**: recomputes the automatic layout and re-fits the view — use it when a big
   edit, or a lot of manual dragging, has left the arrangement messy. It's about tidying node
   positions, not edges: edges are always current, dragged or not.
+- **Collapse**: collapse the panel to a **Code** pill when you want the whole viewport for the
+  graph; use the pill to reopen it.
+- **Narrow screens** (≤ 768 px): the editor becomes a bottom sheet over the full-screen
+  canvas. The same **Code** pill opens it, and the canvas controls move above the sheet.
 
 **Known limitation:** edge routing avoids node boxes, and nothing else. If you drag one node
 onto or nearly onto another, an edge can visibly cut between the two boxes instead of routing
 around them. That's about the layout, not something you did wrong.
-
-- **Narrow screens** (≤ 768 px): the editor and graph become a single pane; use the
-  **Code / Graph** toggle in the toolbar to switch between them.
 
 ## Reading the graphs
 
@@ -59,5 +60,5 @@ around them. That's about the layout, not something you did wrong.
   to the exact operand/result-type cells. Dashed edges are chain/glue dependencies. The
   colored left column encodes the node kind (green = EntryToken, purple = register copies,
   blue = load/store, orange = target-specific ops, yellow = TokenFactor).
-- **Mermaid** renders the flowchart as written; back-edges (arrows that point "up") take a
-  loop-around curve.
+- **Mermaid** renders the flowchart as written. ELK routes edges orthogonally; self-loops and
+  edges whose target lies above their source use the muted loop accent.

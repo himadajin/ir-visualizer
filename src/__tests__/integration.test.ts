@@ -132,7 +132,7 @@ describe("Integration: parseLLVMUseDef (parser + use-def graph builder)", () => 
     expect(graph.edges.length).toBeGreaterThan(0);
     expect(graph.direction).toBe("TD");
 
-    // The view is flat: Dagre ranks instructions directly, so no node may
+    // The view is flat: layered layout ranks instructions directly, so no node may
     // carry a parentId (the rejected compound/container design).
     graph.nodes.forEach((node) => {
       expect(node).not.toHaveProperty("parentId");

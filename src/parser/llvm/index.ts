@@ -1,3 +1,3 @@
-// Entry point for the LLVM-IR parser: the line-oriented implementation
-// (docs/internal/plans/2026-07-llvm-line-oriented-parser.md).
+// Entry point for the line-oriented LLVM-IR parser
+// (docs/internal/specs/llvm-ir.md).
 export { parseLLVM, parseLLVMToAST, parseLLVMUseDef } from "./parse";

@@ -1,7 +1,7 @@
 # Spec: LLVM-IR Use-Def view
 
 Behavior specification for the Use-Def projection of LLVM-IR — the second view
-of the `llvm-ir` mode (`views: [cfg, use-def]`), selected by the toolbar's view
+of the `llvm-ir` mode (`views: [cfg, use-def]`), selected by the editor panel's view
 toggle. Input syntax is unchanged from `specs/llvm-ir.md`; this spec covers only
 the AST → `GraphData` conversion performed by
 `src/graphBuilder/llvmUseDefGraphBuilder.ts`, which consumes the §3.5
@@ -12,16 +12,16 @@ test(s) that fix the behavior. Unqualified test names refer to
 `src/graphBuilder/__tests__/llvm/useDefGraph.test.ts`. Statements marked
 _observed, untested_ describe current behavior with no covering test.
 
-Plan: `docs/internal/plans/2026-08-llvm-use-def-view.md`.
-
 ## 1. What the view shows
 
 SSA dataflow, per function: one node per instruction line that participates in
 dataflow, one edge per (defining line → reading line) relationship. The graph is
-**flat** — there are no container nodes and no `parentId`, so Dagre ranks
-instruction nodes directly by their use-def edges and vertical position means
-dataflow depth. Basic-block membership is carried on the instruction node itself
-as a colored badge (§2), not by geometry.
+**flat** — there are no container nodes and no `parentId`, so ELK's layered layout ranks
+instruction nodes directly by their use-def edges and vertical position means dataflow
+depth. A compound-node prototype was rejected because estimated container sizes drifted
+from rendered sizes and React Flow parent clamping cascaded children into overlap.
+Basic-block membership is carried on the instruction node itself as a colored badge (§2),
+not by geometry.
 
 Control flow is **not** shown: a `br` contributes at most the read of its
 condition, never an edge to another block. Module-level items that never
@@ -154,15 +154,14 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
 
 - `GraphData.direction` is `"TD"`, and **no node carries `parentId`** — the view
   deliberately produces a flat graph so that the layered layout's ranking is the
-  dataflow order (see the plan's §2 retrospective for why containers were
-  rejected).
+  dataflow order. Containers are excluded for the sizing and clamping reasons in §1.
 - The view supplies its own `layoutOptions` (_observed, untested_) and reuses
   the standard `codeGraphEdgeBuilder`: edge geometry comes from the live
   orthogonal router `src/utils/edgeRouter.ts` (`specs/graph-view.md` §4), not
   from ELK, and a loop-carried phi edge — whose source ends
   up at or below its target — is flagged and styled as a back edge from the
   final layout geometry without any special casing here.
-- **Per-operand ports** (`plans/2026-08-elk-edge-routing.md` §3.5): an
+- **Per-operand ports**: an
   instruction card exposes one target `Handle` (id `u-<name>`) per entry in
   `uses`, horizontally positioned at the first occurrence of `%name` in the
   monospace text (measured with the same `getFontMetrics` char width the size
@@ -174,8 +173,7 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   incoming edges visibly land on their own `[ %v, %bb ]` operands.
   _(observed, untested — visual)_
 - Instruction nodes render as single-row code cards: a block badge chip
-  showing `blockLabel` sits inline to the **left** of the code line
-  (`plans/2026-08-node-visual-compaction.md`), tinted from an 8-color muted
+  showing `blockLabel` sits inline to the **left** of the code line, tinted from an 8-color muted
   palette indexed by `blockIndex % 8`. The badge is what preserves the CFG
   correspondence in the absence of containers.
 - Value nodes render as pills; `argument` and `external` are styled differently
@@ -193,4 +191,4 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
 - Memory dependence (store→load) — out of scope permanently (§3.5).
 - Cross-function dataflow (call argument → parameter linking).
 - Use-def edges overlaid on the CFG view.
-- Visual grouping of a block's instructions (see the plan's §9).
+- Visual grouping of a block's instructions.

@@ -44,7 +44,7 @@ LLVM ~2.x through current is accepted:
 | 14+          | opaque `ptr`, `#dbg_value(...)` debug records, `callbr`                                                                                                                     |
 | any          | `comdat`, `module asm`, `uselistorder` — accepted and ignored                                                                                                               |
 
-**Views:** LLVM-IR has two views, switched by the CFG / Use-Def toggle in the toolbar. The
+**Views:** LLVM-IR has two views, switched by the CFG / Use-Def toggle in the editor panel. The
 editor content is kept when switching views (only switching _mode_ replaces it with that
 mode's example), and each switch re-lays-out the graph from scratch.
 

@@ -1,9 +1,8 @@
 /**
  * Per-line terminator parsers for LLVM IR — one logical line → AST node.
  *
- * Layer 3 of the line-oriented parser
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §3.2, §3.4,
- * step 7). `parseTerminator` is pure and total: it never throws, on any
+ * Terminator layer of the line-oriented parser
+ * (docs/internal/specs/llvm-ir.md §3.2–§3.4). `parseTerminator` is pure and total: it never throws, on any
  * input. It trusts the classifier's opcode (the §3.2 keyword table,
  * `TERMINATOR_OPCODES` in ./classify.ts) but stays sane on malformed
  * operand text.

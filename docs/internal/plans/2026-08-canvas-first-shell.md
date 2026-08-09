@@ -197,10 +197,38 @@ Both `specs/graph-view.md` **§1 (Parse cycle)** and **§6 (Shell UI)** change:
 §1's "shown in a snackbar (truncated to 100 characters)" wording is replaced by
 the status-footer behavior. The original proposal mentioned only §6.
 
+## Amendment (2026-08-09): re-parse loop fix
+
+Implementing §3 uncovered a **pre-existing bug** that makes the canvas-first
+controls impossible to build on top of the current hooks, so one exception to
+"What does _not_ change" below is required.
+
+`useGraphData.updateGraph` was a `useCallback` listing `nodes` and `edges` among
+its dependencies, so every graph update produced a new `updateGraph` identity.
+`useIRWorkspace`'s debounced parse effect lists `updateGraph` as a dependency,
+so each update re-armed the effect and, 750 ms later, re-parsed the unchanged
+code and replaced every node object again — an endless parse/replace cycle. The
+practical symptom: React Flow never settles, so **every `fitView()` after the
+initial mount fit is silently swallowed** (`zoomIn` works, `fitView` does
+nothing). The canvas-first shell depends on that call in three places — the
+§6.4 fit-view button, the collapse/expand animated recenter, and the re-fit
+after Reset Layout — none of which can work while the loop runs.
+
+`useGraphData` is therefore changed as a **prerequisite** of this plan:
+`updateGraph` and `resetLayout` get stable identities by reading the latest
+nodes/edges (and the last topology signature and last parsed graph) through
+refs instead of dependencies. `useIRWorkspace` is untouched. The observable
+parse-cycle semantics are unchanged: the 750 ms debounce and
+keep-last-good-graph-on-error behavior of `specs/graph-view.md` §1, and the
+topology-signature rules of §2 (full re-layout on signature change,
+position/edge-type preservation on content-only updates), all hold exactly as
+specified and remain pinned by the existing tests.
+
 ## What does _not_ change
 
 - The IR mode registry contract, parsers, graph builders, layout, node
-  components, and all of `useIRWorkspace`/`useGraphData`. This is a shell-only
+  components, and `useIRWorkspace` (`useGraphData` gets the identity-stability
+  fix described in the amendment above). This is otherwise a shell-only
   change: `src/App.tsx` + `src/components/AppShell/*` + `GraphViewer`'s
   controls, plus the specs listed below.
 - Parse cycle behavior (debounce, keep-last-good-graph-on-error) per

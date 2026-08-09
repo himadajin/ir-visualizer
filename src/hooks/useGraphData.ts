@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   type Node,
   type Edge,
@@ -26,31 +26,57 @@ const getTopologySignature = (graph: GraphData) => {
 export const useGraphData = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [lastSignature, setLastSignature] = useState<string>("");
 
-  const [current, setCurrent] = useState<{
+  // `updateGraph` needs the *latest* nodes/edges (a content-only update
+  // preserves the previous positions and re-classifies edges from them), but it
+  // must NOT change identity when they change: `useIRWorkspace`'s debounced
+  // parse effect lists `updateGraph` as a dependency, so an unstable identity
+  // re-arms that effect after every graph update and re-parses unchanged code
+  // every 750 ms forever. That loop also replaces every node object on each
+  // pass, which permanently swallows React Flow's queued `fitView()` calls.
+  // Mirroring the state into refs keeps the callback stable.
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
+  // Neither of these is ever rendered, so they are refs rather than state —
+  // updating them must not re-render, and must not invalidate the callbacks.
+  const lastSignatureRef = useRef<string>("");
+  const currentRef = useRef<{
     graph: GraphData;
     mode: IRLayoutBehavior;
   } | null>(null);
 
   const updateGraph = useCallback(
     (graph: GraphData, mode: IRLayoutBehavior) => {
-      setCurrent({ graph, mode });
+      currentRef.current = { graph, mode };
       const signature = getTopologySignature(graph);
 
       // Check if topology changed
-      const isTopologyEqual = signature === lastSignature;
+      const isTopologyEqual = signature === lastSignatureRef.current;
 
       if (isTopologyEqual) {
         // Content-only update: preserve node positions and edge types.
-        const positionMap = new Map(nodes.map((n: Node) => [n.id, n.position]));
-        const edgeTypeMap = new Map(edges.map((e: Edge) => [e.id, e.type]));
+        const previousNodes = nodesRef.current;
+        const previousEdges = edgesRef.current;
+        const positionMap = new Map(
+          previousNodes.map((n: Node) => [n.id, n.position]),
+        );
+        const edgeTypeMap = new Map(
+          previousEdges.map((e: Edge) => [e.id, e.type]),
+        );
 
         const newNodes = graph.nodes.map((node: GraphNode) => {
           const existingPos = positionMap.get(node.id) || { x: 0, y: 0 };
           return createReactFlowNode(node, existingPos);
         });
         setNodes(newNodes);
+        nodesRef.current = newNodes;
 
         const newEdges = graph.edges.map((edge: GraphEdge) => {
           const edgeType = mode.edgeBuilder.classifyEdgeType({
@@ -62,6 +88,7 @@ export const useGraphData = () => {
           return mode.edgeBuilder.buildReactFlowEdge(edge, edgeType);
         });
         setEdges(newEdges);
+        edgesRef.current = newEdges;
       } else {
         // Topology changed or first run: re-layout.
         const { nodes: layoutedNodes, edges: layoutedEdges } =
@@ -70,14 +97,17 @@ export const useGraphData = () => {
             dagreOptions: mode.dagreOptions,
           });
         setNodes(layoutedNodes);
+        nodesRef.current = layoutedNodes;
         setEdges(layoutedEdges);
-        setLastSignature(signature);
+        edgesRef.current = layoutedEdges;
+        lastSignatureRef.current = signature;
       }
     },
-    [lastSignature, nodes, edges, setNodes, setEdges],
+    [setNodes, setEdges],
   );
 
   const resetLayout = useCallback(() => {
+    const current = currentRef.current;
     if (!current) return;
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
       current.graph,
@@ -87,8 +117,10 @@ export const useGraphData = () => {
       },
     );
     setNodes(layoutedNodes);
+    nodesRef.current = layoutedNodes;
     setEdges(layoutedEdges);
-  }, [current, setNodes, setEdges]);
+    edgesRef.current = layoutedEdges;
+  }, [setNodes, setEdges]);
 
   return {
     nodes,

@@ -5,6 +5,8 @@ import type {
   LLVMFunctionHeaderData,
   LLVMGlobalVariable,
   LLVMMetadata,
+  LLVMUseDefInstructionData,
+  LLVMUseDefValueData,
 } from "../ast/llvmAST";
 import type { MermaidASTNode } from "../ast/mermaidAST";
 import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
@@ -31,6 +33,8 @@ type GraphNodeAstData =
   | { nodeType: "llvm-metadata"; astData: LLVMMetadata }
   | { nodeType: "llvm-declaration"; astData: LLVMDeclaration }
   | { nodeType: "llvm-exit"; astData: Record<string, never> }
+  | { nodeType: "llvm-useDefInstruction"; astData: LLVMUseDefInstructionData }
+  | { nodeType: "llvm-useDefValue"; astData: LLVMUseDefValueData }
   | { nodeType: "mermaid-node"; astData: MermaidASTNode }
   | { nodeType: "selectionDAG-node"; astData: SelectionDAGNodeAST }
   | { nodeType?: undefined; astData?: undefined };
@@ -48,6 +52,11 @@ export interface GraphEdge {
   sourceHandle?: string;
   targetHandle?: string;
   isChainOrGlue?: boolean;
+  /**
+   * Render with a dash pattern (strokeDasharray) via the standard edge
+   * factory. Mode-agnostic; used by the LLVM Use-Def view's phi edges.
+   */
+  dashed?: boolean;
 }
 
 export interface GraphData {

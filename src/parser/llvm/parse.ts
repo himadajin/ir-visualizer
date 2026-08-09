@@ -11,6 +11,7 @@
 import type { GraphData } from "../../types/graph";
 import type { LLVMModule } from "../../ast/llvmAST";
 import { convertASTToGraph } from "../../graphBuilder/llvmGraphBuilder";
+import { convertASTToUseDefGraph } from "../../graphBuilder/llvmUseDefGraphBuilder";
 import { buildModule } from "./module";
 
 export function parseLLVMToAST(input: string): LLVMModule {
@@ -19,4 +20,13 @@ export function parseLLVMToAST(input: string): LLVMModule {
 
 export function parseLLVM(input: string): GraphData {
   return convertASTToGraph(buildModule(input));
+}
+
+/**
+ * Use-Def projection of the same text: the second view of the `llvm-ir`
+ * mode (docs/internal/specs/llvm-use-def-view.md). Same AST, different
+ * graphBuilder — no parser changes are involved.
+ */
+export function parseLLVMUseDef(input: string): GraphData {
+  return convertASTToUseDefGraph(buildModule(input));
 }

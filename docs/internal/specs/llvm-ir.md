@@ -238,12 +238,14 @@ them yet (see the plan's follow-ups).
 
 ### 3.5 Use-def foundation
 
-**Parser-only.** Every instruction and terminator parsed from a source line carries two
-extra fields, `defs` and `uses` (possibly empty arrays of sigil-free local names). No
-consumer exists yet: the graphBuilder and UI ignore both fields (the use-def graph view is
-a separate future plan). SSA values only — memory dependence (store→load) is out of scope,
+Every instruction and terminator parsed from a source line carries two extra fields,
+`defs` and `uses` (possibly empty arrays of sigil-free local names). The consumer is the
+**Use-Def view** (`specs/llvm-use-def-view.md`, built by
+`plans/2026-08-llvm-use-def-view.md`); the CFG graphBuilder described in §4 still ignores
+both fields. SSA values only — memory dependence (store→load) is out of scope,
 permanently. The one node without the fields is the synthetic empty terminator of the
-§3.4 label recovery, which has no source line.
+§3.4 label recovery, which has no source line (and, having neither defs nor uses, gets no
+Use-Def node either).
 
 > Pinned by: `src/parser/llvm/__tests__/useDef.test.ts` ("attachment coverage",
 > "corpus-wide properties")
@@ -339,7 +341,9 @@ The produced graph always has `direction: "TD"`.
 - `landingpad` clause continuation lines (`cleanup` / `catch …` / `filter …` printed on
   their own line) become separate opaque instructions in the block (_observed, untested_);
   single-line landingpads — what the corpus contains — parse as one instruction.
-- `phi` instructions do not contribute edges (they are generic instructions textually).
+- `phi` instructions do not contribute CFG edges (they are generic instructions textually).
+  The Use-Def view recovers their incoming pairs by scanning `originalText`
+  (`specs/llvm-use-def-view.md` §3.1).
   > Pinned by: `classify.test.ts` ("when a phi uses bracketed block refs, should classify
   > instruction")
 - Operand classification is heuristic, and only the write-target marking of

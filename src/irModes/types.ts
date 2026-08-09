@@ -22,11 +22,43 @@ export interface IRModeDefinition {
   /** Text -> graph. Throws Error on invalid input (see the registry contract
    * for SelectionDAG's per-line tolerance, which is not an exception to this). */
   parse: (code: string) => GraphData;
-  /** This mode's React Flow node renderers, keyed by the camelCase nodeType. */
+  /** This mode's React Flow node renderers, keyed by the camelCase nodeType.
+   * Covers every view's renderers (GraphViewer merges per mode, not per view). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodeTypes: Record<string, ComponentType<NodeProps<any>>>;
   /** How to classify and build this mode's edges (see IREdgeBuilder). */
   edgeBuilder: IREdgeBuilder;
   /** Dagre layout overrides, e.g. SelectionDAG's wider row spacing. */
   dagreOptions?: Partial<dagre.GraphLabel>;
+  /**
+   * Optional alternative projections of the same text (e.g. LLVM's CFG vs
+   * Use-Def). When present: >= 2 entries, views[0] is the default and must
+   * behave identically to the top-level parse/edgeBuilder/dagreOptions
+   * (share the function references). See the registry contract, "Views".
+   */
+  views?: IRViewDefinition[];
 }
+
+/** One selectable projection of a mode's text (registry contract, "Views"). */
+export interface IRViewDefinition {
+  /** Stable identifier, e.g. "cfg", "use-def". */
+  key: string;
+  /** Toggle label, e.g. "CFG". */
+  label: string;
+  /** Text -> graph; same throw-on-invalid rule as the mode's parse. */
+  parse: (code: string) => GraphData;
+  /** Defaults to the mode's edgeBuilder. */
+  edgeBuilder?: IREdgeBuilder;
+  /** Defaults to the mode's dagreOptions. */
+  dagreOptions?: Partial<dagre.GraphLabel>;
+}
+
+/**
+ * The layout-relevant behavior of the active view: what useGraphData needs
+ * to lay a graph out. A bare IRModeDefinition satisfies it structurally
+ * (single-view modes), and useIRWorkspace builds one from the active view.
+ */
+export type IRLayoutBehavior = Pick<
+  IRModeDefinition,
+  "edgeBuilder" | "dagreOptions"
+>;

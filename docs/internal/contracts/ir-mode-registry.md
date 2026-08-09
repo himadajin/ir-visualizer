@@ -20,8 +20,56 @@ interface IRModeDefinition {
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
   dagreOptions?: Partial<dagre.GraphLabel>; // e.g. SelectionDAG's { ranksep: 50 }
+  views?: IRViewDefinition[]; // optional alternative projections — see "Views" below
 }
 ```
+
+## Views
+
+A mode may expose several **views** of the same text — e.g. LLVM-IR's CFG vs its
+Use-Def dataflow graph (`specs/llvm-use-def-view.md`). A view is a projection:
+same editor language, same default code, same parser front-end, different
+`GraphData`.
+
+```ts
+interface IRViewDefinition {
+  key: string; // stable, e.g. "cfg", "use-def"
+  label: string; // toggle label, e.g. "CFG"
+  parse: (code: string) => GraphData; // same throw-on-invalid rule as the mode's parse
+  edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
+  dagreOptions?: Partial<dagre.GraphLabel>; // defaults to the mode's dagreOptions
+}
+```
+
+Rules:
+
+- `views` is optional. A mode without it has a single implicit view built from
+  its top-level `parse`/`edgeBuilder`/`dagreOptions` (Mermaid and SelectionDAG
+  stay exactly as they were).
+- When present, `views` has ≥ 2 entries and `views[0]` is the **default view**;
+  it must behave identically to the mode's top-level fields (share the same
+  function references — don't duplicate logic).
+- `useIRWorkspace` owns the active view key. Switching **views keeps the editor
+  code** (that is the point of views); switching **modes resets** the view to the
+  default and replaces the code with `defaultCode`, as before.
+- The toolbar renders a view `ToggleButtonGroup` only when the active mode has
+  `views`.
+- A mode's `nodeTypes` covers every view's node renderers (GraphViewer merges
+  `nodeTypes` per mode, not per view).
+- Because a view switch changes the topology signature, `useGraphData` does a
+  full re-layout in each direction; positions are not preserved across view
+  switches (`specs/graph-view.md` §2).
+
+The layout-relevant half of a mode is named separately so a view-resolved value
+can be passed where a mode used to be:
+
+```ts
+type IRLayoutBehavior = Pick<IRModeDefinition, "edgeBuilder" | "dagreOptions">;
+```
+
+`useGraphData.updateGraph(graph, behavior)` takes `IRLayoutBehavior` rather than
+the full `IRModeDefinition`; a mode object satisfies it structurally, and the
+workspace passes the active view's resolved `edgeBuilder`/`dagreOptions`.
 
 `IREdgeBuilder` (`src/utils/layout.ts`) captures the two things that differ between how LLVM/Mermaid
 and SelectionDAG decide what an edge should look like:
@@ -53,8 +101,9 @@ All three current modes live in `src/irModes/`: `llvmMode.ts`, `mermaidMode.ts`,
 
 - `App.tsx` / `useIRWorkspace` — looks up the active mode by key, calls `mode.parse(code)`,
   uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the editor.
-- `useGraphData` — takes the full mode object into `updateGraph(graph, mode)` /
-  `resetLayout()`, so layout and edge-building are mode-driven rather than branching by string.
+- `useGraphData` — takes an `IRLayoutBehavior` into `updateGraph(graph, behavior)` /
+  `resetLayout()`, so layout and edge-building are mode- (or view-) driven rather than
+  branching by string.
 - `GraphViewer` — merges `nodeTypes` from every entry in `IR_MODE_LIST` (plus the
   mode-agnostic fallback `codeNode`) instead of importing each mode's node components directly.
 

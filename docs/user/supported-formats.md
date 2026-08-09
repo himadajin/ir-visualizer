@@ -44,7 +44,22 @@ LLVM ~2.x through current is accepted:
 | 14+          | opaque `ptr`, `#dbg_value(...)` debug records, `callbr`                                                                                                                     |
 | any          | `comdat`, `module asm`, `uselistorder` — accepted and ignored                                                                                                               |
 
-**Graph structure:** every basic block becomes a node and every terminator becomes the
+**Views:** LLVM-IR has two views, switched by the CFG / Use-Def toggle in the toolbar. The
+editor content is kept when switching views (only switching _mode_ replaces it with that
+mode's example), and each switch re-lays-out the graph from scratch.
+
+- **CFG** (default) — the control-flow graph described below.
+- **Use-Def** — SSA dataflow instead: one node per instruction, with an edge from the
+  instruction that defines each `%value` to every instruction that reads it. Nodes are
+  arranged by dataflow depth, so an instruction sits below everything it reads. Each node
+  carries a colored badge naming the basic block it came from, so you can still tell blocks
+  apart. Function arguments appear as their own small pills, and a value with no visible
+  definition gets a differently styled pill. `phi` incoming values arrive on dashed edges
+  labeled with their incoming block. Instructions that neither define nor read a value
+  (`br label %x`, `ret void`) are left out, and control flow is not drawn — that is the CFG
+  view's job. Memory dependence (store→load) is not shown.
+
+**Graph structure (CFG view):** every basic block becomes a node and every terminator becomes the
 block's outgoing edges. Conditional `br` edges are labeled `true` / `false`; `switch` gets a
 `default` edge plus one edge per case, labeled with the case value; `invoke` gets a `to`
 edge (normal path) and an `unwind` edge (exception path); `ret` connects to a shared

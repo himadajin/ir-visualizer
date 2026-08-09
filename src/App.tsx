@@ -15,6 +15,8 @@ function App() {
   const {
     mode,
     modeKey,
+    views,
+    activeViewKey,
     code,
     setCode,
     error,
@@ -24,6 +26,7 @@ function App() {
     onEdgesChange,
     resetLayout,
     changeMode,
+    changeView,
     clearCode,
   } = useIRWorkspace();
 
@@ -55,6 +58,9 @@ function App() {
       <ToolbarPane
         mode={modeKey}
         onModeChange={handleModeChange}
+        views={views}
+        activeViewKey={activeViewKey}
+        onViewChange={changeView}
         isNarrow={isNarrow}
         activePane={activePane}
         onActivePaneChange={setActivePane}

@@ -137,11 +137,18 @@ notion of geometry that can go out of date.
   Two connector segments provably do not suffice for every side/direction combination, so
   the longer candidates are a minimum, not a convenience. The exact point sequences are in
   `plans/2026-08-live-edge-routing.md` §3.1.
-  **Known limitation:** because the fallback does no obstacle avoidance, a fallback edge in
-  overlapping-rect geometry can visibly thread between the two boxes. This is only
-  reachable after a user drags one node onto or nearly onto another — ELK's placement never
-  produces rects whose inflated boxes merge — and is accepted rather than fixed, since the
-  alternatives are a stale route or a second geometry generator. _(observed, untested)_
+  **Known limitations,** both accepted rather than fixed since the alternatives are a stale
+  route or a second geometry generator:
+  - Because the fallback does no obstacle avoidance, a fallback edge in overlapping-rect
+    geometry can visibly thread between the two boxes. Reachable only by dragging one node
+    onto or nearly onto another — ELK's placement does not produce two _directly connected_
+    nodes whose inflated boxes overlap. _(observed, untested)_
+  - ELK's placement can still leave two _unrelated_ node rects closer than `2 × nodeMargin`
+    apart with no drag at all, closing the corridor a third edge would otherwise route
+    through and forcing that edge to the fallback. The shipped default LLVM-IR CFG has two
+    such edges, from a ~30 px gap where the router needs 32 px — a layout-constant question
+    (`docs/user/getting-started.md`), not a router defect. Measured 2026-08-09 from the
+    rendered default graph's node rects.
 - **No immediate reversals:** no returned polyline — searched, self-loop or fallback — has
   an interior vertex whose arriving and leaving segments run along the same axis in
   opposite directions. This is the checkable form of "never a degenerate hook", and it is

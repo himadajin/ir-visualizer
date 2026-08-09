@@ -33,9 +33,20 @@ example already loaded.
 - **Clear**: empties the editor.
 - **Graph view**: scroll/pinch to zoom, drag the background to pan, drag nodes to rearrange
   them. Node positions survive edits that don't change the graph's structure (e.g. editing an
-  instruction inside a block), so your manual arrangement isn't lost while you type.
-- **Reset Layout**: recomputes the automatic layout and re-fits the view — use it after
-  dragging nodes around or when a big edit makes the layout messy.
+  instruction inside a block), so your manual arrangement isn't lost while you type. Edges
+  always follow the live position of the nodes they connect, including while you're mid-drag,
+  so there's nothing to repair afterward — dragging a node never changes how its edges are
+  drawn, only where they point.
+- **Reset Layout**: recomputes the automatic layout and re-fits the view — use it when a big
+  edit, or a lot of manual dragging, has left the arrangement messy. It's about tidying node
+  positions, not edges: edges are always current, dragged or not.
+
+**Known limitation:** edge routing avoids node boxes, and nothing else. If you drag one node
+onto or nearly onto another, an edge can visibly cut between the two boxes instead of routing
+around them. Two edges in the default LLVM-IR example do this too, without any dragging — the
+automatic layout leaves a gap a couple of pixels narrower than routing needs there. Both are
+about the layout, not something you did wrong.
+
 - **Narrow screens** (≤ 768 px): the editor and graph become a single pane; use the
   **Code / Graph** toggle in the toolbar to switch between them.
 

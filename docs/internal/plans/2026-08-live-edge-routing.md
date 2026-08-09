@@ -1,6 +1,6 @@
 # Plan: Live edge routing (edge geometry as a function of live node rects)
 
-- **Status:** Planned 2026-08-09.
+- **Status:** Implemented 2026-08-09.
 - **Motivation:** `plans/2026-08-elk-edge-routing.md` fixed the _shape_ of edges but
   tied it to a snapshot of the layout. The moment a user drags a node, the picture
   degrades into a second, worse visual grammar. This plan removes the snapshot —
@@ -300,11 +300,20 @@ satisfy both, and exactness wins.
 
 > **Known limitation.** In overlapping-rect geometry a fallback edge can visibly
 > thread between (and through) the two boxes. This is only reachable when a user
-> has dragged one node onto or nearly onto another: ELK's own placement never
-> produces rects whose `nodeMargin`-inflated boxes merge, so it cannot occur in a
-> freshly laid-out graph. It is accepted rather than fixed — the alternative is
-> either a stale route or a second geometry generator, both of which this plan
-> exists to remove.
+> has dragged one node onto or nearly onto another: ELK's own placement does not
+> produce two _directly connected_ nodes whose `nodeMargin`-inflated boxes merge.
+> It is accepted rather than fixed — the alternative is either a stale route or a
+> second geometry generator, both of which this plan exists to remove.
+>
+> **Addendum, found during close-out (2026-08-09).** The claim above is narrower
+> than it reads: it covers an edge's own two endpoint nodes, not the rest of the
+> graph. ELK's placement _can_ leave two **unrelated** node rects less than
+> `2 × nodeMargin` apart with no drag at all, which closes the corridor some
+> third edge needed and forces that edge to the fallback too. The shipped
+> default LLVM-IR CFG has two such edges, from a ~30 px gap where the router
+> needs 32 px — see `specs/graph-view.md` §4 and `docs/user/getting-started.md`.
+> This is a layout-constant question, not something this plan's design got
+> wrong.
 
 **Searched routes are exempt for their two mandated stubs.** Clearance comes from
 the traversability rule in step 3, which governs grid segments; `sourcePoint → S`
@@ -471,20 +480,41 @@ The design is **one routing pass per graph**:
 
 ## 4. Steps
 
-1. Docs (this plan; `specs/graph-view.md` §2–§4, `architecture.md`).
-2. `src/types/edgeRouting.ts` + `src/utils/edgeRouter.ts` implementing §3.2
-   verbatim, with `src/utils/__tests__/edgeRouter.test.ts` covering orthogonality,
-   exact endpoints, obstacle avoidance, tie-breaking and determinism, the
-   right-side self-loop, the no-path fallback, omission of requests naming a node
-   absent from `nodes`, and a 300 ms catastrophic-regression guard on the
-   60-node / 80-edge graph (the 50 ms budget itself is measured out of band —
-   §2 decision 10).
-3. `src/hooks/useEdgeRoutes.ts` + its context (§3.4); consume it in
-   `RoutedEdge.tsx` and delete the staleness check and the smoothstep fallback.
-4. Drop route storage from `layout.ts` and route inheritance from `useGraphData`;
-   update `layout.test.ts` and `useGraphData.test.ts` accordingly.
-5. `npm run test:run`, `npm run format`, `npm run lint`; manual browser check of all
-   four views, including a drag of a node in each.
+Implemented 2026-08-09 in five commits, in this order:
+
+1. `27b2c47` — docs (this plan; `specs/graph-view.md` §2–§4, `architecture.md`).
+2. `0ddecbd` — `src/types/edgeRouting.ts` + `src/utils/edgeRouter.ts` implementing
+   §3.2 verbatim, with `src/utils/__tests__/edgeRouter.test.ts` (25 tests)
+   covering orthogonality, exact endpoints, obstacle avoidance, tie-breaking and
+   determinism, the right-side self-loop, the no-path fallback, omission of
+   requests naming a node absent from `nodes`, and a 300 ms
+   catastrophic-regression guard on the 60-node / 80-edge graph (the 50 ms
+   budget itself is measured out of band — §2 decision 10).
+3. `45f7684` — `src/hooks/useEdgeRoutes.ts` + its context (§3.4); consumed in
+   `RoutedEdge.tsx`, deleting the staleness check and the smoothstep fallback.
+4. `48540cf` — an unplanned fix, not in the step list above, found by the
+   manual browser-check that step 3 already called for: `HighlightedCode.tsx`'s
+   Shiki `<pre>` output carries the user-agent default block margin (12 px
+   top/bottom), which `converter.ts`'s node-size _estimate_ never accounted
+   for. That drift existed before this plan, but a stored, snapshot-based
+   route had always absorbed it silently; with edge geometry now live (step
+   3), it rendered as edges landing slightly off the node body instead.
+   Fixed by resetting the margin to `0` on the generated HTML before mounting
+   it (`specs/graph-view.md` §5); regression-pinned by
+   `HighlightedCode.test.tsx`.
+5. `0353332` — dropped route storage from `layout.ts` (`RoutedEdgeData.route`,
+   the ELK-section `sectionPoints` bookkeeping) and route inheritance from
+   `useGraphData` (`inheritRoutedEdgeData` → `inheritBackEdgeFlag`, carrying
+   forward only the structural back-edge flag); updated `layout.test.ts` and
+   `useGraphData.test.ts` accordingly.
+
+`npm run test:run`, `npm run format`, and `npm run lint` stayed green
+throughout (541 tests at completion); manual browser checking covered all
+four views, including a drag of a node in each. Two edge-routing limitations
+were found during this manual checking and accepted rather than fixed, in
+keeping with §2 decision 9 (obstacle avoidance covers node rects only): see
+`specs/graph-view.md` §4 "Known limitation" and
+`docs/user/getting-started.md`.
 
 ## 5. Risks and mitigations
 

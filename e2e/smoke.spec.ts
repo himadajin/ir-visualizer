@@ -134,6 +134,29 @@ test.describe("IR Visualizer smoke tests", () => {
     });
   });
 
+  test("LLVM-IR use-def view", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".react-flow__node").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Use-Def" }).click();
+
+    // Instruction nodes render individually; "%5 = add i32 %0, 45" only
+    // exists as its own node in the use-def projection, never in the CFG
+    // view's basic-block cards.
+    await expect(
+      page.locator(".react-flow__node", { hasText: "%5 = add i32 %0, 45" }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Switching views keeps the editor content (spec: views/graph-view.md §1).
+    await expect(page.locator(".view-lines")).toContainText("define");
+
+    // Toggling back restores the CFG (exit node is CFG-only).
+    await page.getByRole("button", { name: "CFG" }).click();
+    await expect(page.locator(".react-flow")).toContainText("exit", {
+      timeout: 10_000,
+    });
+  });
+
   test("renders a graph from LLVM 2.x era IR with invoke/unwind", async ({
     page,
   }) => {

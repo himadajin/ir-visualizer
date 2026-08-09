@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { parseMermaid } from "../parser/mermaid";
-import { parseLLVM } from "../parser/llvm";
+import { parseLLVM, parseLLVMUseDef } from "../parser/llvm";
 import { parseSelectionDAGToGraphData } from "../parser/selectionDAG";
+import { llvmMode } from "../irModes/llvmMode";
 
 describe("Integration: parseMermaid (parser + graph builder)", () => {
   it("should produce GraphData from Mermaid text", () => {
@@ -120,6 +121,69 @@ define void @foo() {
 
     const declNode = graph.nodes.find((n) => n.nodeType === "llvm-declaration");
     expect(declNode).toBeDefined();
+  });
+});
+
+describe("Integration: parseLLVMUseDef (parser + use-def graph builder)", () => {
+  it("should produce a flat dataflow graph from the default LLVM example", () => {
+    const graph = parseLLVMUseDef(llvmMode.defaultCode);
+
+    expect(graph.nodes.length).toBeGreaterThan(0);
+    expect(graph.edges.length).toBeGreaterThan(0);
+    expect(graph.direction).toBe("TD");
+
+    // The view is flat: Dagre ranks instructions directly, so no node may
+    // carry a parentId (the rejected compound/container design).
+    graph.nodes.forEach((node) => {
+      expect(node).not.toHaveProperty("parentId");
+    });
+
+    const instructionNodes = graph.nodes.filter(
+      (n) => n.nodeType === "llvm-useDefInstruction",
+    );
+    const valueNodes = graph.nodes.filter(
+      (n) => n.nodeType === "llvm-useDefValue",
+    );
+    expect(instructionNodes.length).toBeGreaterThan(0);
+    expect(valueNodes.length).toBeGreaterThan(0);
+
+    // The default code's loop (blocks 9/12) carries loop-carried phis, e.g.
+    // `%10 = phi i32 [ %1, %7 ], [ %15, %12 ]`: at least one incoming edge
+    // must render dashed with a "%v (%bb)" label.
+    const phiEdges = graph.edges.filter((e) => e.dashed === true);
+    expect(phiEdges.length).toBeGreaterThan(0);
+    phiEdges.forEach((e) => {
+      expect(e.label).toMatch(/^%\S+ \(%?\S+(, %?\S+)*\)$/);
+    });
+  });
+
+  it("should produce a dataflow graph for a simple function", () => {
+    const input = `
+define i32 @main(i32 %n) {
+entry:
+  %x = add i32 %n, 2
+  ret i32 %x
+}`;
+
+    const graph = parseLLVMUseDef(input);
+
+    const instructionNodes = graph.nodes.filter(
+      (n) => n.nodeType === "llvm-useDefInstruction",
+    );
+    expect(instructionNodes).toHaveLength(2); // add + ret
+
+    // %n flows from the argument node into the add; %x flows from the add
+    // into the ret. Neither edge carries a label (only phi edges do).
+    expect(graph.edges).toHaveLength(2);
+    graph.edges.forEach((edge) => {
+      expect(edge.label).toBeUndefined();
+      expect(edge.dashed).toBeUndefined();
+    });
+
+    const argNode = graph.nodes.find(
+      (n) => n.nodeType === "llvm-useDefValue" && n.astData.kind === "argument",
+    );
+    expect(argNode).toBeDefined();
   });
 });
 

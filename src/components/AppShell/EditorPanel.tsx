@@ -110,6 +110,7 @@ const toggleGroupSx = {
     color: SHELL_COLORS.inkMuted,
     borderColor: SHELL_COLORS.control,
     borderRadius: SHELL_RADIUS,
+    "&:hover": { borderColor: SHELL_COLORS.controlHover },
     "&.Mui-selected": {
       backgroundColor: SHELL_SELECTED_FILL,
       borderColor: SHELL_COLORS.control,

@@ -110,22 +110,22 @@ as the one visually "interesting" layer and the chrome stays out of their way.
 All values are derived from colors already present in the codebase; no new hues
 are invented.
 
-| Token          | Value                                                                  | Use                                                                      |
-| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `ground`       | `#FAFAFA`                                                              | Full-viewport canvas background; dot `<Background />` dots `#D7DBDF`     |
-| `paper`        | `#FFFFFF`                                                              | Surface of panel / pill / control cluster (identical to nodes)           |
-| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on interactive shell controls (select, toggle group, buttons)     |
-| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)         |
-| `ink`          | `#1F2328`                                                              | Primary text                                                             |
-| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                           |
-| `ok`           | `#1A7F37`                                                              | Parse-success indicator only — never decorative                          |
-| `error`        | `#CF222E`                                                              | Parse-failure indicator only — never decorative                          |
-| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state (replaces the deleted `accent` token)       |
-| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                      |
-| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent) |
-| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                  |
+| Token          | Value                                                                  | Use                                                                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ground`       | `#FAFAFA`                                                              | Full-viewport canvas background; dot `<Background />` dots `#D7DBDF`                                                                                                                                                                         |
+| `paper`        | `#FFFFFF`                                                              | Surface of panel / pill / control cluster (identical to nodes)                                                                                                                                                                               |
+| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on bordered interactive controls (select, toggle group, outlined buttons); `controlHover` applies to all of them, `controlFocus` only to the select's focused field border — toggles and buttons signal focus via `focusRing` instead |
+| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)                                                                                                                                                                             |
+| `ink`          | `#1F2328`                                                              | Primary text                                                                                                                                                                                                                                 |
+| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                                                                                                                                                                                               |
+| `ok`           | `#1A7F37`                                                              | Parse-success indicator only — never decorative                                                                                                                                                                                              |
+| `error`        | `#CF222E`                                                              | Parse-failure indicator only — never decorative                                                                                                                                                                                              |
+| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state (replaces the deleted `accent` token)                                                                                                                                                                           |
+| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                                                                                                                                                                                          |
+| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent)                                                                                                                                                                     |
+| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                                                                                                                                                                                      |
 
-The `accent` (`#8250DF`) token from the original proposal is **deleted**.
+The `accent` purple token from the original proposal is **deleted**.
 Green `ok` / red `error` are the only semantic (non-gray) colors anywhere in
 the shell. Graph nodes keep their existing `1px solid #777` border
 unchanged — that border is NodeShell's, not a shell-chrome token, and is out
@@ -138,6 +138,11 @@ of scope here.
   (`system-ui`). Monospace is reserved for the status footer (compiler-output
   feel) and the canvas/graph nodes themselves — it is no longer used for shell
   chrome.
+- **Icon-only buttons are deliberately borderless**: the panel collapse button
+  and the canvas control cluster's zoom / fit / reset buttons carry no
+  `control` border of their own — their enclosing surface (panel, pill,
+  cluster) already has one via `line` — and signal hover/focus with
+  `hoverFill` and `focusRing` instead.
 
 ### Signature element: the brand title
 

@@ -188,22 +188,22 @@ radius, white surface, monospace type, corner-chip idiom). That NodeShell gramma
 the corner-chip idiom — remains exclusively a graph-node affordance; the shell chrome does not
 borrow it, and the editor panel is chrome around the canvas, not a node itself.
 
-| Token          | Value                                                                  | Use                                                                      |
-| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `ground`       | `#FAFAFA`                                                              | Canvas background; `<Background />` dot color `#D7DBDF`                  |
-| `paper`        | `#FFFFFF`                                                              | Panel / pill / control-cluster surface (same as nodes)                   |
-| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on interactive shell controls (select, toggle group, buttons)     |
-| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)         |
-| `ink`          | `#1F2328`                                                              | Primary text                                                             |
-| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                           |
-| `ok`           | `#1A7F37`                                                              | Parse success only — never decorative                                    |
-| `error`        | `#CF222E`                                                              | Parse failure only — never decorative                                    |
-| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state                                             |
-| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                      |
-| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent) |
-| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                  |
+| Token          | Value                                                                  | Use                                                                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ground`       | `#FAFAFA`                                                              | Canvas background; `<Background />` dot color `#D7DBDF`                                                                                                                                                                                      |
+| `paper`        | `#FFFFFF`                                                              | Panel / pill / control-cluster surface (same as nodes)                                                                                                                                                                                       |
+| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on bordered interactive controls (select, toggle group, outlined buttons); `controlHover` applies to all of them, `controlFocus` only to the select's focused field border — toggles and buttons signal focus via `focusRing` instead |
+| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)                                                                                                                                                                             |
+| `ink`          | `#1F2328`                                                              | Primary text                                                                                                                                                                                                                                 |
+| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                                                                                                                                                                                               |
+| `ok`           | `#1A7F37`                                                              | Parse success only — never decorative                                                                                                                                                                                                        |
+| `error`        | `#CF222E`                                                              | Parse failure only — never decorative                                                                                                                                                                                                        |
+| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state                                                                                                                                                                                                                 |
+| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                                                                                                                                                                                          |
+| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent)                                                                                                                                                                     |
+| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                                                                                                                                                                                      |
 
-There is no `accent` token: the `#8250DF` purple used by the shipped shell (PR #60) has been
+There is no `accent` token: the purple accent used by the shipped shell (PR #60) has been
 removed. `ok` (green) and `error` (red) are the only semantic, non-gray colors anywhere in the
 shell chrome. Graph nodes keep their existing `1px solid #777` border unchanged — that border
 belongs to NodeShell, not to a shell-chrome token, and node styling is out of scope here.
@@ -213,6 +213,10 @@ belongs to NodeShell, not to a shell-chrome token, and node styling is out of sc
   buttons — uses the app's system sans-serif stack (`system-ui`). Monospace is reserved for
   the status footer (compiler-output feel) and the canvas/graph nodes; it is no longer used
   anywhere in the shell chrome.
+- **Icon-only buttons are deliberately borderless**: the panel collapse button and the canvas
+  control cluster's zoom / fit / reset buttons carry no `control` border of their own — their
+  enclosing surface (panel, pill, cluster) already has one via `line` — and signal
+  hover/focus with `hoverFill` and `focusRing` instead.
 - **Motion**: exactly one animation — the panel ⇄ pill collapse/expand morph (~180 ms
   ease-out) with an animated `fitView` recenter. Disabled under `prefers-reduced-motion`.
 - **Accessibility floor**: 2 px `focusRing` (neutral gray `#57606A`, not accent) on all

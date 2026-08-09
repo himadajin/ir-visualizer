@@ -6,7 +6,17 @@ This project is an application that displays Intermediate Representation (IR) as
 When you enter text in the editor, the active IR mode parses it and displays the resulting graph.
 The graph is rendered using react-flow.
 
-### How it Works
+## Engineering Principles
+
+- Do not preserve backwords compatibility.
+  Remove obsolete paths instead of adding compatibility layers, migrations.
+- Choose the simplest implementation that fully meets the current requirements.
+  Avoid speculative abstracitions, configuration, and indirection.
+- Keep components modular and converns clearly separated.
+- Make architecture decisions for the long term.
+  Do not accept stopgap that only works for now and is meant to be replaced later.
+
+## How it Works
 
 See `docs/internal/architecture.md` for the full data-flow diagram and layer map.
 

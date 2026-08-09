@@ -19,9 +19,10 @@ import {
   SHELL_COLORS,
   SHELL_ELEVATION,
   SHELL_HAIRLINE,
+  SHELL_HOVER_FILL,
   SHELL_MOTION_MS,
   SHELL_RADIUS,
-  cornerChipSx,
+  SHELL_SELECTED_FILL,
   focusRingSx,
 } from "./shellTokens";
 
@@ -60,23 +61,40 @@ const surfaceSx = {
 
 const controlHeight = 26;
 
+/**
+ * Plain sans-serif wordmark. The chrome is intentionally quieter than the
+ * graph nodes, so no chip, no monospace — just a label sitting on the header
+ * baseline next to the controls.
+ */
+const brandSx = {
+  pl: 1,
+  fontSize: "13px",
+  fontWeight: 500,
+  lineHeight: 1,
+  color: "#333",
+  letterSpacing: "0.01em",
+  whiteSpace: "nowrap",
+  userSelect: "none",
+} as const;
+
 const selectSx = {
   height: controlHeight,
-  fontFamily: NODE_FONT_FAMILY,
   fontSize: "12px",
-  color: SHELL_COLORS.ink,
+  color: SHELL_COLORS.inkMuted,
   backgroundColor: SHELL_COLORS.paper,
   borderRadius: SHELL_RADIUS,
-  ".MuiOutlinedInput-notchedOutline": { borderColor: SHELL_COLORS.line },
-  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: SHELL_COLORS.ink },
+  ".MuiOutlinedInput-notchedOutline": { borderColor: SHELL_COLORS.control },
+  "&:hover .MuiOutlinedInput-notchedOutline": {
+    borderColor: SHELL_COLORS.controlHover,
+  },
   "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-    borderColor: SHELL_COLORS.accent,
+    borderColor: SHELL_COLORS.controlFocus,
     borderWidth: "1px",
   },
   ".MuiSvgIcon-root": { color: SHELL_COLORS.inkMuted, fontSize: "16px" },
   ".MuiSelect-select": { py: "2px", pr: "24px !important", pl: "8px" },
   ".MuiSelect-select:focus-visible": {
-    outline: `2px solid ${SHELL_COLORS.accent}`,
+    outline: `2px solid ${SHELL_COLORS.inkMuted}`,
     outlineOffset: "1px",
     borderRadius: SHELL_RADIUS,
   },
@@ -90,12 +108,12 @@ const toggleGroupSx = {
     py: 0,
     textTransform: "none",
     color: SHELL_COLORS.inkMuted,
-    borderColor: SHELL_COLORS.line,
+    borderColor: SHELL_COLORS.control,
     borderRadius: SHELL_RADIUS,
     "&.Mui-selected": {
-      backgroundColor: SHELL_COLORS.paper,
-      borderColor: SHELL_COLORS.accent,
-      color: SHELL_COLORS.accent,
+      backgroundColor: SHELL_SELECTED_FILL,
+      borderColor: SHELL_COLORS.control,
+      color: "#222",
       fontWeight: 600,
     },
     ...focusRingSx,
@@ -107,14 +125,17 @@ const actionButtonSx = {
   fontSize: "11px",
   textTransform: "none",
   color: SHELL_COLORS.inkMuted,
-  borderColor: SHELL_COLORS.line,
+  borderColor: SHELL_COLORS.control,
   borderRadius: SHELL_RADIUS,
-  "&:hover": { borderColor: SHELL_COLORS.ink, backgroundColor: "#f0f0f0" },
+  "&:hover": {
+    borderColor: SHELL_COLORS.controlHover,
+    backgroundColor: SHELL_HOVER_FILL,
+  },
   ...focusRingSx,
 } as const;
 
 interface EditorPanelProps {
-  /** false collapses the panel to the floating `code` pill. */
+  /** false collapses the panel to the floating "Code" pill. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Narrow mode (§6.5): bottom sheet instead of top-left card, no resizer. */
@@ -141,14 +162,14 @@ interface EditorPanelProps {
 
 /**
  * The floating editor panel (`specs/graph-view.md` §6.2/§6.3): a card at the
- * top-left holding everything that is not the canvas — brand corner chip, mode
+ * top-left holding everything that is not the canvas — the wordmark, mode
  * selector, view toggle, Clear, collapse, the Monaco editor, and the parse
  * status footer. In narrow mode (§6.5) the very same contents are anchored to
  * the bottom edge as a sheet instead; only the geometry changes.
  *
- * Conceptually the panel is itself a graph node: it reuses NodeShell's border,
- * radius, and corner-chip grammar. NodeShell is deliberately not imported —
- * it renders React Flow `Handle`s, which belong to the canvas, not the shell.
+ * The chrome is deliberately quiet — neutral grays and the app's sans-serif —
+ * so it reads as the tool around the graph rather than as another graph node.
+ * The only monospace here is the status footer, which is compiler output.
  */
 export function EditorPanel({
   open,
@@ -189,20 +210,27 @@ export function EditorPanel({
           left: PANEL_MARGIN,
           zIndex: 5,
           display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
           // The pill is the only way back to the editor on a touch screen, so
-          // narrow mode grows the miniature node's body (not its chip) until
-          // the hit target clears ~40 px in both directions.
-          padding: narrow ? "0 24px 20px 0" : "0 8px 4px 0",
+          // narrow mode pads it out until the hit target clears ~40 px in both
+          // directions.
+          padding: narrow ? "11px 20px" : "4px 10px",
+          minWidth: narrow ? 40 : "auto",
+          minHeight: narrow ? 40 : "auto",
           cursor: "pointer",
+          fontFamily: "inherit",
+          fontSize: "13px",
+          fontWeight: 500,
+          lineHeight: 1,
+          color: "#333",
           ...surfaceSx,
           ...morphSx,
           transformOrigin: morphOrigin(narrow),
           ...focusRingSx,
         }}
       >
-        <Box component="span" sx={cornerChipSx}>
-          code
-        </Box>
+        Code
       </Box>
     );
   }
@@ -231,7 +259,7 @@ export function EditorPanel({
         overflow: "hidden",
         ...surfaceSx,
         // The sheet sits on the viewport edge, so only its top corners can
-        // round; the node grammar's border is kept on all four sides.
+        // round; the surface border is kept on all four sides.
         borderRadius: narrow
           ? `${SHELL_RADIUS} ${SHELL_RADIUS} 0 0`
           : SHELL_RADIUS,
@@ -242,12 +270,12 @@ export function EditorPanel({
       <Box
         sx={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems: "center",
           borderBottom: `1px solid ${SHELL_HAIRLINE}`,
         }}
       >
-        <Box component="span" sx={cornerChipSx}>
-          ir-visualizer
+        <Box component="span" sx={brandSx}>
+          IR Visualizer
         </Box>
 
         <Box
@@ -273,7 +301,7 @@ export function EditorPanel({
               <MenuItem
                 key={irMode.key}
                 value={irMode.key}
-                sx={{ fontFamily: NODE_FONT_FAMILY, fontSize: "12px" }}
+                sx={{ fontSize: "12px" }}
               >
                 {irMode.label}
               </MenuItem>
@@ -319,7 +347,7 @@ export function EditorPanel({
               height: controlHeight,
               borderRadius: SHELL_RADIUS,
               color: SHELL_COLORS.inkMuted,
-              "&:hover": { backgroundColor: "#f0f0f0" },
+              "&:hover": { backgroundColor: SHELL_HOVER_FILL },
               ...focusRingSx,
             }}
           >

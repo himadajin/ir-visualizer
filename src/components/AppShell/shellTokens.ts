@@ -1,44 +1,53 @@
 /**
  * Design tokens for the canvas-first shell (`specs/graph-view.md` §6.6).
  *
- * Every floating surface — editor panel, collapsed pill, canvas control
- * cluster — reuses the graph nodes' visual grammar (`Graph/common/NodeShell`):
- * white surface, 1px #777 border, 4px radius, monospace type, corner chips.
- * The shell must not introduce a second visual language, so these constants
- * are the only place shell colors/geometry are defined.
+ * The shell chrome — editor panel, collapsed pill, canvas control cluster — is
+ * deliberately QUIETER than the graph it frames: neutral grays, the app's
+ * system sans-serif, light control borders, a barely-there elevation. The
+ * graph nodes own the loud end of the visual range (monospace, dark borders,
+ * corner chips), so the chrome must never compete with them; the nodes stay
+ * the protagonists and the chrome recedes to the edges of the viewport.
+ *
+ * These constants are the only place shell colors/geometry are defined.
  */
-import { NODE_FONT_FAMILY } from "../Graph/common/nodeTextStyle";
 
 export const SHELL_COLORS = {
   /** Full-viewport canvas background. */
   ground: "#FAFAFA",
   /** React Flow `<Background />` dot color. */
   groundDots: "#D7DBDF",
-  /** Surface of panel / pill / control cluster (identical to graph nodes). */
+  /** Surface of panel / pill / control cluster. */
   paper: "#FFFFFF",
-  /** Border color for all floating chrome (identical to NodeShell). */
-  line: "#777",
+  /** Outer border of the floating surfaces (panel, pill, control cluster). */
+  line: "#999",
+  /** Resting border of an interactive control (select, button, toggle). */
+  control: "#d0d0d0",
+  /** Hovered control border. */
+  controlHover: "#999",
+  /** Focused control border. */
+  controlFocus: "#777",
   ink: "#1F2328",
   inkMuted: "#57606A",
   /** Parse success only — never decorative. */
   ok: "#1A7F37",
   /** Parse failure only — never decorative. */
   error: "#CF222E",
-  /** Focus rings and selected states only. */
-  accent: "#8250DF",
 } as const;
 
-/** Floating chrome only; graph nodes stay flat. */
+/** Floating chrome only; graph nodes stay flat. Kept light on purpose. */
 export const SHELL_ELEVATION =
-  "0 1px 2px rgba(31,35,40,.08), 0 8px 24px rgba(31,35,40,.08)";
+  "0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)";
 
 export const SHELL_RADIUS = "4px";
 
-/** Hairline used inside a surface (NodeShell's chip borders use the same). */
+/** Hairline used inside a surface (header rule, footer rule, divider). */
 export const SHELL_HAIRLINE = "#ddd";
 
-/** NodeShell's chip background. */
-export const SHELL_CHIP_BACKGROUND = "#f0f0f0";
+/** Fill for hovered chrome controls and icon buttons. */
+export const SHELL_HOVER_FILL = "#f0f0f0";
+
+/** Fill for a selected chrome control (view toggle). */
+export const SHELL_SELECTED_FILL = "#e8e8e8";
 
 /** Inset of the floating editor panel from the viewport edges, in px. */
 export const PANEL_MARGIN = 16;
@@ -91,33 +100,10 @@ export function buildFitViewPadding(inset: ShellFitViewInset) {
   } as const;
 }
 
-/**
- * NodeShell's corner-chip geometry, reproduced for shell chrome. NodeShell
- * itself cannot be reused here because it renders React Flow `Handle`s.
- * Placed in normal flow (not absolutely positioned) so it can sit as the first
- * item of a flex header row while still hugging the surface's top-left corner.
- */
-export const cornerChipSx = {
-  alignSelf: "flex-start",
-  padding: "2px 6px",
-  backgroundColor: SHELL_CHIP_BACKGROUND,
-  borderTopLeftRadius: SHELL_RADIUS,
-  borderBottomRightRadius: SHELL_RADIUS,
-  borderRight: `1px solid ${SHELL_HAIRLINE}`,
-  borderBottom: `1px solid ${SHELL_HAIRLINE}`,
-  fontFamily: NODE_FONT_FAMILY,
-  fontSize: "12px",
-  fontWeight: "bold",
-  lineHeight: "16px",
-  color: SHELL_COLORS.inkMuted,
-  whiteSpace: "nowrap",
-  userSelect: "none",
-} as const;
-
-/** 2px accent focus ring on every interactive piece of shell chrome. */
+/** Neutral 2px focus ring on every interactive piece of shell chrome. */
 export const focusRingSx = {
   "&:focus-visible, &.Mui-focusVisible": {
-    outline: `2px solid ${SHELL_COLORS.accent}`,
+    outline: `2px solid ${SHELL_COLORS.inkMuted}`,
     outlineOffset: "1px",
   },
 } as const;

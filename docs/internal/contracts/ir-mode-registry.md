@@ -1,10 +1,9 @@
 # Contract: IR mode registry
 
-- **Status:** Implemented (Phase 2, 2026-07-04)
-- **Motivation:** before the registry, adding a 4th IR required editing roughly 14 scattered
-  dispatch sites. This contract defines the single
-  interface an IR mode must implement so that adding one only means adding one registry
-  entry (plus the mode's own parser/AST/node-component files).
+Everything that differs per IR (parser, default code, editor language, node components,
+edge/layout behavior) is centralized in one registry entry per IR. Adding an IR means
+adding one entry plus that IR's own parser/AST/graphBuilder/node-component files — never
+editing scattered per-mode dispatch sites.
 
 ## The interface
 
@@ -44,14 +43,13 @@ interface IRViewDefinition {
 Rules:
 
 - `views` is optional. A mode without it has a single implicit view built from
-  its top-level `parse`/`edgeBuilder`/`layoutOptions` (Mermaid and SelectionDAG
-  stay exactly as they were).
+  its top-level `parse`/`edgeBuilder`/`layoutOptions`.
 - When present, `views` has ≥ 2 entries and `views[0]` is the **default view**;
   it must behave identically to the mode's top-level fields (share the same
   function references — don't duplicate logic).
 - `useIRWorkspace` owns the active view key. Switching **views keeps the editor
   code** (that is the point of views); switching **modes resets** the view to the
-  default and replaces the code with `defaultCode`, as before.
+  default and replaces the code with `defaultCode`.
 - The editor panel renders a view `ToggleButtonGroup` only when the active mode has
   `views`.
 - A mode's `nodeTypes` covers every view's node renderers (GraphViewer merges
@@ -61,7 +59,7 @@ Rules:
   switches (`specs/graph-view.md` §2).
 
 The layout-relevant half of a mode is named separately so a view-resolved value
-can be passed where a mode used to be:
+can be passed wherever layout behavior is needed:
 
 ```ts
 type IRLayoutBehavior = Pick<IRModeDefinition, "edgeBuilder" | "layoutOptions">;
@@ -81,11 +79,10 @@ interface IREdgeBuilder {
 ```
 
 - LLVM/Mermaid (`codeGraphEdgeBuilder`) build `type: "routed"` edges; the ELK layout
-  attaches each edge's back-edge flag to `edge.data` afterwards, and the edge's geometry is
-  computed at render time from the live node rectangles (`specs/graph-view.md` §4). A
-  builder therefore contributes no geometry at all. There is no position-based
-  classification anymore — whether an edge is a back edge is derived from the final layout
-  geometry, not chosen up front.
+  attaches each edge's back-edge flag to `edge.data` afterwards (derived from the final
+  layout geometry, not chosen by the builder), and the edge's geometry is computed at
+  render time from the live node rectangles (`specs/graph-view.md` §4). A builder
+  therefore contributes no geometry at all.
 - SelectionDAG (`selectionDAGEdgeBuilder`) builds React Flow built-in `default` (bezier)
   edges connecting specific operand/type Handles; routing does not apply to them.
 
@@ -106,7 +103,7 @@ All three current modes live in `src/irModes/`: `llvmMode.ts`, `mermaidMode.ts`,
 ## Adding a 4th IR mode
 
 1. Add the parser/AST/graphBuilder files for the new IR under `src/parser`, `src/ast`,
-   `src/graphBuilder` (unchanged from before this contract — this part was never the problem).
+   `src/graphBuilder`.
 2. Add the mode's node component(s) under `src/components/Graph/<NewMode>/`.
 3. Write `src/irModes/newMode.ts` implementing `IRModeDefinition`. Reuse `codeGraphEdgeBuilder`
    unless the new IR needs custom edge semantics like SelectionDAG.

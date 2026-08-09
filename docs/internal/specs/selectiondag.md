@@ -4,9 +4,9 @@ Behavior specification for the `selectionDAG` mode: the accepted LLVM SelectionD
 (`src/parser/selectionDAG.ohm` / `selectionDAG.ts`) and the DAG construction
 (`src/graphBuilder/selectionDAGGraphBuilder.ts`).
 
-Conventions: every normative statement carries a **Pinned by** reference to the test(s) that
-fix the behavior. Statements marked _observed, untested_ describe current behavior with no
-covering test.
+Conventions: every normative statement is covered by a **Pinned by** reference to the test
+file(s) that fix the behavior. Statements marked _observed, untested_ describe current
+behavior with no covering test.
 
 ## 1. Input model — line-based, tolerant
 
@@ -23,14 +23,14 @@ This tolerance is intentional (real `llc` dumps mix header text with node lines)
 "Known behavior difference" section of `contracts/ir-mode-registry.md`.
 
 > Pinned by: `src/parser/__tests__/selectionDAG/errorsAndFallbacks.test.ts`,
-> `fullParse.test.ts`, `invariants.test.ts`
+> `src/parser/__tests__/selectionDAG/fullParse.test.ts`,
+> `src/parser/__tests__/selectionDAG/invariants.test.ts`
 
 ## 2. Node-line syntax
 
 A node line is `<nodeId>: <types> = <rhs>` with optional leading indentation.
 
 - **nodeId**: `t<digits>` (current format) or `0x<hex>` (old LLVM dumps).
-  > Pinned by: `nodeSyntax.test.ts` (minimal node, old-format hex node)
 - **types**: comma-separated list, e.g. `i64,ch` — each type is an identifier
   (`i32`, `ch`, `glue`, `v4f32`, ...).
 - **rhs**: either the special form `ValueType: <ty>` (parsed as opName `ValueType` with
@@ -46,8 +46,6 @@ reassoc nofpexcept`.
     bare capitalized name (Bare).
   - **verbose**: an `[ORD=N]`-style bracket group, accepted before or after the operands
     (old-format dumps).
-    > Pinned by: `nodeSyntax.test.ts`, `operandsAndDetails.test.ts`,
-    > `registerAndValueType.test.ts`
 
 - **operands**: comma-separated; each is one of
 
@@ -59,32 +57,32 @@ reassoc nofpexcept`.
   | immediate   | `-?digits`                            | `immediate`                 |
   | null        | `<null>`                              | `null`                      |
 
-  > Pinned by: `operandsAndDetails.test.ts`, `nodeSyntax.test.ts` ("wrapped")
+> Pinned by: `src/parser/__tests__/selectionDAG/nodeSyntax.test.ts`,
+> `src/parser/__tests__/selectionDAG/operandsAndDetails.test.ts`,
+> `src/parser/__tests__/selectionDAG/registerAndValueType.test.ts`
 
 ## 3. DAG construction rules
 
 - Each parsed node becomes one `GraphNode` with `nodeType: "selectionDAG-node"`,
   `language: "llvm"`, the AST node as `astData`, and a compact one-line label (used only for
   fallback sizing). Comment entries produce nothing.
-  > Pinned by: `src/graphBuilder/__tests__/selectionDAG/{nodes,metadata}.test.ts`
 - Edges are generated **from operands**: for every operand of kind `node` whose id refers to a
   node present in the same dump, one edge goes _from the referenced node to the referencing
   node_ (dataflow direction). Inline, immediate, and null operands, and references to unknown
   ids, produce no edge.
-  > Pinned by: `src/graphBuilder/__tests__/selectionDAG/edges.test.ts`
 - Edges attach to specific **Handles** instead of generic node borders:
   `sourceHandle = "<srcId>-type-<resultIndex>"` (the operand's `:N` index, default 0) and
   `targetHandle = "<dstId>-operand-<operandIndex>"`. These ids must match the Handle ids that
   `SelectionDAGNode.tsx` renders per type cell / operand cell.
-  > Pinned by: `edges.test.ts` ("target handles", "source index")
 - If the referenced result type at that index is `ch` or `glue`, the edge is flagged
   `isChainOrGlue` and renders **dashed** (see `createSelectionDAGReactFlowEdge`).
-  > Pinned by: `edges.test.ts` ("chain or glue"),
-  > `src/utils/__tests__/converter.test.ts` ("dashed edge")
 - The graph is always `direction: "TD"`; SelectionDAG layout uses
   `elk.layered.spacing.nodeNodeBetweenLayers: 50` (`selectionDAGMode.layoutOptions`,
-  an ELK option — see `specs/graph-view.md` §3).
-  > Pinned by: `invariants.test.ts` (direction); the spacing value: _observed, untested_
+  an ELK option — see `specs/graph-view.md` §3). _(the spacing value: observed, untested)_
+
+> Pinned by: `src/graphBuilder/__tests__/selectionDAG/{nodes,edges,metadata}.test.ts`,
+> `src/parser/__tests__/selectionDAG/invariants.test.ts`,
+> `src/utils/__tests__/converter.test.ts`
 
 ## 4. Node rendering
 
@@ -114,6 +112,5 @@ The left-column color encodes an opName **category**
   signal that a line the user intended as a node was skipped.
 - Nodes referenced by operands but not defined in the dump produce no edge and no placeholder
   node.
-  > Pinned by: `edges.test.ts` ("unknown node")
 - Related feature request: [#42](https://github.com/himadajin/ir-visualizer/issues/42) —
   optionally inlining constant/register nodes that old-LLVM dumps emit as separate nodes.

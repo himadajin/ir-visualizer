@@ -35,9 +35,10 @@ targets, debug records — produce **no nodes**.
 All ids are namespaced by function, using the same `func_<name>` prefixing
 convention as the CFG builder, so identical block labels or value names across
 functions cannot collide. Quoted identifiers are an exception: `uniqueId`
-strips only the sigil (`@`/`%`) and surrounding quotes, so a quoted name whose
-_contents_ include `@`, `%`, or `"` can still collide with an unrelated name
-after stripping (e.g. `@"a@b"` and `@ab` both prefix to `func_ab`) — a
+removes every `@`, `%`, and `"` character anywhere in the name (a global
+strip, not just the leading sigil and surrounding quotes), so a quoted name
+whose _contents_ include `@`, `%`, or `"` can still collide with an unrelated
+name after stripping (e.g. `@"a@b"` and `@ab` both prefix to `func_ab`) — a
 pre-existing encoding gap shared with the CFG builder (`llvmGraphBuilder.ts`);
 fixing it is follow-up work outside this spec (_observed, untested_).
 

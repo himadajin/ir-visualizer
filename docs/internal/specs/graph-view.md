@@ -243,9 +243,18 @@ ELK needs node sizes before React renders anything, so `converter.ts` estimates 
   `CodeFragment.tsx`'s exported paddings for their structures. When changing node styling,
   change the constant, never a literal, or layout spacing silently drifts from rendering
   (see `plans/2026-08-node-visual-compaction.md`).
+- Every LLVM node body and the Use-Def instruction card render their code line(s) through
+  `HighlightedCode.tsx`, which wraps Shiki's own `<pre>` output (block mode; SelectionDAG's
+  `CodeFragment.tsx` uses the same component in `inline` mode instead, which strips the
+  `<pre>`/`<code>` tags entirely, so it never carries this margin). Shiki's `<pre>` carries
+  the user-agent default block margin (12 px top/bottom, observed in this app's rendering);
+  `HighlightedCode.tsx` resets it to `0` on the generated HTML before mounting it, because the
+  estimate above assumes no margin. Mermaid nodes render plain text (`MermaidNode.tsx`, no
+  `HighlightedCode` involved) and were never affected.
 
 > Pinned by: `src/utils/__tests__/converter.test.ts` (mermaid/LLVM/wrapping/header-offset/
-> empty-label cases)
+> empty-label cases), `src/components/Graph/common/__tests__/HighlightedCode.test.tsx` (the
+> rendered `<pre>` carries no margin in block mode; inline mode still strips the tag).
 
 ## 6. Shell UI (canvas-first shell)
 

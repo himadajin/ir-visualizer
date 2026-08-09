@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { Panel, useReactFlow, type FitViewOptions } from "@xyflow/react";
 import { Box, IconButton } from "@mui/material";
 import {
-  SHELL_CHIP_BACKGROUND,
   SHELL_COLORS,
   SHELL_ELEVATION,
   SHELL_HAIRLINE,
+  SHELL_HOVER_FILL,
   SHELL_RADIUS,
   focusRingSx,
 } from "../AppShell/shellTokens";
@@ -56,7 +56,7 @@ function ControlButton({
         height: 28,
         borderRadius: SHELL_RADIUS,
         color: SHELL_COLORS.ink,
-        "&:hover": { backgroundColor: SHELL_CHIP_BACKGROUND },
+        "&:hover": { backgroundColor: SHELL_HOVER_FILL },
         ...focusRingSx,
       }}
     >

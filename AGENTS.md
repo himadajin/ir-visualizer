@@ -72,3 +72,30 @@ See `docs/internal/architecture.md` for the full data-flow diagram and layer map
 - Always run tests after making changes.
 - Always run `npm run format` after making changes.
 - Always run `npm run lint` after making changes.
+
+## Commits, issues, and pull requests
+
+Two principles govern how changes are named and described.
+
+A change has one name, and that name is its commit message.
+Titles for issues, PRs, and commits alike follow
+[Conventional Commits](https://www.conventionalcommits.org/)
+(e.g. `docs: update config schema`, `feat(match): add typo-tolerant matching`,
+`fix(zle): clear listing on accept-line`)
+and are written in English so they flow through tooling.
+The issue names the change first;
+the PR reuses that title verbatim,
+so it lands on `main` unedited as the commit message on squash merge.
+GitHub appends the ` (#N)` suffix at that point.
+Include a scope once the affected component is known.
+
+An issue body is written for a future reader
+who has no access to the conversation that spawned it.
+Open with one or two paragraphs stating the current state,
+the change or decision being made, and the reason;
+the body should stand on its own from there.
+Use vocabulary the reader can resolve:
+refer to other issues as `#N` plus a short description,
+and accompany any number used as evidence
+with its measurement environment and reproduction steps.
+Bodies may be English or Japanese.

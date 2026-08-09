@@ -116,8 +116,9 @@ design decisions this section encodes.
 A single overlay card at the **top-left**, inset from the viewport edges, holding everything
 that is not the canvas.
 
-- **Header**, left to right: the brand corner chip (`ir-visualizer`), the **mode selector**,
-  the **view toggle**, a **Clear** action, and a **collapse** button.
+- **Header**, left to right: the brand title ("IR Visualizer", small sans-serif, ~13 px,
+  `#333`), the **mode selector**, the **view toggle**, a **Clear** action, and a **collapse**
+  button.
 - **Mode selector** lists the registry modes in `IR_MODES` insertion order
   (LLVM-IR, SelectionDAG, Mermaid).
   > Pinned by: `e2e/smoke.spec.ts` (selects each mode by visible label). Order:
@@ -138,11 +139,11 @@ that is not the canvas.
   handler on the panel root is an additional safety net. _(observed, untested)_
 - **Resize**: right-edge drag via `usePaneResize` — min 280 px, max 60 vw, initial 420 px.
   Wide mode only. _(observed, untested)_
-- **Collapse**: the panel collapses to a small floating pill rendered as a miniature node
-  (same border and corner-chip grammar) labeled `code`, giving the graph the full viewport.
-  The state is a session-local `panelOpen: boolean` (no persistence); the same flag drives
-  wide and narrow mode. The pill sits **top-left in wide mode** and **bottom-left in narrow
-  mode**. _(observed, untested)_
+- **Collapse**: the panel collapses to a small floating pill styled as a plain small button
+  with a sans-serif `Code` label, giving the graph the full viewport. The state is a
+  session-local `panelOpen: boolean` (no persistence); the same flag drives wide and narrow
+  mode. The pill sits **top-left in wide mode** and **bottom-left in narrow mode**.
+  _(observed, untested)_
 
 ### 6.3 Status footer
 
@@ -180,31 +181,41 @@ drag-resizer is wide-mode-only. _(observed, untested)_
 
 ### 6.6 Visual grammar and design tokens
 
-All floating chrome — editor panel, collapsed pill, control cluster — reuses the graph
-nodes' visual grammar from `src/components/Graph/common/NodeShell.tsx`: `1px solid #777`
-border, `4px` radius, white surface, monospace type, and the corner-chip idiom (small label
-chip in the top-left corner, grey background, bold 12 px, rounded on the outer top-left and
-inner bottom-right corners only). Conceptually, the editor panel is itself a node.
+Floating chrome — editor panel, collapsed pill, control cluster — uses the quiet gray
+language: neutral grays, sans-serif type, and light borders, distinct from the graph nodes'
+own grammar in `src/components/Graph/common/NodeShell.tsx` (`1px solid #777` border, `4px`
+radius, white surface, monospace type, corner-chip idiom). That NodeShell grammar — including
+the corner-chip idiom — remains exclusively a graph-node affordance; the shell chrome does not
+borrow it, and the editor panel is chrome around the canvas, not a node itself.
 
-| Token       | Value                                                         | Use                                                      |
-| ----------- | ------------------------------------------------------------- | -------------------------------------------------------- |
-| `ground`    | `#FAFAFA`                                                     | Canvas background; `<Background />` dot color `#D7DBDF`  |
-| `paper`     | `#FFFFFF`                                                     | Panel / pill / control-cluster surface (same as nodes)   |
-| `line`      | `#777`                                                        | Border color for all floating chrome (same as NodeShell) |
-| `ink`       | `#1F2328`                                                     | Primary text                                             |
-| `ink-muted` | `#57606A`                                                     | Secondary text (status footer, chip labels)              |
-| `ok`        | `#1A7F37`                                                     | Parse success only — never decorative                    |
-| `error`     | `#CF222E`                                                     | Parse failure only — never decorative                    |
-| `accent`    | `#8250DF`                                                     | Focus rings and selected states only                     |
-| elevation   | `0 1px 2px rgba(31,35,40,.08), 0 8px 24px rgba(31,35,40,.08)` | Floating chrome only; graph nodes stay flat (no shadow)  |
+| Token          | Value                                                                  | Use                                                                      |
+| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ground`       | `#FAFAFA`                                                              | Canvas background; `<Background />` dot color `#D7DBDF`                  |
+| `paper`        | `#FFFFFF`                                                              | Panel / pill / control-cluster surface (same as nodes)                   |
+| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on interactive shell controls (select, toggle group, buttons)     |
+| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)         |
+| `ink`          | `#1F2328`                                                              | Primary text                                                             |
+| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                           |
+| `ok`           | `#1A7F37`                                                              | Parse success only — never decorative                                    |
+| `error`        | `#CF222E`                                                              | Parse failure only — never decorative                                    |
+| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state                                             |
+| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                      |
+| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent) |
+| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                  |
+
+There is no `accent` token: the `#8250DF` purple used by the shipped shell (PR #60) has been
+removed. `ok` (green) and `error` (red) are the only semantic, non-gray colors anywhere in the
+shell chrome. Graph nodes keep their existing `1px solid #777` border unchanged — that border
+belongs to NodeShell, not to a shell-chrome token, and node styling is out of scope here.
 
 - **No translucency and no backdrop blur**: every surface is fully opaque.
-- **Typography**: no webfonts. The brand mark, corner chips, mode selector, and status footer
-  use the graph nodes' monospace stack (`common/nodeTextStyle.ts`); other UI text uses
-  `system-ui`.
+- **Typography**: no webfonts. All shell chrome — brand title, mode selector, view toggle,
+  buttons — uses the app's system sans-serif stack (`system-ui`). Monospace is reserved for
+  the status footer (compiler-output feel) and the canvas/graph nodes; it is no longer used
+  anywhere in the shell chrome.
 - **Motion**: exactly one animation — the panel ⇄ pill collapse/expand morph (~180 ms
   ease-out) with an animated `fitView` recenter. Disabled under `prefers-reduced-motion`.
-- **Accessibility floor**: 2 px `accent` focus rings on all interactive chrome, keyboard
-  operability, WCAG AA contrast for status-footer text.
+- **Accessibility floor**: 2 px `focusRing` (neutral gray `#57606A`, not accent) on all
+  interactive chrome, keyboard operability, WCAG AA contrast for status-footer text.
 
 _(§6.6 as a whole: observed, untested — the tokens are enforced by review, not by tests.)_

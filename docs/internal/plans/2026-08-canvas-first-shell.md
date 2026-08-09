@@ -94,51 +94,61 @@ authoritative where they differ from §§1–4 above. The proposal predates the 
 Use-Def view toggle (`docs/internal/specs/llvm-use-def-view.md`), so the toolbar
 it describes is missing one control; that gap is closed here.
 
-### Concept: the editor panel is itself a node
+### Concept: quiet shell chrome, code-colored canvas
 
-All floating chrome — editor panel, collapsed pill, canvas control cluster —
-reuses the **exact visual grammar of the graph nodes** rendered by
-`src/components/Graph/common/NodeShell.tsx`: white surface, `1px solid #777`
-border, `4px` border radius, monospace type, and NodeShell's **corner-chip
-idiom** (a small label chip in the top-left corner, grey background, bold 12 px,
-rounded only on the outer top-left and inner bottom-right corner). The shell
-does not introduce a second visual language; it extends the one the canvas
-already speaks.
+Floating chrome — editor panel, collapsed pill, canvas control cluster — uses
+the pre-#60 **quiet gray language**: neutral grays, sans-serif type, light
+borders, no decorated hue. The graph nodes keep their own visual grammar
+(`src/components/Graph/common/NodeShell.tsx`: white surface, `1px solid #777`
+border, `4px` radius, monospace type, corner-chip idiom) unchanged — node
+styling is out of scope for this plan. The shell chrome does **not** borrow
+that grammar; the two are deliberately distinct now, so the graph nodes read
+as the one visually "interesting" layer and the chrome stays out of their way.
 
 ### Design tokens
 
 All values are derived from colors already present in the codebase; no new hues
 are invented.
 
-| Token       | Value                                                         | Use                                                                  |
-| ----------- | ------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `ground`    | `#FAFAFA`                                                     | Full-viewport canvas background; dot `<Background />` dots `#D7DBDF` |
-| `paper`     | `#FFFFFF`                                                     | Surface of panel / pill / control cluster (identical to nodes)       |
-| `line`      | `#777`                                                        | Border color for all floating chrome (identical to NodeShell)        |
-| `ink`       | `#1F2328`                                                     | Primary text                                                         |
-| `ink-muted` | `#57606A`                                                     | Secondary text (status footer, chip labels)                          |
-| `ok`        | `#1A7F37`                                                     | Parse-success indicator only — never decorative                      |
-| `error`     | `#CF222E`                                                     | Parse-failure indicator only — never decorative                      |
-| `accent`    | `#8250DF`                                                     | Focus rings and selected states only (github-light entity purple)    |
-| elevation   | `0 1px 2px rgba(31,35,40,.08), 0 8px 24px rgba(31,35,40,.08)` | Floating chrome only; graph nodes stay flat (no shadow)              |
+| Token          | Value                                                                  | Use                                                                      |
+| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ground`       | `#FAFAFA`                                                              | Full-viewport canvas background; dot `<Background />` dots `#D7DBDF`     |
+| `paper`        | `#FFFFFF`                                                              | Surface of panel / pill / control cluster (identical to nodes)           |
+| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on interactive shell controls (select, toggle group, buttons)     |
+| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)         |
+| `ink`          | `#1F2328`                                                              | Primary text                                                             |
+| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                           |
+| `ok`           | `#1A7F37`                                                              | Parse-success indicator only — never decorative                          |
+| `error`        | `#CF222E`                                                              | Parse-failure indicator only — never decorative                          |
+| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state (replaces the deleted `accent` token)       |
+| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                      |
+| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent) |
+| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                  |
+
+The `accent` (`#8250DF`) token from the original proposal is **deleted**.
+Green `ok` / red `error` are the only semantic (non-gray) colors anywhere in
+the shell. Graph nodes keep their existing `1px solid #777` border
+unchanged — that border is NodeShell's, not a shell-chrome token, and is out
+of scope here.
 
 - **No translucency and no backdrop blur anywhere.** All surfaces are fully
   opaque. This explicitly rejects the "subtle translucency/blur" allowed in §2.
-- **Typography**: no webfonts are added. The brand mark, corner chips, mode
-  selector, and status footer use the same monospace stack as the graph nodes
-  (`src/components/Graph/common/nodeTextStyle.ts`); all other UI text uses
-  `system-ui`.
+- **Typography**: no webfonts are added. All shell chrome (brand title, mode
+  selector, toggles, buttons) uses the app's system sans-serif stack
+  (`system-ui`). Monospace is reserved for the status footer (compiler-output
+  feel) and the canvas/graph nodes themselves — it is no longer used for shell
+  chrome.
 
-### Signature element: the brand corner chip
+### Signature element: the brand title
 
-The editor panel header carries a NodeShell-style corner chip labeled
-`ir-visualizer`. It is the app's signature mark and the clearest statement of
-the "panel as node" concept — the panel is literally a node with the app's name
-in its block label.
+The editor panel header carries a small sans-serif **"IR Visualizer" title**
+(~13 px, `#333`), vertically centered in the header row — not a NodeShell-style
+corner chip. The corner-chip idiom remains exclusively a graph-node affordance;
+the panel is chrome around the canvas, not a node itself.
 
 ### Panel header composition
 
-Left to right: the brand corner chip, the **IR mode selector** (registry-driven,
+Left to right: the brand title, the **IR mode selector** (registry-driven,
 unchanged contract), the **CFG/Use-Def view toggle** for modes that define
 `views`, a **Clear** action, and a **collapse** button. The view toggle moves
 out of the removed toolbar and into the panel header — **not** into the canvas
@@ -157,12 +167,12 @@ One line of monospace text, styled after a compiler diagnostic:
 
 ### Collapse pill and its position
 
-The panel collapses to a small floating pill rendered as a miniature node (same
-border and chip grammar) labeled `code`. Collapse state is session-local
-`useState`. The old narrow-mode `activePane: "editor" | "graph"` state is
-replaced by a single `panelOpen: boolean` shared by both wide and narrow modes.
-The pill sits **top-left in wide mode** and **bottom-left in narrow mode**
-(thumb reach).
+The panel collapses to a small floating pill, styled as a **plain small
+button** with a sans-serif `Code` label — not a miniature node. Collapse state
+is session-local `useState`. The old narrow-mode `activePane: "editor" |
+"graph"` state is replaced by a single `panelOpen: boolean` shared by both wide
+and narrow modes. The pill sits **top-left in wide mode** and **bottom-left in
+narrow mode** (thumb reach).
 
 ### Event containment
 
@@ -188,8 +198,9 @@ animations. Everything is disabled under `prefers-reduced-motion`.
 
 ### Accessibility floor
 
-2 px `accent`-colored focus rings on every interactive piece of chrome, full
-keyboard operability, and WCAG AA contrast for status-footer text.
+2 px `focusRing` (`#57606A`, neutral gray, not accent) on every interactive
+piece of chrome, full keyboard operability, and WCAG AA contrast for
+status-footer text.
 
 ### Spec sections affected
 
@@ -223,6 +234,24 @@ keep-last-good-graph-on-error behavior of `specs/graph-view.md` §1, and the
 topology-signature rules of §2 (full re-layout on signature change,
 position/edge-type preservation on content-only updates), all hold exactly as
 specified and remain pinned by the existing tests.
+
+## Amendment (2026-08-09): quiet visual language revision
+
+After using the shipped shell (PR #60), the node-grammar chrome described in
+"Agreed design decisions" above proved too heavy in practice: the panel,
+pill, and control cluster borrowing NodeShell's corner-chip idiom and
+monospace type meant the controls competed visually with the graph nodes
+instead of framing them, and the `accent` purple was the only decorated hue
+in an otherwise code-colored tool. The canvas-first **layout** from §§1–4
+(full-bleed canvas, floating panel, bottom-right control cluster, narrow-mode
+sheet) is unaffected and stays as shipped. Only the shell chrome's **visual
+language** reverts to the pre-#60 quiet gray look: neutral grays, sans-serif
+type, and light borders for panel/pill/controls, with the `accent` token
+deleted and the corner-chip/monospace grammar left exclusively to the graph
+nodes. "Agreed design decisions" above has been edited in place to reflect
+this; see the design-tokens table, the brand-title, collapse-pill, and
+accessibility-floor subsections for the specifics. `specs/graph-view.md` §6
+is updated to match.
 
 ## What does _not_ change
 

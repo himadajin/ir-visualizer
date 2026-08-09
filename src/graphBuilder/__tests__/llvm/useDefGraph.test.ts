@@ -670,4 +670,69 @@ describe("llvm useDef graphBuilder", () => {
       });
     });
   });
+
+  describe("cross-function id uniqueness", () => {
+    it("node and edge ids stay unique across functions with identical labels, defs, params, and external names", () => {
+      // Two functions that are identical in every way the ids are built
+      // from — same block label ("entry"), same instruction defs/uses
+      // ("a", "b", "c"), same named parameter ("x"), same unresolved name
+      // ("undef") — so only the func_<name> prefix (spec §2) can keep
+      // instruction, argument, external, and edge ids from colliding.
+      const makeFunction = (name: string): LLVMFunction =>
+        func(
+          name,
+          [
+            block(
+              "entry",
+              "entry",
+              [
+                line({ text: "%a = add i32 1, 2", defs: ["a"] }),
+                line({
+                  text: "%b = mul i32 %a, %x",
+                  defs: ["b"],
+                  uses: ["a", "x"],
+                }),
+                line({
+                  text: "%c = add i32 %undef, 1",
+                  defs: ["c"],
+                  uses: ["undef"],
+                }),
+              ],
+              terminator({ text: "ret i32 %c", opcode: "ret", uses: ["c"] }),
+            ),
+          ],
+          [{ type: "i32", name: "%x" }],
+        );
+
+      const graph = convertASTToUseDefGraph(
+        moduleOf(makeFunction("foo"), makeFunction("bar")),
+      );
+
+      // 4 dataflow-participating lines per function (a, b, c, ret).
+      expect(instructionNodes(graph.nodes)).toHaveLength(8);
+      // 1 argument node + 1 external node per function.
+      expect(valueNodes(graph.nodes)).toHaveLength(4);
+      expectUniqueIds(graph.nodes);
+
+      // 4 edges per function: a->b, x->b, undef->c, c->ret.
+      expect(graph.edges).toHaveLength(8);
+      expectUniqueIds(graph.edges);
+
+      // Explicit edge-id uniqueness check: the "-a" suffix (edge id embeds
+      // the value name, spec §3) is identical for both functions, so this
+      // is exactly the case that would collide without the func_<name>
+      // prefix on the edge's source/target ids.
+      const edgeIdsEndingInA = graph.edges
+        .map((edge) => edge.id)
+        .filter((id) => id.endsWith("-a"));
+      expect(edgeIdsEndingInA).toHaveLength(2);
+      expect(new Set(edgeIdsEndingInA).size).toBe(2);
+      expect(edgeIdsEndingInA).toEqual(
+        expect.arrayContaining([
+          "e-func_foo_ud_entry_i0-func_foo_ud_entry_i1-a",
+          "e-func_bar_ud_entry_i0-func_bar_ud_entry_i1-a",
+        ]),
+      );
+    });
+  });
 });

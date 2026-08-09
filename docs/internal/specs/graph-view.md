@@ -28,16 +28,19 @@ covering test.
 ## 2. Graph updates — topology signature
 
 `useGraphData.updateGraph(graph, behavior)` (where `behavior` is the active view's
-`edgeBuilder`/`dagreOptions`, structurally satisfied by a mode object — see
+`edgeBuilder`/`layoutOptions`, structurally satisfied by a mode object — see
 `contracts/ir-mode-registry.md`) computes a **topology signature**:
 `direction | sorted node ids | sorted source-target pairs`.
 
 - **Signature changed** (first parse, node/edge added or removed, direction changed):
-  full Dagre re-layout; all positions are recomputed.
+  full **asynchronous** ELK re-layout; all positions and edge routes are recomputed. A
+  layout that resolves after a newer parse has started is discarded (generation counter),
+  so a stale layout can never overwrite a newer graph.
 - **Signature unchanged** (content-only edit, e.g. changing an instruction inside a block):
-  node **positions are preserved**, labels/content update in place, and each edge's rendered
-  type is re-derived by the mode's `IREdgeBuilder` with the previous type available
-  (SelectionDAG keeps types stable; LLVM/Mermaid re-classify from current positions).
+  synchronous update — node **positions are preserved**, labels/content update in place,
+  edges are rebuilt by the mode's `IREdgeBuilder` and inherit the previous edge's stored
+  route and back-edge flag by id (§4). A content edit can change a node's _size_, which the
+  stored route does not track; the next full layout corrects this (accepted drift).
 - Switching views always changes the signature (the two projections emit different node id
   namespaces), so each view switch performs a full re-layout; **positions are not preserved
   across view switches**. This is intended: the two projections have unrelated topologies, so
@@ -46,41 +49,64 @@ covering test.
 > Pinned by: `src/hooks/__tests__/useGraphData.test.ts` (layout on first call, position
 > preservation, re-layout on topology change, SelectionDAG position/edge-type stability)
 
-**Reset Layout** re-runs the full layout for the last parsed graph (using the active mode's
-edge builder and dagre options) and is a no-op before the first parse; the viewer then re-fits
-the viewport (after a 50 ms delay — _observed, untested_).
+**Reset Layout** re-runs the full (async) layout for the last parsed graph (using the active
+mode's edge builder and layout options) and is a no-op before the first parse; the viewer then
+re-fits the viewport (after a 50 ms delay — _observed, untested_).
 
 > Pinned by: `useGraphData.test.ts` ("resetLayout ...")
 
-## 3. Layout (Dagre)
+## 3. Layout (ELK)
 
-- Rank direction: explicit option → `GraphData.direction` → `"TD"`. `TD` places sources above
-  targets; `LR` places them left of targets.
-- Per-mode `dagreOptions` merge into the Dagre graph config (SelectionDAG: `ranksep: 50`).
-- Node boxes given to Dagre use the estimated dimensions from §5, so spacing reflects real
-  rendered sizes.
+Layout and edge routing are both computed by ELK (`elkjs`, layered algorithm), replacing
+Dagre — see `plans/2026-08-elk-edge-routing.md` for the rationale and agreed decisions.
+
+- `getLayoutedElements` is **async**: the elkjs bundle is dynamically imported on first use
+  and layout runs on the main thread (graphs are small; no worker).
+- Rank direction: explicit option → `GraphData.direction` → `"TD"`. `TD` maps to ELK
+  `elk.direction: DOWN`, `LR` to `RIGHT`.
+- Edge routing is `ORTHOGONAL`; per-mode `layoutOptions` (ELK option map) merge into the
+  root options (e.g. Use-Def's tighter spacing, SelectionDAG's layer spacing).
+- Node boxes given to ELK use the estimated dimensions from §5, so spacing reflects real
+  rendered sizes. Use-Def instruction nodes additionally declare `FIXED_POS` ports at
+  operand text offsets (`specs/llvm-use-def-view.md` §4).
 
 > Pinned by: `src/utils/__tests__/layout.test.ts` (positions assigned, direction respected,
-> no overlapping positions). `dagreOptions` merging: _observed, untested_.
+> no overlapping positions, routes attached). `layoutOptions` merging: _observed, untested_.
 
-## 4. Edge classification and rendering
+## 4. Edge routing and rendering
 
-Classification is mode-supplied (`IREdgeBuilder`, see `contracts/ir-mode-registry.md`):
+Every LLVM/Mermaid edge is rendered by one custom edge type, `routed`
+(`RoutedEdge.tsx`), which draws the ELK-computed route; there are no hand-drawn edge
+shapes anymore.
 
-- **LLVM/Mermaid** (`codeGraphEdgeBuilder`): an edge is a `backEdge` when it is a self-loop or
-  its source sits at or below its target (`source.y >= target.y`); otherwise `customBezier`.
-  `backEdge` renders as the large loop-around curve (`BackEdge.tsx`).
-- **SelectionDAG** (`selectionDAGEdgeBuilder`): never re-classifies; keeps the previous type on
-  updates, defaults to `customBezier`. Chain/glue edges render dashed and use per-operand/type
-  Handles (see `specs/selectiondag.md` §3). SelectionDAG edges place the arrow marker at the
-  **start** (pointing at the source), LLVM/Mermaid at the **end**.
+- The layout stores each edge's route on the React Flow edge:
+  `data.route = { points, sourcePos, targetPos }` — the orthogonal polyline's points and
+  the two endpoint nodes' layout positions (top-left), recorded for staleness detection.
+- `RoutedEdge` draws `points` as an orthogonal polyline with **rounded corners**; edge
+  labels (phi) render at the route midpoint.
+- **Drag fallback:** when an endpoint node's current position differs from the recorded
+  layout position (the user dragged it), the edge falls back to a live smoothstep path
+  between the current handle positions. **Reset layout** restores routed rendering.
+- **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a
+  self-loop or its target node lies entirely above its source node. Back edges render in
+  the loop accent color (muted purple `#8250df`, matching arrowhead) — "colored + upward
+  = loop-carried". This accent is graph grammar, not shell chrome (§6.6 still has no
+  accent token).
+- **Self-loops:** when ELK yields no usable route (and in the drag-fallback state), the
+  edge synthesizes a small orthogonal loop hugging the node's right side.
+- **SelectionDAG**: unaffected by routing — its edges connect per-operand/type Handles
+  and keep the handle-anchored bezier look via React Flow's built-in `default` edge with
+  `pathOptions.curvature`. Chain/glue edges render dashed (see `specs/selectiondag.md`
+  §3). SelectionDAG edges place the arrow marker at the **start** (pointing at the
+  source), LLVM/Mermaid at the **end**.
 
-> Pinned by: `layout.test.ts` (back edge / self-loop), `useGraphData.test.ts` (self-loop,
-> SelectionDAG type stability), `converter.test.ts` (dashed chain/glue, markerStart/markerEnd)
+> Pinned by: `layout.test.ts` (route attachment, back-edge / self-loop flagging),
+> `useGraphData.test.ts` (route preservation on content-only updates),
+> `converter.test.ts` (dashed chain/glue, markerStart/markerEnd)
 
 ## 5. Node dimension estimation
 
-Dagre needs node sizes before React renders anything, so `converter.ts` estimates them:
+ELK needs node sizes before React renders anything, so `converter.ts` estimates them:
 
 - Text nodes: character-count based. Char width/line height come from `getFontMetrics`
   (measures a monospace `M` in the DOM; falls back to 8×20 px in non-browser environments).
@@ -168,7 +194,9 @@ reset (§2).
   using the @xyflow/react 12.10 object form (e.g. `fitView({ padding: { left: "436px" } })`),
   so "fit" centers the graph in the _visible_ area. The padding is `0` while the panel is
   collapsed. This applies to the initial fit, the fit-view button, and the re-fit after Reset
-  Layout. _(observed, untested)_
+  Layout. Because layout is async (§2), the initial fit is triggered by
+  `useNodesInitialized` once the first layout's nodes are measured, not by the `fitView`
+  prop (which would fire before any nodes exist). _(observed, untested)_
 - The cluster stays clear of any bottom inset the shell reserves: in narrow mode with the
   sheet open it is lifted above the sheet by the sheet's height, and it returns to the
   viewport's bottom-right corner whenever that inset is `0`. _(observed, untested)_

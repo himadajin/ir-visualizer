@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
+  useNodesInitialized,
+  useReactFlow,
   type Node,
   type Edge,
   type OnNodesChange,
@@ -9,8 +11,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import CustomBezierEdge from "./CustomBezierEdge";
-import BackEdge from "./BackEdge";
+import RoutedEdge from "./RoutedEdge";
 
 import CodeNode from "./CodeNode";
 import { CanvasControls, type FitViewPadding } from "./CanvasControls";
@@ -22,8 +23,25 @@ import {
 } from "../AppShell/shellTokens";
 
 const edgeTypes = {
-  customBezier: CustomBezierEdge,
-  backEdge: BackEdge,
+  routed: RoutedEdge,
+};
+
+/**
+ * Layout is async (specs/graph-view.md §2), so the first render has zero
+ * nodes and React Flow's `fitView` prop would fire on nothing. This fits
+ * once, when the first layout's nodes have been measured (§6.4).
+ */
+const InitialFit = ({ padding }: { padding: FitViewPadding }) => {
+  const nodesInitialized = useNodesInitialized();
+  const { fitView } = useReactFlow();
+  const hasFitted = useRef(false);
+  useEffect(() => {
+    if (!hasFitted.current && nodesInitialized) {
+      hasFitted.current = true;
+      void fitView({ padding, duration: 0 });
+    }
+  }, [nodesInitialized, fitView, padding]);
+  return null;
 };
 
 // codeNode is the mode-agnostic fallback (used when a GraphNode has no
@@ -39,7 +57,8 @@ interface GraphViewerProps {
   edges: Edge[];
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
-  onResetLayout: () => void;
+  /** Re-runs the (async) layout; resolves when positions have been applied. */
+  onResetLayout: () => Promise<void> | void;
   /**
    * Space (px) the floating editor panel takes up along the viewport edge it
    * is anchored to — its width plus its margin on the left in wide mode, its
@@ -65,19 +84,15 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
     [fitViewInset],
   );
 
-  const fitViewOptions = useMemo(
-    () => ({ padding: fitViewPadding }),
-    [fitViewPadding],
-  );
-
   const handleResetLayout = () => {
-    onResetLayout();
-    // Slight delay to allow nodes to update position before fitting view
-    setTimeout(() => {
-      if (rfInstance) {
-        void rfInstance.fitView({ padding: fitViewPadding, duration: 0 });
-      }
-    }, 50);
+    void Promise.resolve(onResetLayout()).then(() => {
+      // Slight delay to allow nodes to update position before fitting view
+      setTimeout(() => {
+        if (rfInstance) {
+          void rfInstance.fitView({ padding: fitViewPadding, duration: 0 });
+        }
+      }, 50);
+    });
   };
 
   return (
@@ -102,9 +117,8 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
         // graphs — or the narrow-mode visible strip — can fit; 0.1 lets every
         // fit actually contain the graph (specs/graph-view.md §6.1).
         minZoom={0.1}
-        fitView
-        fitViewOptions={fitViewOptions}
       >
+        <InitialFit padding={fitViewPadding} />
         <Background color={SHELL_COLORS.groundDots} />
         <CanvasControls
           fitViewPadding={fitViewPadding}

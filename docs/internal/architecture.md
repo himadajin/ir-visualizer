@@ -7,11 +7,11 @@ One-page orientation for the codebase. Read this first; follow the links for the
 ```mermaid
 flowchart TD
   Editor["CodeEditor (Monaco + Shiki)"] -->|"onChange(text)"| Workspace["useIRWorkspace<br/>(mode state + 750ms debounce)"]
-  Registry["IR mode registry (src/irModes)<br/>parser / defaultCode / editorLanguage /<br/>nodeTypes / edgeBuilder / dagreOptions"] -.->|"active mode"| Workspace
+  Registry["IR mode registry (src/irModes)<br/>parser / defaultCode / editorLanguage /<br/>nodeTypes / edgeBuilder / layoutOptions"] -.->|"active mode"| Workspace
   Workspace -->|"mode.parse(code)"| Parser["Parser (src/parser, Ohm-js)"]
   Parser -->|AST| Builder["graphBuilder (src/graphBuilder)"]
   Builder -->|GraphData| GraphHook["useGraphData<br/>(topology signature,<br/>position preservation)"]
-  GraphHook -->|"getLayoutedElements"| Layout["layout.ts (Dagre) +<br/>converter.ts (sizing)"]
+  GraphHook -->|"getLayoutedElements"| Layout["layout.ts (ELK) +<br/>converter.ts (sizing)"]
   Layout -->|"React Flow nodes/edges"| Viewer["GraphViewer (React Flow)<br/>node components from registry"]
 ```
 
@@ -19,10 +19,10 @@ flowchart TD
   `parse()` runs. Parse errors are caught and shown in the editor panel's status footer; the
   previous graph stays.
 - `parse()` is parser + graphBuilder composed: text → AST → `GraphData` (plain, React-free).
-- `useGraphData` decides between a full Dagre re-layout (topology changed) and a
+- `useGraphData` decides between a full (async) ELK re-layout (topology changed) and a
   position-preserving content update (same topology). See `specs/graph-view.md`.
 - Layout converts `GraphData` to React Flow nodes/edges, estimating node dimensions from
-  shared font/style constants so Dagre's boxes match what CSS later renders.
+  shared font/style constants so ELK's boxes match what CSS later renders.
 
 ## Layers
 
@@ -33,7 +33,7 @@ flowchart TD
 | Graph builder       | `src/graphBuilder`        | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                             | no          |
 | Graph types         | `src/types/graph.ts`      | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                           | no          |
 | IR mode registry    | `src/irModes`             | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                           | import only |
-| Layout / conversion | `src/utils`               | Dagre layout, React Flow node/edge construction, node sizing, font metrics                    | types only  |
+| Layout / conversion | `src/utils`               | ELK layout and edge routing, React Flow node/edge construction, node sizing, font metrics     | types only  |
 | Hooks               | `src/hooks`               | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `usePaneResize`       | yes         |
 | App shell           | `src/components/AppShell` | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer) | yes         |
 | Graph rendering     | `src/components/Graph`    | React Flow node/edge components (+ colocated `*.stories.tsx`)                                 | yes         |

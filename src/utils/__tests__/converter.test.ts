@@ -143,6 +143,7 @@ describe("calculateNodeDimensions", () => {
       astData: {
         text: label,
         def: "1",
+        uses: ["0"],
         isTerminator: false,
         blockLabel: "entry",
         blockIndex: 0,
@@ -253,7 +254,7 @@ describe("createReactFlowEdge", () => {
     expect(rfEdge.source).toBe("A");
     expect(rfEdge.target).toBe("B");
     expect(rfEdge.label).toBe("true");
-    expect(rfEdge.type).toBe("customBezier");
+    expect(rfEdge.type).toBe("routed");
     expect(rfEdge.animated).toBe(false);
     expect(rfEdge.style).toEqual({ stroke: "#666" });
     expect(rfEdge.markerEnd).toEqual({

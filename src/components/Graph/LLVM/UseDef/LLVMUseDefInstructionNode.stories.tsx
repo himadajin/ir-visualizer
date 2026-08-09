@@ -28,6 +28,7 @@ export const Default: Story = {
     astData: {
       text: "%5 = add i32 %0, 45",
       def: "5",
+      uses: ["0"],
       isTerminator: false,
       blockLabel: "entry",
       blockIndex: 0,
@@ -40,6 +41,7 @@ export const Terminator: Story = {
     astData: {
       text: "br i1 %2, label %4, label %7",
       def: null,
+      uses: ["2"],
       isTerminator: true,
       blockLabel: "4",
       blockIndex: 1,
@@ -52,6 +54,7 @@ export const Phi: Story = {
     astData: {
       text: "%10 = phi i32 [ %1, %7 ], [ %15, %12 ]",
       def: "10",
+      uses: ["1", "15"],
       isTerminator: false,
       blockLabel: "loop.header",
       blockIndex: 2,
@@ -64,6 +67,7 @@ export const LongLine: Story = {
     astData: {
       text: "%42 = call noundef i32 @very_long_function_name(ptr noundef %ptr, i64 noundef %len, i32 noundef %flags)",
       def: "42",
+      uses: ["ptr", "len", "flags"],
       isTerminator: false,
       blockLabel: "cleanup.cont.unwind",
       blockIndex: 3,
@@ -88,6 +92,7 @@ export const BadgePalette: Story = {
     astData: {
       text: "%1 = load i32, ptr %p",
       def: "1",
+      uses: ["p"],
       isTerminator: false,
       blockLabel: "bb0",
       blockIndex: 0,
@@ -103,6 +108,7 @@ export const BadgePalette: Story = {
           astData={{
             text: `%${blockIndex} = load i32, ptr %p`,
             def: String(blockIndex),
+            uses: ["p"],
             isTerminator: false,
             blockLabel: `bb${blockIndex}`,
             blockIndex,

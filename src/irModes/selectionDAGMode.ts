@@ -32,5 +32,5 @@ export const selectionDAGMode = {
     selectionDAGNode: SelectionDAGNode,
   },
   edgeBuilder: selectionDAGEdgeBuilder,
-  dagreOptions: { ranksep: 50 },
+  layoutOptions: { "elk.layered.spacing.nodeNodeBetweenLayers": "50" },
 } satisfies IRModeDefinition;

@@ -1,8 +1,10 @@
-import type { NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { LLVMUseDefInstructionData } from "../../../../ast/llvmAST";
 import NodeShell from "../../common/NodeShell";
 import HighlightedCode from "../../common/HighlightedCode";
+import { getUseDefPorts } from "./useDefPorts";
 import {
+  USE_DEF_CARD_BORDER,
   USE_DEF_BADGE_BORDER_RADIUS,
   USE_DEF_BADGE_FONT_SIZE,
   USE_DEF_BADGE_GAP,
@@ -23,6 +25,7 @@ import {
  */
 const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
   const instruction = data.astData as LLVMUseDefInstructionData;
+  const ports = getUseDefPorts(instruction);
   const tint =
     USE_DEF_BADGE_PALETTE[
       ((instruction.blockIndex % USE_DEF_BADGE_PALETTE.length) +
@@ -61,6 +64,34 @@ const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
         language="llvm"
         style={{ whiteSpace: "pre" }}
       />
+      {/* Per-operand ports (specs/llvm-use-def-view.md §4): a target handle
+          per used name at that operand's text position on the top edge, and
+          a "def" source handle under the defined name. Port x is measured
+          from the card's outer edge; absolute `left` is relative to the
+          padding box, hence the border correction. */}
+      {ports.map((port) => (
+        <Handle
+          key={port.id}
+          id={port.id}
+          type={port.side === "top" ? "target" : "source"}
+          position={port.side === "top" ? Position.Top : Position.Bottom}
+          isConnectable={false}
+          style={{
+            opacity: 0,
+            ...(port.side === "top" ? { top: 0 } : { bottom: 0 }),
+            left:
+              port.x === null
+                ? "50%"
+                : `${String(port.x - USE_DEF_CARD_BORDER)}px`,
+            transform:
+              port.side === "top"
+                ? "translate(-50%, -50%)"
+                : "translate(-50%, 50%)",
+            width: "1px",
+            height: "1px",
+          }}
+        />
+      ))}
     </NodeShell>
   );
 };

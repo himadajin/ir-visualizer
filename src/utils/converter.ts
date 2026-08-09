@@ -245,14 +245,23 @@ export const createReactFlowNode = (
   };
 };
 
+/**
+ * Loop accent: back edges (and self-loops) draw in this muted purple so
+ * "colored + upward = loop-carried" (specs/graph-view.md §4). Graph grammar,
+ * not shell chrome.
+ */
+export const BACK_EDGE_COLOR = "#8250df";
+
 export const createReactFlowEdge = (
   edge: GraphEdge,
-  edgeType: string = "customBezier",
+  edgeType: string = "routed",
 ): Edge => {
   return {
     id: edge.id,
     source: edge.source,
     target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
     label: edge.label,
     animated: false,
     type: edgeType,
@@ -268,10 +277,7 @@ export const createReactFlowEdge = (
   };
 };
 
-export const createSelectionDAGReactFlowEdge = (
-  edge: GraphEdge,
-  edgeType: string = "customBezier",
-): Edge => {
+export const createSelectionDAGReactFlowEdge = (edge: GraphEdge): Edge => {
   return {
     id: edge.id,
     source: edge.source,
@@ -280,7 +286,11 @@ export const createSelectionDAGReactFlowEdge = (
     targetHandle: edge.targetHandle,
     label: edge.label,
     animated: false,
-    type: edgeType,
+    // React Flow's built-in bezier; the high curvature keeps operand fan-ins
+    // visually separated near the node. `pathOptions` is honored by the
+    // built-in bezier edge but missing from the `Edge` type, hence the cast.
+    type: "default",
+    ...({ pathOptions: { curvature: 0.75 } } as Partial<Edge>),
     zIndex: 0,
     markerStart: {
       type: MarkerType.ArrowClosed,

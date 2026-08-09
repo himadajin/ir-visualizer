@@ -9,6 +9,7 @@ import {
   NODE_PADDING,
 } from "../converter";
 import type { GraphNode, GraphEdge } from "../../types/graph";
+import { USE_DEF_BADGE_ROW_HEIGHT } from "../../components/Graph/LLVM/UseDef/useDefStyleConstants";
 
 describe("createSelectionDAGReactFlowEdge", () => {
   it("should create a normal edge when isChainOrGlue is false", () => {
@@ -133,6 +134,38 @@ describe("calculateNodeDimensions", () => {
     expect(dims.height).toBe(2 * FALLBACK_LINE_HEIGHT + NODE_PADDING * 2);
   });
 
+  it("should give a use-def instruction card a taller box than a value pill", () => {
+    const label = "%1 = add i32 %0, 1";
+    const instruction: GraphNode = {
+      id: "f_main_ud_entry_i0",
+      label,
+      nodeType: "llvm-useDefInstruction",
+      astData: {
+        text: label,
+        def: "1",
+        isTerminator: false,
+        blockLabel: "entry",
+        blockIndex: 0,
+      },
+    };
+    const value: GraphNode = {
+      id: "f_main_udarg_a",
+      label,
+      nodeType: "llvm-useDefValue",
+      astData: { name: "a", kind: "argument", paramType: "i32" },
+    };
+
+    const instructionDims = calculateNodeDimensions(instruction);
+    const valueDims = calculateNodeDimensions(value);
+
+    // Same text, same width; the instruction card additionally stacks the
+    // block badge row above the code line.
+    expect(instructionDims.width).toBe(valueDims.width);
+    expect(instructionDims.height).toBe(
+      valueDims.height + USE_DEF_BADGE_ROW_HEIGHT,
+    );
+  });
+
   it("should handle empty label", () => {
     const node: GraphNode = {
       id: "E",
@@ -249,5 +282,28 @@ describe("createReactFlowEdge", () => {
 
     const rfEdge = createReactFlowEdge(graphEdge);
     expect(rfEdge.label).toBeUndefined();
+  });
+
+  it("should create a dashed edge when dashed is set", () => {
+    const graphEdge: GraphEdge = {
+      id: "e3",
+      source: "A",
+      target: "B",
+      dashed: true,
+    };
+
+    const rfEdge = createReactFlowEdge(graphEdge);
+    expect(rfEdge.style).toEqual({ stroke: "#666", strokeDasharray: "6 6" });
+  });
+
+  it("should not set strokeDasharray when dashed is not set", () => {
+    const graphEdge: GraphEdge = {
+      id: "e4",
+      source: "A",
+      target: "B",
+    };
+
+    const rfEdge = createReactFlowEdge(graphEdge);
+    expect(rfEdge.style).not.toHaveProperty("strokeDasharray");
   });
 });

@@ -12,6 +12,13 @@ import {
   NODE_LINE_HEIGHT,
 } from "../components/Graph/common/nodeTextStyle";
 import { CODE_FRAGMENT_PADDING_Y } from "../components/Graph/common/CodeFragment";
+import {
+  USE_DEF_BADGE_FONT_SIZE,
+  USE_DEF_BADGE_PADDING_X,
+  USE_DEF_BADGE_ROW_HEIGHT,
+  USE_DEF_CARD_BORDER,
+  USE_DEF_CARD_PADDING,
+} from "../components/Graph/LLVM/UseDef/useDefStyleConstants";
 import { getFontMetrics } from "./fontUtils";
 
 export const NODE_PADDING = 20;
@@ -147,9 +154,69 @@ const calculateCodeNodeDimensions = (
   return { width, height };
 };
 
+// Use-def instruction/value cards render through NodeShell (10px padding,
+// 1px border), not the 20px NODE_PADDING boxes, so they get their own
+// estimation. The Use-Def graph is flat (no containers), so an inaccurate
+// estimate is cosmetic — it only shifts Dagre's spacing — and erring a few
+// px large reads better than nodes overlapping.
+const MIN_CHARS_USE_DEF = 8;
+const MAX_CHARS_USE_DEF = 80;
+const USE_DEF_SIZE_SLACK = 8;
+
+/**
+ * Width of the block badge chip: its text at the badge font size (scaled
+ * from the measured monospace metrics) plus its horizontal padding. A short
+ * instruction under a long block label would otherwise get a card narrower
+ * than its own badge.
+ */
+const estimateBadgeWidth = (blockLabel: string, charWidth: number) => {
+  const scale = USE_DEF_BADGE_FONT_SIZE / parseFloat(NODE_FONT_SIZE);
+  return blockLabel.length * charWidth * scale + USE_DEF_BADGE_PADDING_X * 2;
+};
+
+const calculateUseDefCardDimensions = (node: GraphNode) => {
+  const metrics = getFontMetrics(
+    NODE_FONT_FAMILY,
+    NODE_FONT_SIZE,
+    NODE_LINE_HEIGHT,
+  );
+  const lines = getLabelLines(node.label);
+  const { maxLineLength, totalLines } = measureWrappedLines(
+    lines,
+    MAX_CHARS_USE_DEF,
+  );
+  const chars = Math.max(
+    Math.min(maxLineLength, MAX_CHARS_USE_DEF),
+    MIN_CHARS_USE_DEF,
+  );
+  // NodeShell frame: padding and border on both sides.
+  const frame = (USE_DEF_CARD_PADDING + USE_DEF_CARD_BORDER) * 2;
+  // Instruction cards stack a block badge chip above the code line; value
+  // pills have no badge row.
+  const badgeLabel =
+    node.nodeType === "llvm-useDefInstruction" ? node.astData.blockLabel : null;
+  const badgeRow = badgeLabel === null ? 0 : USE_DEF_BADGE_ROW_HEIGHT;
+  const contentWidth = Math.max(
+    chars * metrics.width,
+    badgeLabel === null ? 0 : estimateBadgeWidth(badgeLabel, metrics.width),
+  );
+
+  return {
+    width: contentWidth + frame + USE_DEF_SIZE_SLACK,
+    height: totalLines * metrics.height + frame + badgeRow + USE_DEF_SIZE_SLACK,
+  };
+};
+
 export const calculateNodeDimensions = (node: GraphNode) => {
   if (node.nodeType === "selectionDAG-node") {
     return calculateSelectionDAGDimensions(node);
+  }
+
+  if (
+    node.nodeType === "llvm-useDefInstruction" ||
+    node.nodeType === "llvm-useDefValue"
+  ) {
+    return calculateUseDefCardDimensions(node);
   }
 
   return calculateCodeNodeDimensions(node);
@@ -194,7 +261,10 @@ export const createReactFlowEdge = (
       type: MarkerType.ArrowClosed,
       color: "#666",
     },
-    style: { stroke: "#666" },
+    style: {
+      stroke: "#666",
+      ...(edge.dashed ? { strokeDasharray: "6 6" } : {}),
+    },
   };
 };
 

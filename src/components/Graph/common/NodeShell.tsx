@@ -1,5 +1,19 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Handle, Position } from "@xyflow/react";
+import {
+  NODE_BORDER_RADIUS,
+  NODE_BORDER_WIDTH,
+  NODE_FONT_FAMILY,
+  NODE_FONT_SIZE,
+  NODE_HEADER_BACKGROUND,
+  NODE_HEADER_BORDER_COLOR,
+  NODE_HEADER_FONT_SIZE,
+  NODE_HEADER_HEIGHT,
+  NODE_HEADER_TEXT_COLOR,
+  NODE_LINE_HEIGHT,
+  NODE_PADDING_X,
+  NODE_PADDING_Y,
+} from "./nodeTextStyle";
 
 export interface NodeShellProps {
   children: ReactNode;
@@ -11,56 +25,65 @@ export interface NodeShellProps {
   style?: CSSProperties;
 }
 
+/**
+ * The shared node frame (specs/graph-view.md §5–§6.6): 1px border, 2px
+ * radius, white surface, dense monospace, and — when a block label is
+ * present — a full-width header band with a bottom hairline. The frame
+ * metrics all come from nodeTextStyle.ts so converter.ts can estimate the
+ * exact rendered box. `style` lands on the wrapper: border overrides
+ * (Mermaid shapes) apply directly, inherited text properties reach the
+ * content.
+ */
 const NodeShell = ({
   children,
-  borderRadius = "4px",
+  borderRadius = `${NODE_BORDER_RADIUS}px`,
   borderColor = "#777",
   backgroundColor = "#fff",
   headerLabel,
-  headerColor = "#f0f0f0",
+  headerColor = NODE_HEADER_BACKGROUND,
   style,
 }: NodeShellProps) => {
   return (
     <div
       className="node-shell-wrapper"
       style={{
-        padding: headerLabel ? "28px 10px 10px 10px" : "10px",
         borderRadius,
-        border: `1px solid ${borderColor}`,
+        border: `${NODE_BORDER_WIDTH}px solid ${borderColor}`,
         background: backgroundColor,
-        fontFamily: "monospace",
-        fontSize: "14px",
-        lineHeight: "20px",
+        fontFamily: NODE_FONT_FAMILY,
+        fontSize: NODE_FONT_SIZE,
+        lineHeight: NODE_LINE_HEIGHT,
         textAlign: "left",
         height: "100%",
         boxSizing: "border-box",
         position: "relative",
+        overflow: "hidden",
         ...style,
       }}
     >
-      {headerLabel && (
+      {headerLabel !== undefined && (
         <div
           style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            padding: "2px 6px",
+            boxSizing: "border-box",
+            height: `${NODE_HEADER_HEIGHT}px`,
+            display: "flex",
+            alignItems: "center",
+            padding: `0 ${NODE_PADDING_X}px`,
             backgroundColor: headerColor,
-            borderTopLeftRadius: borderRadius,
-            borderBottomRightRadius: borderRadius,
-            borderRight: "1px solid #ddd",
-            borderBottom: "1px solid #ddd",
-            fontSize: "12px",
-            fontWeight: "bold",
-            color: "#555",
-            zIndex: 10,
+            borderBottom: `1px solid ${NODE_HEADER_BORDER_COLOR}`,
+            fontSize: `${NODE_HEADER_FONT_SIZE}px`,
+            fontWeight: 600,
+            color: NODE_HEADER_TEXT_COLOR,
+            whiteSpace: "nowrap",
           }}
         >
           {headerLabel}
         </div>
       )}
 
-      {children}
+      <div style={{ padding: `${NODE_PADDING_Y}px ${NODE_PADDING_X}px` }}>
+        {children}
+      </div>
 
       <Handle
         type="target"

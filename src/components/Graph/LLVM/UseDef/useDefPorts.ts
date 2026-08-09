@@ -1,13 +1,16 @@
 import { getFontMetrics } from "../../../../utils/fontUtils";
 import type { LLVMUseDefInstructionData } from "../../../../ast/llvmAST";
 import {
+  NODE_BORDER_WIDTH,
   NODE_FONT_FAMILY,
   NODE_FONT_SIZE,
   NODE_LINE_HEIGHT,
+  NODE_PADDING_X,
 } from "../../common/nodeTextStyle";
 import {
-  USE_DEF_CARD_BORDER,
-  USE_DEF_CARD_PADDING,
+  USE_DEF_BADGE_FONT_SIZE,
+  USE_DEF_BADGE_GAP,
+  USE_DEF_BADGE_PADDING_X,
 } from "./useDefStyleConstants";
 
 /**
@@ -16,7 +19,8 @@ import {
  * operand's first occurrence in the monospace text, plus a source port under
  * the def name. Both the node component (React Flow `Handle` positions) and
  * the ELK layout (`FIXED_POS` ports) call this, so routed edges aim at the
- * exact pixel the handle actually sits on.
+ * exact pixel the handle actually sits on. The code line starts after the
+ * inline block badge, so every port shifts right by the badge's width.
  */
 
 export interface UseDefPort {
@@ -44,10 +48,33 @@ export const findOperandToken = (
   return { index: match.index, length: match[0].length };
 };
 
-/** Px from the card's left border to the first text column. */
-const CARD_TEXT_LEFT = USE_DEF_CARD_PADDING + USE_DEF_CARD_BORDER;
+/**
+ * Rendered width of the inline block badge chip: its label at the badge font
+ * size (the chip is monospace, so this scales linearly from the measured
+ * char width) plus its horizontal padding.
+ */
+export const estimateBadgeWidth = (blockLabel: string): number => {
+  const { width: charWidth } = getFontMetrics(
+    NODE_FONT_FAMILY,
+    NODE_FONT_SIZE,
+    NODE_LINE_HEIGHT,
+  );
+  const scale = USE_DEF_BADGE_FONT_SIZE / parseFloat(NODE_FONT_SIZE);
+  return blockLabel.length * charWidth * scale + USE_DEF_BADGE_PADDING_X * 2;
+};
 
-const tokenCenterX = (text: string, name: string): number | null => {
+/** Px from the card's left edge to the code line's first character. */
+export const cardTextLeft = (blockLabel: string): number =>
+  NODE_BORDER_WIDTH +
+  NODE_PADDING_X +
+  estimateBadgeWidth(blockLabel) +
+  USE_DEF_BADGE_GAP;
+
+const tokenCenterX = (
+  text: string,
+  name: string,
+  textLeft: number,
+): number | null => {
   const token = findOperandToken(text, name);
   if (token === null) return null;
   const { width: charWidth } = getFontMetrics(
@@ -55,7 +82,7 @@ const tokenCenterX = (text: string, name: string): number | null => {
     NODE_FONT_SIZE,
     NODE_LINE_HEIGHT,
   );
-  return CARD_TEXT_LEFT + (token.index + token.length / 2) * charWidth;
+  return textLeft + (token.index + token.length / 2) * charWidth;
 };
 
 /**
@@ -67,15 +94,16 @@ const tokenCenterX = (text: string, name: string): number | null => {
 export const getUseDefPorts = (
   data: LLVMUseDefInstructionData,
 ): UseDefPort[] => {
+  const textLeft = cardTextLeft(data.blockLabel);
   const ports: UseDefPort[] = data.uses.map((name) => ({
     id: `u-${name}`,
-    x: tokenCenterX(data.text, name),
+    x: tokenCenterX(data.text, name, textLeft),
     side: "top" as const,
   }));
   if (data.def !== null) {
     ports.push({
       id: "def",
-      x: tokenCenterX(data.text, data.def),
+      x: tokenCenterX(data.text, data.def, textLeft),
       side: "bottom",
     });
   }

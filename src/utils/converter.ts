@@ -7,31 +7,26 @@ import {
   SELECTION_DAG_ITEM_PADDING,
 } from "../components/Graph/SelectionDAG/selectionDAGStyleConstants";
 import {
+  NODE_BORDER_WIDTH,
   NODE_FONT_FAMILY,
   NODE_FONT_SIZE,
+  NODE_HEADER_HEIGHT,
   NODE_LINE_HEIGHT,
+  NODE_PADDING_X,
+  NODE_PADDING_Y,
 } from "../components/Graph/common/nodeTextStyle";
 import { CODE_FRAGMENT_PADDING_Y } from "../components/Graph/common/CodeFragment";
-import {
-  USE_DEF_BADGE_FONT_SIZE,
-  USE_DEF_BADGE_PADDING_X,
-  USE_DEF_BADGE_ROW_HEIGHT,
-  USE_DEF_CARD_BORDER,
-  USE_DEF_CARD_PADDING,
-} from "../components/Graph/LLVM/UseDef/useDefStyleConstants";
+import { USE_DEF_BADGE_GAP } from "../components/Graph/LLVM/UseDef/useDefStyleConstants";
+import { estimateBadgeWidth } from "../components/Graph/LLVM/UseDef/useDefPorts";
 import { getFontMetrics } from "./fontUtils";
-
-export const NODE_PADDING = 20;
 
 // Configuration for min and max characters width
 const MIN_CHARS_MERMAID = 10;
 const MAX_CHARS_MERMAID = 30;
-const MIN_CHARS_LLVM = 40;
+const MIN_CHARS_LLVM = 16;
 const MAX_CHARS_LLVM = 80;
 const MIN_CHARS_SELECTION_DAG = 12;
 const MAX_CHARS_SELECTION_DAG = 50;
-
-const HEADER_OFFSET = 24;
 
 /**
  * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
@@ -144,35 +139,26 @@ const calculateCodeNodeDimensions = (
   const effectiveMaxChars = Math.min(maxLineLength, maxChars);
   const finalChars = Math.max(effectiveMaxChars, minChars);
 
-  const width = finalChars * metrics.width + NODE_PADDING * 2;
+  // Exactly the rendered NodeShell frame (specs/graph-view.md §5).
+  const width =
+    finalChars * metrics.width + (NODE_PADDING_X + NODE_BORDER_WIDTH) * 2;
   const hasLabel = node.blockLabel !== undefined;
   const height =
     totalLines * metrics.height +
-    NODE_PADDING * 2 +
-    (hasLabel ? HEADER_OFFSET : 0);
+    (NODE_PADDING_Y + NODE_BORDER_WIDTH) * 2 +
+    (hasLabel ? NODE_HEADER_HEIGHT : 0);
 
   return { width, height };
 };
 
-// Use-def instruction/value cards render through NodeShell (10px padding,
-// 1px border), not the 20px NODE_PADDING boxes, so they get their own
+// Use-def instruction/value cards are single-row NodeShell cards with an
+// inline block badge (specs/llvm-use-def-view.md §4), so they get their own
 // estimation. The Use-Def graph is flat (no containers), so an inaccurate
-// estimate is cosmetic — it only shifts Dagre's spacing — and erring a few
+// estimate is cosmetic — it only shifts layout spacing — and erring a few
 // px large reads better than nodes overlapping.
 const MIN_CHARS_USE_DEF = 8;
 const MAX_CHARS_USE_DEF = 80;
 const USE_DEF_SIZE_SLACK = 8;
-
-/**
- * Width of the block badge chip: its text at the badge font size (scaled
- * from the measured monospace metrics) plus its horizontal padding. A short
- * instruction under a long block label would otherwise get a card narrower
- * than its own badge.
- */
-const estimateBadgeWidth = (blockLabel: string, charWidth: number) => {
-  const scale = USE_DEF_BADGE_FONT_SIZE / parseFloat(NODE_FONT_SIZE);
-  return blockLabel.length * charWidth * scale + USE_DEF_BADGE_PADDING_X * 2;
-};
 
 const calculateUseDefCardDimensions = (node: GraphNode) => {
   const metrics = getFontMetrics(
@@ -190,20 +176,20 @@ const calculateUseDefCardDimensions = (node: GraphNode) => {
     MIN_CHARS_USE_DEF,
   );
   // NodeShell frame: padding and border on both sides.
-  const frame = (USE_DEF_CARD_PADDING + USE_DEF_CARD_BORDER) * 2;
-  // Instruction cards stack a block badge chip above the code line; value
-  // pills have no badge row.
+  const frameX = (NODE_PADDING_X + NODE_BORDER_WIDTH) * 2;
+  const frameY = (NODE_PADDING_Y + NODE_BORDER_WIDTH) * 2;
+  // Instruction cards put the block badge chip inline, left of the code
+  // line; value pills have no badge.
   const badgeLabel =
     node.nodeType === "llvm-useDefInstruction" ? node.astData.blockLabel : null;
-  const badgeRow = badgeLabel === null ? 0 : USE_DEF_BADGE_ROW_HEIGHT;
-  const contentWidth = Math.max(
-    chars * metrics.width,
-    badgeLabel === null ? 0 : estimateBadgeWidth(badgeLabel, metrics.width),
-  );
+  const badgeSpan =
+    badgeLabel === null
+      ? 0
+      : estimateBadgeWidth(badgeLabel) + USE_DEF_BADGE_GAP;
 
   return {
-    width: contentWidth + frame + USE_DEF_SIZE_SLACK,
-    height: totalLines * metrics.height + frame + badgeRow + USE_DEF_SIZE_SLACK,
+    width: badgeSpan + chars * metrics.width + frameX + USE_DEF_SIZE_SLACK,
+    height: totalLines * metrics.height + frameY + USE_DEF_SIZE_SLACK,
   };
 };
 

@@ -109,15 +109,20 @@ shapes anymore.
 ELK needs node sizes before React renders anything, so `converter.ts` estimates them:
 
 - Text nodes: character-count based. Char width/line height come from `getFontMetrics`
-  (measures a monospace `M` in the DOM; falls back to 8×20 px in non-browser environments).
-  Width clamps per mode: Mermaid 10–30 chars, LLVM 40–80, SelectionDAG fallback 12–50;
-  plus `NODE_PADDING` (20 px per side) and a 24 px header offset when a block label chip is
-  present (`blockLabel !== undefined`, so labeled and `null`-labeled entry blocks both count).
+  (measures a monospace `M` in the DOM; falls back to 8×16 px in non-browser environments).
+  Width clamps per mode: Mermaid 10–30 chars, LLVM 16–80, SelectionDAG fallback 12–50. The
+  estimated box is exactly the rendered NodeShell frame:
+  `chars·charW + 2·(NODE_PADDING_X + NODE_BORDER_WIDTH)` wide and
+  `lines·lineHeight + 2·(NODE_PADDING_Y + NODE_BORDER_WIDTH)` tall, plus
+  `NODE_HEADER_HEIGHT` when a block label band is present (`blockLabel !== undefined`, so
+  labeled and `null`-labeled entry blocks both count).
 - SelectionDAG nodes: structural estimation mirroring `SelectionDAGNode.tsx`'s row/cell layout.
-- The estimation and the rendered CSS share single-source constants
-  (`common/nodeTextStyle.ts`, `SelectionDAG/selectionDAGStyleConstants.ts`,
-  `CodeFragment.tsx`'s exported paddings) — when changing node styling, change the constant,
-  never a literal, or layout spacing silently drifts from rendering.
+- The estimation and the rendered CSS share single-source constants — `common/nodeTextStyle.ts`
+  owns the whole node frame (font 12 px / line height 16 px, paddings 8×6, border 1 px, radius
+  2 px, header band 20 px), with `SelectionDAG/selectionDAGStyleConstants.ts` and
+  `CodeFragment.tsx`'s exported paddings for their structures. When changing node styling,
+  change the constant, never a literal, or layout spacing silently drifts from rendering
+  (see `plans/2026-08-node-visual-compaction.md`).
 
 > Pinned by: `src/utils/__tests__/converter.test.ts` (mermaid/LLVM/wrapping/header-offset/
 > empty-label cases)
@@ -211,10 +216,11 @@ drag-resizer is wide-mode-only. _(observed, untested)_
 
 Floating chrome — editor panel, collapsed pill, control cluster — uses the quiet gray
 language: neutral grays, sans-serif type, and light borders, distinct from the graph nodes'
-own grammar in `src/components/Graph/common/NodeShell.tsx` (`1px solid #777` border, `4px`
-radius, white surface, monospace type, corner-chip idiom). That NodeShell grammar — including
-the corner-chip idiom — remains exclusively a graph-node affordance; the shell chrome does not
-borrow it, and the editor panel is chrome around the canvas, not a node itself.
+own grammar in `src/components/Graph/common/NodeShell.tsx` (`1px solid #777` border, `2px`
+radius, white surface, dense 12 px monospace, full-width header band —
+`plans/2026-08-node-visual-compaction.md`). That NodeShell grammar — including the header
+band — remains exclusively a graph-node affordance; the shell chrome does not borrow it, and
+the editor panel is chrome around the canvas, not a node itself.
 
 | Token          | Value                                                                  | Use                                                                                                                                                                                                                                          |
 | -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

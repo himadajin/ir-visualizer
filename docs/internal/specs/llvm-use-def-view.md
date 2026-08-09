@@ -165,16 +165,18 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   instruction card exposes one target `Handle` (id `u-<name>`) per entry in
   `uses`, horizontally positioned at the first occurrence of `%name` in the
   monospace text (measured with the same `getFontMetrics` char width the size
-  estimator uses), on the card's top edge; and a source `Handle` under the
-  `def` name on the bottom edge. A name that cannot be located in the text
-  falls back to the default centered handle. The layout declares the same
-  offsets as ELK `FIXED_POS` ports so routed edges aim at the exact operand
-  slot — a phi's incoming edges visibly land on their own `[ %v, %bb ]`
-  operands. _(observed, untested — visual)_
-- Instruction nodes render as code cards with a block badge chip showing
-  `blockLabel`, tinted from an 8-color muted palette indexed by
-  `blockIndex % 8`. The badge is what preserves the CFG correspondence in the
-  absence of containers.
+  estimator uses, shifted right by the inline badge's width plus its gap), on
+  the card's top edge; and a source `Handle` under the `def` name on the
+  bottom edge. A name that cannot be located in the text falls back to the
+  default centered handle. The layout declares the same offsets as ELK
+  `FIXED_POS` ports so routed edges aim at the exact operand slot — a phi's
+  incoming edges visibly land on their own `[ %v, %bb ]` operands.
+  _(observed, untested — visual)_
+- Instruction nodes render as single-row code cards: a block badge chip
+  showing `blockLabel` sits inline to the **left** of the code line
+  (`plans/2026-08-node-visual-compaction.md`), tinted from an 8-color muted
+  palette indexed by `blockIndex % 8`. The badge is what preserves the CFG
+  correspondence in the absence of containers.
 - Value nodes render as pills; `argument` and `external` are styled differently
   so a dangling reference is visibly not a parameter.
 - `dashed` edges render with a dash pattern via the standard edge factory

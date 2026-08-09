@@ -1,6 +1,7 @@
 import type { NodeProps } from "@xyflow/react";
 import type { MermaidASTNode } from "../../../ast/mermaidAST";
 import NodeShell from "../common/NodeShell";
+import { NODE_BORDER_RADIUS } from "../common/nodeTextStyle";
 
 const shapeToBorderRadius = (shape?: string): string => {
   switch (shape) {
@@ -10,7 +11,7 @@ const shapeToBorderRadius = (shape?: string): string => {
       return "4px";
     case "square":
     default:
-      return "4px";
+      return `${NODE_BORDER_RADIUS}px`;
   }
 };
 

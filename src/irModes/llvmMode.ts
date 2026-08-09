@@ -69,7 +69,10 @@ export const llvmMode = {
       key: "use-def",
       label: "Use-Def",
       parse: parseLLVMUseDef,
-      dagreOptions: { ranksep: 60, nodesep: 40 },
+      layoutOptions: {
+        "elk.layered.spacing.nodeNodeBetweenLayers": "60",
+        "elk.spacing.nodeNode": "40",
+      },
     },
   ],
 } satisfies IRModeDefinition;

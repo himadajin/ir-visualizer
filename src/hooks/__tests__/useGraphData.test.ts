@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useGraphData } from "../useGraphData";
 import { llvmMode, selectionDAGMode } from "../../irModes";
+import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
 
 function twoNodeGraph(labelA = "A", labelB = "B"): GraphData {
@@ -57,28 +58,45 @@ function selectionDAGGraph(): GraphData {
   };
 }
 
+/** Layout is async (specs/graph-view.md §2): wait for it to land. */
+async function waitForNodeCount(
+  result: { current: ReturnType<typeof useGraphData> },
+  count: number,
+) {
+  await waitFor(() => {
+    expect(result.current.nodes).toHaveLength(count);
+  });
+}
+
 describe("useGraphData", () => {
-  it("lays out nodes and edges on the first updateGraph call", () => {
+  it("lays out nodes and edges on the first updateGraph call", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 2);
 
-    expect(result.current.nodes).toHaveLength(2);
     expect(result.current.edges).toHaveLength(1);
-    // Dagre should have assigned real (non-origin) positions.
+    // ELK should have assigned real (non-origin) positions and a route.
     const positions = result.current.nodes.map((n) => n.position);
     expect(positions.some((p) => p.x !== 0 || p.y !== 0)).toBe(true);
+    expect(
+      (result.current.edges[0].data as RoutedEdgeData).route,
+    ).toBeDefined();
   });
 
-  it("preserves node positions on a content-only update (same topology)", () => {
+  it("preserves node positions and edge routes on a content-only update (same topology)", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 2);
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
+    const routeAfterFirst = (result.current.edges[0].data as RoutedEdgeData)
+      .route;
+    expect(routeAfterFirst).toBeDefined();
 
     act(() => {
       // Same node/edge ids -> same topology signature, only labels differ.
@@ -94,24 +112,46 @@ describe("useGraphData", () => {
       "A changed",
       "B changed",
     ]);
+    // The rebuilt edge inherits the stored route (specs/graph-view.md §2).
+    expect((result.current.edges[0].data as RoutedEdgeData).route).toEqual(
+      routeAfterFirst,
+    );
   });
 
-  it("re-runs layout when the topology changes", () => {
+  it("re-runs layout when the topology changes", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 2);
 
     act(() => {
       result.current.updateGraph(threeNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 3);
 
-    expect(result.current.nodes).toHaveLength(3);
     expect(result.current.edges).toHaveLength(2);
   });
 
-  it("marks same-source/target edges as backEdge", () => {
+  it("applies the last of two overlapping layouts (generation guard)", async () => {
+    const { result } = renderHook(() => useGraphData());
+
+    // Two topology-changing updates without waiting: the second must win
+    // even if the first resolves later (specs/graph-view.md §2).
+    act(() => {
+      result.current.updateGraph(twoNodeGraph(), llvmMode);
+      result.current.updateGraph(threeNodeGraph(), llvmMode);
+    });
+    await waitForNodeCount(result, 3);
+
+    expect(result.current.edges).toHaveLength(2);
+    // The discarded first layout must not land afterwards.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(result.current.nodes).toHaveLength(3);
+  });
+
+  it("flags same-source/target edges as back edges", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
@@ -124,16 +164,21 @@ describe("useGraphData", () => {
         llvmMode,
       );
     });
+    await waitForNodeCount(result, 1);
 
-    expect(result.current.edges[0].type).toBe("backEdge");
+    expect(result.current.edges[0].type).toBe("routed");
+    expect((result.current.edges[0].data as RoutedEdgeData).isBackEdge).toBe(
+      true,
+    );
   });
 
-  it("resetLayout re-applies layout to the last graph passed to updateGraph", () => {
+  it("resetLayout re-applies layout to the last graph passed to updateGraph", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 2);
     act(() => {
       result.current.setNodes(
         result.current.nodes.map((n) => ({
@@ -148,8 +193,8 @@ describe("useGraphData", () => {
       ),
     ).toBe(true);
 
-    act(() => {
-      result.current.resetLayout();
+    await act(async () => {
+      await result.current.resetLayout();
     });
 
     expect(
@@ -159,18 +204,18 @@ describe("useGraphData", () => {
     ).toBe(true);
   });
 
-  it("resetLayout is a no-op when no graph has been set yet", () => {
+  it("resetLayout is a no-op when no graph has been set yet", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.resetLayout();
+    await act(async () => {
+      await result.current.resetLayout();
     });
 
     expect(result.current.nodes).toHaveLength(0);
     expect(result.current.edges).toHaveLength(0);
   });
 
-  it("keeps updateGraph/resetLayout identities stable across graph updates", () => {
+  it("keeps updateGraph/resetLayout identities stable across graph updates", async () => {
     const { result } = renderHook(() => useGraphData());
     const firstUpdateGraph = result.current.updateGraph;
     const firstResetLayout = result.current.resetLayout;
@@ -178,9 +223,11 @@ describe("useGraphData", () => {
     act(() => {
       result.current.updateGraph(twoNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 2);
     act(() => {
       result.current.updateGraph(threeNodeGraph(), llvmMode);
     });
+    await waitForNodeCount(result, 3);
     act(() => {
       result.current.setNodes(
         result.current.nodes.map((n) => ({ ...n, position: { x: 7, y: 7 } })),
@@ -193,23 +240,24 @@ describe("useGraphData", () => {
     expect(result.current.resetLayout).toBe(firstResetLayout);
   });
 
-  it("lays out SelectionDAG nodes via the SelectionDAG mode", () => {
+  it("lays out SelectionDAG nodes via the SelectionDAG mode", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
+    await waitForNodeCount(result, 2);
 
-    expect(result.current.nodes).toHaveLength(2);
     expect(result.current.edges).toHaveLength(1);
   });
 
-  it("preserves positions and edge types on a SelectionDAG content-only update", () => {
+  it("preserves positions and edge types on a SelectionDAG content-only update", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
+    await waitForNodeCount(result, 2);
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
     const edgeTypesAfterFirst = result.current.edges.map((e) => e.type);
 
@@ -225,12 +273,13 @@ describe("useGraphData", () => {
     );
   });
 
-  it("resetLayout re-applies the SelectionDAG layout", () => {
+  it("resetLayout re-applies the SelectionDAG layout", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
       result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
     });
+    await waitForNodeCount(result, 2);
     act(() => {
       result.current.setNodes(
         result.current.nodes.map((n) => ({
@@ -240,8 +289,8 @@ describe("useGraphData", () => {
       );
     });
 
-    act(() => {
-      result.current.resetLayout();
+    await act(async () => {
+      await result.current.resetLayout();
     });
 
     expect(

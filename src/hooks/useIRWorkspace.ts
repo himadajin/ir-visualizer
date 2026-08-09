@@ -15,7 +15,7 @@ const PARSE_DEBOUNCE_MS = 750;
 export function useIRWorkspace() {
   const [modeKey, setModeKey] = useState<IRModeKey>(DEFAULT_IR_MODE_KEY);
   // Widen to the contract type: per-mode inferred literals differ in which
-  // optional fields (views, dagreOptions) they carry.
+  // optional fields (views, layoutOptions) they carry.
   const mode: IRModeDefinition = IR_MODES[modeKey];
   // null = the mode's default view (views[0], or the implicit single view).
   const [viewKey, setViewKey] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export function useIRWorkspace() {
         const graph = parse(code);
         updateGraph(graph, {
           edgeBuilder: activeView?.edgeBuilder ?? mode.edgeBuilder,
-          dagreOptions: activeView?.dagreOptions ?? mode.dagreOptions,
+          layoutOptions: activeView?.layoutOptions ?? mode.layoutOptions,
         });
         setError(null);
       } catch (err) {

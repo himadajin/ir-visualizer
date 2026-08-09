@@ -19,7 +19,7 @@ interface IRModeDefinition {
   parse: (code: string) => GraphData; // text -> graph, throws Error on invalid input
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
-  dagreOptions?: Partial<dagre.GraphLabel>; // e.g. SelectionDAG's { ranksep: 50 }
+  layoutOptions?: Record<string, string>; // ELK layout options, e.g. layer spacing
   views?: IRViewDefinition[]; // optional alternative projections — see "Views" below
 }
 ```
@@ -37,14 +37,14 @@ interface IRViewDefinition {
   label: string; // toggle label, e.g. "CFG"
   parse: (code: string) => GraphData; // same throw-on-invalid rule as the mode's parse
   edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
-  dagreOptions?: Partial<dagre.GraphLabel>; // defaults to the mode's dagreOptions
+  layoutOptions?: Record<string, string>; // defaults to the mode's layoutOptions
 }
 ```
 
 Rules:
 
 - `views` is optional. A mode without it has a single implicit view built from
-  its top-level `parse`/`edgeBuilder`/`dagreOptions` (Mermaid and SelectionDAG
+  its top-level `parse`/`edgeBuilder`/`layoutOptions` (Mermaid and SelectionDAG
   stay exactly as they were).
 - When present, `views` has ≥ 2 entries and `views[0]` is the **default view**;
   it must behave identically to the mode's top-level fields (share the same
@@ -64,34 +64,28 @@ The layout-relevant half of a mode is named separately so a view-resolved value
 can be passed where a mode used to be:
 
 ```ts
-type IRLayoutBehavior = Pick<IRModeDefinition, "edgeBuilder" | "dagreOptions">;
+type IRLayoutBehavior = Pick<IRModeDefinition, "edgeBuilder" | "layoutOptions">;
 ```
 
 `useGraphData.updateGraph(graph, behavior)` takes `IRLayoutBehavior` rather than
 the full `IRModeDefinition`; a mode object satisfies it structurally, and the
-workspace passes the active view's resolved `edgeBuilder`/`dagreOptions`.
+workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`.
 
-`IREdgeBuilder` (`src/utils/layout.ts`) captures the two things that differ between how LLVM/Mermaid
-and SelectionDAG decide what an edge should look like:
+`IREdgeBuilder` (`src/utils/layout.ts`) captures how a mode turns a `GraphEdge`
+into a React Flow edge:
 
 ```ts
 interface IREdgeBuilder {
-  classifyEdgeType(params: {
-    edge: GraphEdge;
-    sourcePos?: { x: number; y: number };
-    targetPos?: { x: number; y: number };
-    previousType?: string;
-  }): string;
-  buildReactFlowEdge(edge: GraphEdge, edgeType: string): Edge;
+  buildReactFlowEdge(edge: GraphEdge): Edge;
 }
 ```
 
-- LLVM/Mermaid (`codeGraphEdgeBuilder`) classify an edge as `"backEdge"` when it's a self-loop or the
-  source node sits at or below the target node (control-flow back-edges), otherwise `"customBezier"`.
-- SelectionDAG (`selectionDAGEdgeBuilder`) never reclassifies: it reuses `previousType` when present
-  (so an edge's rendered style is stable across incremental updates) and otherwise defaults to
-  `"customBezier"`. SelectionDAG edges connect specific operand/type Handles rather than generic
-  node boundaries, so position-based back-edge detection doesn't apply.
+- LLVM/Mermaid (`codeGraphEdgeBuilder`) build `type: "routed"` edges; the ELK layout
+  attaches each edge's computed route and back-edge flag to `edge.data` afterwards
+  (`specs/graph-view.md` §4). There is no position-based classification anymore — whether
+  an edge is a back edge is derived from the final layout geometry, not chosen up front.
+- SelectionDAG (`selectionDAGEdgeBuilder`) builds React Flow built-in `default` (bezier)
+  edges connecting specific operand/type Handles; routing does not apply to them.
 
 All three current modes live in `src/irModes/`: `llvmMode.ts`, `mermaidMode.ts`,
 `selectionDAGMode.ts`, aggregated by `src/irModes/index.ts` into `IR_MODES` (keyed map) and

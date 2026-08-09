@@ -45,6 +45,11 @@ export interface LLVMUseDefInstructionData {
   text: string;
   /** The §3.5 def name (sigil-free), or null when the line defines nothing. */
   def: string | null;
+  /**
+   * The §3.5 use names (sigil-free, deduplicated per line). Drives the
+   * per-operand target ports (specs/llvm-use-def-view.md §4).
+   */
+  uses: string[];
   /** Whether the line is the block's terminator. */
   isTerminator: boolean;
   /**

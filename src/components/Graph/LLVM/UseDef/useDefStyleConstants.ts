@@ -5,14 +5,13 @@
  * what is actually rendered).
  */
 
-/** Padding of instruction/value cards; matches NodeShell's default 10px. */
-export const USE_DEF_CARD_PADDING = 10;
-/** Border width of instruction/value cards (NodeShell's 1px, per side). */
-export const USE_DEF_CARD_BORDER = 1;
-
 /** Font size of the block badge chip, in px. */
 export const USE_DEF_BADGE_FONT_SIZE = 11;
-/** Line height of the block badge chip, in px. */
+/**
+ * Line height of the block badge chip, in px. With its vertical padding the
+ * chip is exactly one NODE_LINE_HEIGHT tall, so the inline badge never
+ * stretches its card's single row.
+ */
 export const USE_DEF_BADGE_LINE_HEIGHT = 14;
 /** Vertical padding inside the block badge chip, in px (per side). */
 export const USE_DEF_BADGE_PADDING_Y = 1;
@@ -20,16 +19,8 @@ export const USE_DEF_BADGE_PADDING_Y = 1;
 export const USE_DEF_BADGE_PADDING_X = 6;
 /** Corner radius of the block badge chip, in px. */
 export const USE_DEF_BADGE_BORDER_RADIUS = 4;
-/** Gap between the badge row and the instruction line below it, in px. */
-export const USE_DEF_BADGE_GAP = 4;
-
-/**
- * Total vertical space the badge row occupies inside an instruction card:
- * the chip itself plus the gap below it. Instruction cards add this to their
- * estimated height; value pills have no badge row.
- */
-export const USE_DEF_BADGE_ROW_HEIGHT =
-  USE_DEF_BADGE_LINE_HEIGHT + USE_DEF_BADGE_PADDING_Y * 2 + USE_DEF_BADGE_GAP;
+/** Gap between the inline badge and the code line to its right, in px. */
+export const USE_DEF_BADGE_GAP = 6;
 
 /** Border color of an instruction card whose line is a terminator. */
 export const USE_DEF_TERMINATOR_BORDER_COLOR = "#a88";

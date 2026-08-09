@@ -89,6 +89,8 @@ function buildFunctionGraph(
   const funcPrefix = uniqueId("func", func.name);
   /** value name -> id of the node that defines it (argument or instruction) */
   const defSource = new Map<string, string>();
+  /** instruction node ids — these expose a "def" source port (spec §3). */
+  const instructionIds = new Set<string>();
   const emitted: EmittedLine[] = [];
 
   // Argument value nodes: one per NAMED parameter, emitted whether or not
@@ -142,11 +144,13 @@ function buildFunctionGraph(
         astData: {
           text: line.originalText,
           def,
+          uses: line.uses ?? [],
           isTerminator: term,
           blockLabel,
           blockIndex,
         },
       });
+      instructionIds.add(nodeId);
       if (def !== null) defSource.set(def, nodeId);
       emitted.push({ nodeId, line });
     });
@@ -190,7 +194,14 @@ function buildFunctionGraph(
         source: sourceId,
         target: nodeId,
         type: "arrow",
+        // Land on the reading line's per-operand port (spec §3); leave from
+        // the defining line's "def" port when the source is an instruction
+        // (value pills keep their single centered handle).
+        targetHandle: `u-${name}`,
       };
+      if (instructionIds.has(sourceId)) {
+        edge.sourceHandle = "def";
+      }
       if (fromBlocks !== undefined) {
         // phi edge: dashed, and labeled with the incoming block(s). Plain
         // use-def edges stay unlabeled — the name is visible in the source

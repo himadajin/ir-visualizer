@@ -7,6 +7,9 @@ export default defineConfig({
   plugins: [react()],
   base: "/ir-visualizer/",
   server: {
+    // Honor an externally assigned port (e.g. a preview harness's PORT env)
+    // instead of always claiming 5173.
+    port: process.env.PORT ? Number(process.env.PORT) : undefined,
     watch: {
       usePolling: true,
     },

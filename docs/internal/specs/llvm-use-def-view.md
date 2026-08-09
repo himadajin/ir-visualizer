@@ -69,12 +69,13 @@ line, `originalText === ""`, no `defs`/`uses`) never produce a node.
 > Pinned by: "debug records and the synthetic empty terminator get no node"
 
 `astData` is
-`{ text, def, isTerminator, blockLabel, blockIndex }`:
+`{ text, def, uses, isTerminator, blockLabel, blockIndex }`:
 
 | Field          | Value                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `text`         | the line's `originalText`                                                                                                                   |
 | `def`          | the §3.5 def name (sigil-free), or `null` when the line defines nothing                                                                     |
+| `uses`         | the §3.5 use names (sigil-free, deduplicated) — drives the per-operand target ports (§4)                                                    |
 | `isTerminator` | whether the line is the block's terminator                                                                                                  |
 | `blockLabel`   | the block's **display** label: `"entry"` for a first block whose label is `null`, otherwise the block's label, falling back to its block id |
 | `blockIndex`   | the block's 0-based position within its function, in AST block order                                                                        |
@@ -113,6 +114,8 @@ node that defines `v` — the instruction node whose `def` is `v`, else the
 argument value node for `v`, else a lazily created external value node — to `N`.
 
 - `id`: `e-<sourceId>-<targetId>-<v>`.
+- `targetHandle`: `"u-<v>"` — the edge lands on the target card's per-operand
+  port for `v` (§4). Sources use the defining node's single source handle.
 - **No label.** The defined name is already visible in the source node's text,
   so a `%v` label would be redundant. Only phi edges are labeled (§3.1).
 - `uses` is already deduplicated per line (§3.5), so a line reading `%v` twice
@@ -150,16 +153,30 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
 ## 4. Layout and rendering behavior
 
 - `GraphData.direction` is `"TD"`, and **no node carries `parentId`** — the view
-  deliberately produces a flat graph so that Dagre's ranking is the dataflow
-  order (see the plan's §2 retrospective for why containers were rejected).
-- The view supplies its own `dagreOptions` (_observed, untested_) and reuses the
-  standard `codeGraphEdgeBuilder`: back edges are classified from vertical
-  position, so a loop-carried phi edge — whose source sits at or below its
-  target — renders as a back edge without any special casing.
-- Instruction nodes render as code cards with a block badge chip showing
-  `blockLabel`, tinted from an 8-color muted palette indexed by
-  `blockIndex % 8`. The badge is what preserves the CFG correspondence in the
-  absence of containers.
+  deliberately produces a flat graph so that the layered layout's ranking is the
+  dataflow order (see the plan's §2 retrospective for why containers were
+  rejected).
+- The view supplies its own `layoutOptions` (_observed, untested_) and reuses
+  the standard `codeGraphEdgeBuilder`: edges are ELK-routed
+  (`specs/graph-view.md` §4), and a loop-carried phi edge — whose source ends
+  up at or below its target — is flagged and styled as a back edge from the
+  final layout geometry without any special casing here.
+- **Per-operand ports** (`plans/2026-08-elk-edge-routing.md` §3.5): an
+  instruction card exposes one target `Handle` (id `u-<name>`) per entry in
+  `uses`, horizontally positioned at the first occurrence of `%name` in the
+  monospace text (measured with the same `getFontMetrics` char width the size
+  estimator uses, shifted right by the inline badge's width plus its gap), on
+  the card's top edge; and a source `Handle` under the `def` name on the
+  bottom edge. A name that cannot be located in the text falls back to the
+  default centered handle. The layout declares the same offsets as ELK
+  `FIXED_POS` ports so routed edges aim at the exact operand slot — a phi's
+  incoming edges visibly land on their own `[ %v, %bb ]` operands.
+  _(observed, untested — visual)_
+- Instruction nodes render as single-row code cards: a block badge chip
+  showing `blockLabel` sits inline to the **left** of the code line
+  (`plans/2026-08-node-visual-compaction.md`), tinted from an 8-color muted
+  palette indexed by `blockIndex % 8`. The badge is what preserves the CFG
+  correspondence in the absence of containers.
 - Value nodes render as pills; `argument` and `external` are styled differently
   so a dangling reference is visibly not a parameter.
 - `dashed` edges render with a dash pattern via the standard edge factory

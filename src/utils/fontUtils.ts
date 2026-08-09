@@ -21,8 +21,9 @@ export const getFontMetrics = (
   }
 
   if (typeof document === "undefined") {
-    // Fallback for non-browser environments
-    return { width: 8, height: 20 };
+    // Fallback for non-browser environments; honor the requested line
+    // height so estimates match the browser's.
+    return { width: 8, height: parseFloat(lineHeight) || 20 };
   }
 
   const div = document.createElement("div");

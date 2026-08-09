@@ -6,10 +6,16 @@ import {
   createSelectionDAGReactFlowEdge,
   calculateNodeDimensions,
   nodeTypeToReactFlowType,
-  NODE_PADDING,
 } from "../converter";
 import type { GraphNode, GraphEdge } from "../../types/graph";
-import { USE_DEF_BADGE_ROW_HEIGHT } from "../../components/Graph/LLVM/UseDef/useDefStyleConstants";
+import {
+  NODE_BORDER_WIDTH,
+  NODE_HEADER_HEIGHT,
+  NODE_PADDING_X,
+  NODE_PADDING_Y,
+} from "../../components/Graph/common/nodeTextStyle";
+import { USE_DEF_BADGE_GAP } from "../../components/Graph/LLVM/UseDef/useDefStyleConstants";
+import { estimateBadgeWidth } from "../../components/Graph/LLVM/UseDef/useDefPorts";
 
 describe("createSelectionDAGReactFlowEdge", () => {
   it("should create a normal edge when isChainOrGlue is false", () => {
@@ -44,9 +50,13 @@ describe("createSelectionDAGReactFlowEdge", () => {
 });
 
 describe("calculateNodeDimensions", () => {
-  // In Node.js test environment, fontUtils falls back to { width: 8, height: 20 }
+  // In Node.js test environment, fontUtils falls back to width 8 and the
+  // requested line height (16px).
   const FALLBACK_CHAR_WIDTH = 8;
-  const FALLBACK_LINE_HEIGHT = 20;
+  const FALLBACK_LINE_HEIGHT = 16;
+  // The rendered NodeShell frame (specs/graph-view.md §5).
+  const FRAME_X = (NODE_PADDING_X + NODE_BORDER_WIDTH) * 2;
+  const FRAME_Y = (NODE_PADDING_Y + NODE_BORDER_WIDTH) * 2;
 
   it("should calculate dimensions for a simple mermaid node", () => {
     const node: GraphNode = {
@@ -58,10 +68,8 @@ describe("calculateNodeDimensions", () => {
     const dims = calculateNodeDimensions(node);
 
     // "Hello" = 5 chars, but MIN_CHARS_MERMAID = 10, so effectiveChars = 10
-    // width = 10 * 8 + 20 * 2 = 80 + 40 = 120
-    // height = 1 * 20 + 20 * 2 = 60 (no blockLabel => no header offset)
-    expect(dims.width).toBe(10 * FALLBACK_CHAR_WIDTH + NODE_PADDING * 2);
-    expect(dims.height).toBe(1 * FALLBACK_LINE_HEIGHT + NODE_PADDING * 2);
+    expect(dims.width).toBe(10 * FALLBACK_CHAR_WIDTH + FRAME_X);
+    expect(dims.height).toBe(1 * FALLBACK_LINE_HEIGHT + FRAME_Y);
   });
 
   it("should calculate dimensions for a multi-line LLVM node", () => {
@@ -73,16 +81,13 @@ describe("calculateNodeDimensions", () => {
 
     const dims = calculateNodeDimensions(node);
 
-    // MAX_CHARS_LLVM = 80, MIN_CHARS_LLVM = 40
-    // longest line = "line three" = 10 chars < MIN_CHARS_LLVM = 40
-    // width = 40 * 8 + 40 = 360
-    // 3 lines, each < 80 chars => 3 wrapped lines
-    // height = 3 * 20 + 40 = 100 (no blockLabel)
-    expect(dims.width).toBe(40 * FALLBACK_CHAR_WIDTH + NODE_PADDING * 2);
-    expect(dims.height).toBe(3 * FALLBACK_LINE_HEIGHT + NODE_PADDING * 2);
+    // MAX_CHARS_LLVM = 80, MIN_CHARS_LLVM = 16
+    // longest line = "line three" = 10 chars < MIN_CHARS_LLVM = 16
+    expect(dims.width).toBe(16 * FALLBACK_CHAR_WIDTH + FRAME_X);
+    expect(dims.height).toBe(3 * FALLBACK_LINE_HEIGHT + FRAME_Y);
   });
 
-  it("should add header offset when blockLabel is present", () => {
+  it("should add the header band when blockLabel is present", () => {
     const node: GraphNode = {
       id: "C",
       label: "some code",
@@ -92,14 +97,12 @@ describe("calculateNodeDimensions", () => {
 
     const dims = calculateNodeDimensions(node);
 
-    // blockLabel is present => add HEADER_OFFSET (24)
-    const HEADER_OFFSET = 24;
     expect(dims.height).toBe(
-      1 * FALLBACK_LINE_HEIGHT + NODE_PADDING * 2 + HEADER_OFFSET,
+      1 * FALLBACK_LINE_HEIGHT + FRAME_Y + NODE_HEADER_HEIGHT,
     );
   });
 
-  it("should add header offset when blockLabel is null (entry block)", () => {
+  it("should add the header band when blockLabel is null (entry block)", () => {
     const node: GraphNode = {
       id: "C",
       label: "some code",
@@ -109,10 +112,9 @@ describe("calculateNodeDimensions", () => {
 
     const dims = calculateNodeDimensions(node);
 
-    // blockLabel is null (not undefined) => header offset added
-    const HEADER_OFFSET = 24;
+    // blockLabel is null (not undefined) => header band added
     expect(dims.height).toBe(
-      1 * FALLBACK_LINE_HEIGHT + NODE_PADDING * 2 + HEADER_OFFSET,
+      1 * FALLBACK_LINE_HEIGHT + FRAME_Y + NODE_HEADER_HEIGHT,
     );
   });
 
@@ -126,15 +128,12 @@ describe("calculateNodeDimensions", () => {
 
     const dims = calculateNodeDimensions(node);
 
-    // effectiveMaxChars = min(100, 80) = 80
-    // width = 80 * 8 + 40 = 680
-    // wrappedLines = ceil(100/80) = 2
-    // height = 2 * 20 + 40 = 80
-    expect(dims.width).toBe(80 * FALLBACK_CHAR_WIDTH + NODE_PADDING * 2);
-    expect(dims.height).toBe(2 * FALLBACK_LINE_HEIGHT + NODE_PADDING * 2);
+    // effectiveMaxChars = min(100, 80) = 80; wrappedLines = ceil(100/80) = 2
+    expect(dims.width).toBe(80 * FALLBACK_CHAR_WIDTH + FRAME_X);
+    expect(dims.height).toBe(2 * FALLBACK_LINE_HEIGHT + FRAME_Y);
   });
 
-  it("should give a use-def instruction card a taller box than a value pill", () => {
+  it("should widen a use-def instruction card by its inline badge", () => {
     const label = "%1 = add i32 %0, 1";
     const instruction: GraphNode = {
       id: "f_main_ud_entry_i0",
@@ -143,6 +142,7 @@ describe("calculateNodeDimensions", () => {
       astData: {
         text: label,
         def: "1",
+        uses: ["0"],
         isTerminator: false,
         blockLabel: "entry",
         blockIndex: 0,
@@ -158,11 +158,11 @@ describe("calculateNodeDimensions", () => {
     const instructionDims = calculateNodeDimensions(instruction);
     const valueDims = calculateNodeDimensions(value);
 
-    // Same text, same width; the instruction card additionally stacks the
-    // block badge row above the code line.
-    expect(instructionDims.width).toBe(valueDims.width);
-    expect(instructionDims.height).toBe(
-      valueDims.height + USE_DEF_BADGE_ROW_HEIGHT,
+    // Same text, single row each: same height; the instruction card is
+    // wider by the inline badge plus its gap.
+    expect(instructionDims.height).toBe(valueDims.height);
+    expect(instructionDims.width).toBeCloseTo(
+      valueDims.width + estimateBadgeWidth("entry") + USE_DEF_BADGE_GAP,
     );
   });
 
@@ -253,7 +253,7 @@ describe("createReactFlowEdge", () => {
     expect(rfEdge.source).toBe("A");
     expect(rfEdge.target).toBe("B");
     expect(rfEdge.label).toBe("true");
-    expect(rfEdge.type).toBe("customBezier");
+    expect(rfEdge.type).toBe("routed");
     expect(rfEdge.animated).toBe(false);
     expect(rfEdge.style).toEqual({ stroke: "#666" });
     expect(rfEdge.markerEnd).toEqual({

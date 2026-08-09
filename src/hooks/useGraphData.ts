@@ -7,7 +7,7 @@ import {
 } from "@xyflow/react";
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
 import type { IRLayoutBehavior } from "../irModes/types";
-import { getLayoutedElements } from "../utils/layout";
+import { getLayoutedElements, inheritRoutedEdgeData } from "../utils/layout";
 import { createReactFlowNode } from "../utils/converter";
 
 // Helper to generate a topology signature
@@ -28,8 +28,8 @@ export const useGraphData = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // `updateGraph` needs the *latest* nodes/edges (a content-only update
-  // preserves the previous positions and re-classifies edges from them), but it
-  // must NOT change identity when they change: `useIRWorkspace`'s debounced
+  // preserves the previous positions and inherits edge routes from them), but
+  // it must NOT change identity when they change: `useIRWorkspace`'s debounced
   // parse effect lists `updateGraph` as a dependency, so an unstable identity
   // re-arms that effect after every graph update and re-parses unchanged code
   // every 750 ms forever. That loop also replaces every node object on each
@@ -51,6 +51,28 @@ export const useGraphData = () => {
     graph: GraphData;
     mode: IRLayoutBehavior;
   } | null>(null);
+  // ELK layout is async (specs/graph-view.md §2): each full layout gets a
+  // generation number, and a result that resolves after a newer layout
+  // started is discarded rather than overwriting the newer graph.
+  const layoutGenerationRef = useRef(0);
+
+  const runLayout = useCallback(
+    (graph: GraphData, mode: IRLayoutBehavior, signature: string | null) => {
+      const generation = ++layoutGenerationRef.current;
+      return getLayoutedElements(graph, {
+        edgeBuilder: mode.edgeBuilder,
+        layoutOptions: mode.layoutOptions,
+      }).then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
+        if (generation !== layoutGenerationRef.current) return;
+        setNodes(layoutedNodes);
+        nodesRef.current = layoutedNodes;
+        setEdges(layoutedEdges);
+        edgesRef.current = layoutedEdges;
+        if (signature !== null) lastSignatureRef.current = signature;
+      });
+    },
+    [setNodes, setEdges],
+  );
 
   const updateGraph = useCallback(
     (graph: GraphData, mode: IRLayoutBehavior) => {
@@ -61,14 +83,16 @@ export const useGraphData = () => {
       const isTopologyEqual = signature === lastSignatureRef.current;
 
       if (isTopologyEqual) {
-        // Content-only update: preserve node positions and edge types.
+        // Content-only update (synchronous): preserve node positions, and
+        // let each rebuilt edge inherit the previous edge's stored route and
+        // back-edge flag by id.
         const previousNodes = nodesRef.current;
         const previousEdges = edgesRef.current;
         const positionMap = new Map(
           previousNodes.map((n: Node) => [n.id, n.position]),
         );
-        const edgeTypeMap = new Map(
-          previousEdges.map((e: Edge) => [e.id, e.type]),
+        const previousEdgeMap = new Map(
+          previousEdges.map((e: Edge) => [e.id, e]),
         );
 
         const newNodes = graph.nodes.map((node: GraphNode) => {
@@ -78,49 +102,27 @@ export const useGraphData = () => {
         setNodes(newNodes);
         nodesRef.current = newNodes;
 
-        const newEdges = graph.edges.map((edge: GraphEdge) => {
-          const edgeType = mode.edgeBuilder.classifyEdgeType({
-            edge,
-            sourcePos: positionMap.get(edge.source),
-            targetPos: positionMap.get(edge.target),
-            previousType: edgeTypeMap.get(edge.id),
-          });
-          return mode.edgeBuilder.buildReactFlowEdge(edge, edgeType);
-        });
+        const newEdges = graph.edges.map((edge: GraphEdge) =>
+          inheritRoutedEdgeData(
+            mode.edgeBuilder.buildReactFlowEdge(edge),
+            previousEdgeMap.get(edge.id),
+          ),
+        );
         setEdges(newEdges);
         edgesRef.current = newEdges;
       } else {
-        // Topology changed or first run: re-layout.
-        const { nodes: layoutedNodes, edges: layoutedEdges } =
-          getLayoutedElements(graph, {
-            edgeBuilder: mode.edgeBuilder,
-            dagreOptions: mode.dagreOptions,
-          });
-        setNodes(layoutedNodes);
-        nodesRef.current = layoutedNodes;
-        setEdges(layoutedEdges);
-        edgesRef.current = layoutedEdges;
-        lastSignatureRef.current = signature;
+        // Topology changed or first run: full async re-layout.
+        void runLayout(graph, mode, signature);
       }
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, runLayout],
   );
 
-  const resetLayout = useCallback(() => {
+  const resetLayout = useCallback(async () => {
     const current = currentRef.current;
     if (!current) return;
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-      current.graph,
-      {
-        edgeBuilder: current.mode.edgeBuilder,
-        dagreOptions: current.mode.dagreOptions,
-      },
-    );
-    setNodes(layoutedNodes);
-    nodesRef.current = layoutedNodes;
-    setEdges(layoutedEdges);
-    edgesRef.current = layoutedEdges;
-  }, [setNodes, setEdges]);
+    await runLayout(current.graph, current.mode, null);
+  }, [runLayout]);
 
   return {
     nodes,

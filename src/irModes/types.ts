@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import type { NodeProps } from "@xyflow/react";
-import type dagre from "dagre";
 import type { GraphData } from "../types/graph";
 import type { IREdgeBuilder } from "../utils/layout";
 
@@ -26,10 +25,10 @@ export interface IRModeDefinition {
    * Covers every view's renderers (GraphViewer merges per mode, not per view). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodeTypes: Record<string, ComponentType<NodeProps<any>>>;
-  /** How to classify and build this mode's edges (see IREdgeBuilder). */
+  /** How to build this mode's edges (see IREdgeBuilder). */
   edgeBuilder: IREdgeBuilder;
-  /** Dagre layout overrides, e.g. SelectionDAG's wider row spacing. */
-  dagreOptions?: Partial<dagre.GraphLabel>;
+  /** ELK layout option overrides, e.g. SelectionDAG's wider layer spacing. */
+  layoutOptions?: Record<string, string>;
   /**
    * Optional alternative projections of the same text (e.g. LLVM's CFG vs
    * Use-Def). When present: >= 2 entries, views[0] is the default and must
@@ -49,8 +48,8 @@ export interface IRViewDefinition {
   parse: (code: string) => GraphData;
   /** Defaults to the mode's edgeBuilder. */
   edgeBuilder?: IREdgeBuilder;
-  /** Defaults to the mode's dagreOptions. */
-  dagreOptions?: Partial<dagre.GraphLabel>;
+  /** Defaults to the mode's layoutOptions. */
+  layoutOptions?: Record<string, string>;
 }
 
 /**
@@ -60,5 +59,5 @@ export interface IRViewDefinition {
  */
 export type IRLayoutBehavior = Pick<
   IRModeDefinition,
-  "edgeBuilder" | "dagreOptions"
+  "edgeBuilder" | "layoutOptions"
 >;

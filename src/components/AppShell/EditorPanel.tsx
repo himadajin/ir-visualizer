@@ -40,9 +40,16 @@ const morphSx = {
     to: { opacity: 1, transform: "scale(1)" },
   },
   animation: `shellMorphIn ${SHELL_MOTION_MS}ms ease-out`,
-  transformOrigin: "top left",
   "@media (prefers-reduced-motion: reduce)": { animation: "none" },
 } as const;
+
+/**
+ * Both surfaces morph out of the corner they are anchored to, so the growth
+ * reads as coming from the pill: top-left in wide mode, bottom-left for the
+ * edge-anchored narrow-mode sheet.
+ */
+const morphOrigin = (narrow: boolean) =>
+  narrow ? "bottom left" : ("top left" as const);
 
 const surfaceSx = {
   backgroundColor: SHELL_COLORS.paper,
@@ -110,7 +117,11 @@ interface EditorPanelProps {
   /** false collapses the panel to the floating `code` pill. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Narrow mode (§6.5): bottom sheet instead of top-left card, no resizer. */
+  narrow: boolean;
   width: number;
+  /** Height of the narrow-mode sheet, in px; ignored in wide mode. */
+  sheetHeight: number;
   onResizeHandleMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
   mode: IRModeKey;
   onModeChange: (event: SelectChangeEvent) => void;
@@ -132,7 +143,8 @@ interface EditorPanelProps {
  * The floating editor panel (`specs/graph-view.md` §6.2/§6.3): a card at the
  * top-left holding everything that is not the canvas — brand corner chip, mode
  * selector, view toggle, Clear, collapse, the Monaco editor, and the parse
- * status footer.
+ * status footer. In narrow mode (§6.5) the very same contents are anchored to
+ * the bottom edge as a sheet instead; only the geometry changes.
  *
  * Conceptually the panel is itself a graph node: it reuses NodeShell's border,
  * radius, and corner-chip grammar. NodeShell is deliberately not imported —
@@ -141,7 +153,9 @@ interface EditorPanelProps {
 export function EditorPanel({
   open,
   onOpenChange,
+  narrow,
   width,
+  sheetHeight,
   onResizeHandleMouseDown,
   mode,
   onModeChange,
@@ -169,14 +183,20 @@ export function EditorPanel({
         title="Expand panel"
         sx={{
           position: "fixed",
-          top: PANEL_MARGIN,
+          // Bottom-left in narrow mode (thumb reach), top-left otherwise.
+          top: narrow ? "auto" : PANEL_MARGIN,
+          bottom: narrow ? PANEL_MARGIN : "auto",
           left: PANEL_MARGIN,
           zIndex: 5,
           display: "inline-flex",
-          padding: "0 8px 4px 0",
+          // The pill is the only way back to the editor on a touch screen, so
+          // narrow mode grows the miniature node's body (not its chip) until
+          // the hit target clears ~40 px in both directions.
+          padding: narrow ? "0 24px 20px 0" : "0 8px 4px 0",
           cursor: "pointer",
           ...surfaceSx,
           ...morphSx,
+          transformOrigin: morphOrigin(narrow),
           ...focusRingSx,
         }}
       >
@@ -194,18 +214,29 @@ export function EditorPanel({
       onWheel={stopWheel}
       sx={{
         position: "fixed",
-        top: PANEL_MARGIN,
-        left: PANEL_MARGIN,
-        bottom: PANEL_MARGIN,
-        width,
-        minWidth: PANEL_MIN_WIDTH,
-        maxWidth: `calc(100vw - ${PANEL_MARGIN * 2}px)`,
+        // Narrow mode: an edge-to-edge sheet on the bottom edge, so the small
+        // viewport spends none of its width on margins. Wide mode: the
+        // top-left card, inset from every edge.
+        top: narrow ? "auto" : PANEL_MARGIN,
+        bottom: narrow ? 0 : PANEL_MARGIN,
+        left: narrow ? 0 : PANEL_MARGIN,
+        right: narrow ? 0 : "auto",
+        width: narrow ? "auto" : width,
+        height: narrow ? sheetHeight : "auto",
+        minWidth: narrow ? 0 : PANEL_MIN_WIDTH,
+        maxWidth: narrow ? "none" : `calc(100vw - ${PANEL_MARGIN * 2}px)`,
         zIndex: 5,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
         ...surfaceSx,
+        // The sheet sits on the viewport edge, so only its top corners can
+        // round; the node grammar's border is kept on all four sides.
+        borderRadius: narrow
+          ? `${SHELL_RADIUS} ${SHELL_RADIUS} 0 0`
+          : SHELL_RADIUS,
         ...morphSx,
+        transformOrigin: morphOrigin(narrow),
       }}
     >
       <Box
@@ -352,20 +383,23 @@ export function EditorPanel({
         )}
       </Box>
 
-      {/* Right-edge drag handle (wide mode only, mouse-driven as before). */}
-      <Box
-        aria-hidden="true"
-        onMouseDown={onResizeHandleMouseDown}
-        sx={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: "5px",
-          cursor: "col-resize",
-          "&:hover": { backgroundColor: SHELL_HAIRLINE },
-        }}
-      />
+      {/* Right-edge drag handle (wide mode only, mouse-driven as before). The
+          narrow-mode sheet is not resizable at all (§6.5). */}
+      {!narrow && (
+        <Box
+          aria-hidden="true"
+          onMouseDown={onResizeHandleMouseDown}
+          sx={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: "5px",
+            cursor: "col-resize",
+            "&:hover": { backgroundColor: SHELL_HAIRLINE },
+          }}
+        />
+      )}
     </Box>
   );
 }

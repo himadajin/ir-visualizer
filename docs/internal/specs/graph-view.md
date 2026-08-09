@@ -165,6 +165,9 @@ reset (§2).
   so "fit" centers the graph in the _visible_ area. The padding is `0` while the panel is
   collapsed. This applies to the initial fit, the fit-view button, and the re-fit after Reset
   Layout. _(observed, untested)_
+- The cluster stays clear of any bottom inset the shell reserves: in narrow mode with the
+  sheet open it is lifted above the sheet by the sheet's height, and it returns to the
+  viewport's bottom-right corner whenever that inset is `0`. _(observed, untested)_
 
 ### 6.5 Responsive narrow mode (viewport ≤ 768 px)
 

@@ -15,7 +15,11 @@ import BackEdge from "./BackEdge";
 import CodeNode from "./CodeNode";
 import { CanvasControls, type FitViewPadding } from "./CanvasControls";
 import { IR_MODE_LIST } from "../../irModes";
-import { SHELL_COLORS, buildFitViewPadding } from "../AppShell/shellTokens";
+import {
+  SHELL_COLORS,
+  buildFitViewPadding,
+  type ShellFitViewInset,
+} from "../AppShell/shellTokens";
 
 const edgeTypes = {
   customBezier: CustomBezierEdge,
@@ -37,12 +41,13 @@ interface GraphViewerProps {
   onEdgesChange: OnEdgesChange;
   onResetLayout: () => void;
   /**
-   * Horizontal space (px) the floating editor panel takes up on the left —
-   * its width plus its viewport margin, or 0 while it is collapsed. Every fit
-   * (initial, the Fit view button, the re-fit after Reset Layout) keeps the
-   * graph clear of it. See `specs/graph-view.md` §6.4.
+   * Space (px) the floating editor panel takes up along the viewport edge it
+   * is anchored to — its width plus its margin on the left in wide mode, its
+   * height at the bottom in narrow mode, and nothing while it is collapsed.
+   * Every fit (initial, the Fit view button, the re-fit after Reset Layout)
+   * keeps the graph clear of it. See `specs/graph-view.md` §6.4/§6.5.
    */
-  fitViewPaddingLeft: number;
+  fitViewInset: ShellFitViewInset;
 }
 
 export const GraphViewer: React.FC<GraphViewerProps> = ({
@@ -51,13 +56,13 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
   onNodesChange,
   onEdgesChange,
   onResetLayout,
-  fitViewPaddingLeft,
+  fitViewInset,
 }) => {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
 
   const fitViewPadding: FitViewPadding = useMemo(
-    () => buildFitViewPadding(fitViewPaddingLeft),
-    [fitViewPaddingLeft],
+    () => buildFitViewPadding(fitViewInset),
+    [fitViewInset],
   );
 
   const fitViewOptions = useMemo(
@@ -99,6 +104,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
         <Background color={SHELL_COLORS.groundDots} />
         <CanvasControls
           fitViewPadding={fitViewPadding}
+          bottomInset={fitViewInset.bottom}
           onResetLayout={handleResetLayout}
         />
       </ReactFlow>

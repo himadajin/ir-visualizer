@@ -1,15 +1,12 @@
 # Contract: Edge routing (`routeEdges`)
 
-- **Status:** Implemented (2026-08-09)
-- **Motivation:** edge geometry is a pure function of the live node rectangles, computed
-  at render time by this repo's own orthogonal router. Everything downstream — the one
-  routing pass per graph, `RoutedEdge`'s per-edge lookup, the router's own test suite — is
-  written against a specific module boundary and a specific set of guarantees about what
-  it returns. Both used to live only in a plan file; this contract is their permanent home.
-  The router's internal algorithm (the Hanan grid, the A\* search, the fallback ladder) is
-  an implementation detail behind this boundary and is not reproduced here — see
-  `src/utils/edgeRouter.ts` and its inline documentation for how the guarantees below are
-  achieved.
+Edge geometry is a pure function of the live node rectangles, computed at render time by
+this repo's own orthogonal router. Everything downstream — the one routing pass per graph,
+`RoutedEdge`'s per-edge lookup, the router's own test suite — is written against the
+module boundary and the guarantees defined here. The router's internal algorithm (the
+Hanan grid, the A\* search, the fallback ladder) is an implementation detail behind this
+boundary and is not reproduced here — see `src/utils/edgeRouter.ts` and its inline
+documentation for how the guarantees below are achieved.
 
 ## The frozen boundary
 
@@ -135,4 +132,4 @@ React context; `RoutedEdge` looks up its own entry by edge id and never calls th
 itself. During a drag the hook narrows `requests` to the edges incident to the dragged
 node (still passing the **complete** `nodes` array, since a partial route must still avoid
 every obstacle) and runs a full pass once the drag stops — see `specs/graph-view.md` §4 for
-why that split is required rather than an optimization held in reserve.
+the frame-budget measurement behind that split.

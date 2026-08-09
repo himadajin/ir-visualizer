@@ -34,15 +34,11 @@ else:
 **Version coverage:** parsing is line-oriented and only reads the structure the graph
 needs — block labels and terminators; instruction bodies are kept as text. That makes the
 parser insensitive to most syntax differences between LLVM releases, so printer output from
-LLVM ~2.x through current is accepted:
-
-| LLVM version | Era-specific syntax that is accepted                                                                                                                                        |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~2.x         | typed pointers (`i8*`), function-pointer call types, one-line `invoke`, the old `unwind` terminator                                                                         |
-| 3.x–6.x      | unnamed blocks printed only as `; <label>:N` comments, old-style `load i8* %p` / `getelementptr` (no separate pointee type), `!llvm.loop` / `!prof` suffixes on terminators |
-| 7.x–13.x     | printed numeric block labels (`7:`), explicit pointee types                                                                                                                 |
-| 14+          | opaque `ptr`, `#dbg_value(...)` debug records, `callbr`                                                                                                                     |
-| any          | `comdat`, `module asm`, `uselistorder` — accepted and ignored                                                                                                               |
+LLVM ~2.x through current is accepted: typed pointers and the old `unwind` terminator
+(2.x), `; <label>:N` unnamed blocks and old-style `load`/`getelementptr` (3.x–6.x),
+printed numeric block labels (7.x–13.x), opaque `ptr`, `#dbg_*` debug records, and
+`callbr` (14+). `comdat`, `module asm`, and `uselistorder` are accepted and ignored. The
+per-era details live in the [LLVM-IR spec](../internal/specs/llvm-ir.md).
 
 **Views:** LLVM-IR has two views, switched by the CFG / Use-Def toggle in the editor panel. The
 editor content is kept when switching views (only switching _mode_ replaces it with that

@@ -5,10 +5,9 @@ of the `llvm-ir` mode (`views: [cfg, use-def]`), selected by the editor panel's 
 toggle. Input syntax is unchanged from `specs/llvm-ir.md`; this spec covers only
 the AST → `GraphData` conversion performed by
 `src/graphBuilder/llvmUseDefGraphBuilder.ts`, which consumes the §3.5
-`defs`/`uses` fields (the consumer that §3.5 deferred).
+`defs`/`uses` fields.
 
-Conventions: every normative statement carries a **Pinned by** reference to the
-test(s) that fix the behavior. Unqualified test names refer to
+Conventions: unless noted otherwise, every normative statement in this spec is pinned by
 `src/graphBuilder/__tests__/llvm/useDefGraph.test.ts`. Statements marked
 _observed, untested_ describe current behavior with no covering test.
 
@@ -16,36 +15,25 @@ _observed, untested_ describe current behavior with no covering test.
 
 SSA dataflow, per function: one node per instruction line that participates in
 dataflow, one edge per (defining line → reading line) relationship. The graph is
-**flat** — there are no container nodes and no `parentId`, so ELK's layered layout ranks
-instruction nodes directly by their use-def edges and vertical position means dataflow
-depth. A compound-node prototype was rejected because estimated container sizes drifted
-from rendered sizes and React Flow parent clamping cascaded children into overlap.
-Basic-block membership is carried on the instruction node itself as a colored badge (§2),
-not by geometry.
+**flat** — no container nodes and no `parentId` (`contracts/graph-data.md`) — so ELK's
+layered layout ranks instruction nodes directly by their use-def edges and vertical
+position means dataflow depth. Basic-block membership is carried on the instruction node
+itself as a colored badge (§2), not by geometry.
 
 Control flow is **not** shown: a `br` contributes at most the read of its
 condition, never an edge to another block. Module-level items that never
 participate in SSA dataflow — globals, metadata, attribute groups, declarations,
 targets, debug records — produce **no nodes**.
 
-> Pinned by: "module-level items produce no nodes"
-
 ## 2. Nodes
 
 All ids are namespaced by function, using the same `func_<name>` prefixing
 convention as the CFG builder, so identical block labels or value names across
-functions cannot collide. Quoted identifiers are an exception: `uniqueId`
-removes every `@`, `%`, and `"` character anywhere in the name (a global
-strip, not just the leading sigil and surrounding quotes), so a quoted name
-whose _contents_ include `@`, `%`, or `"` can still collide with an unrelated
-name after stripping (e.g. `@"a@b"` and `@ab` both prefix to `func_ab`) — a
-pre-existing encoding gap shared with the CFG builder (`llvmGraphBuilder.ts`);
-fixing it is follow-up work outside this spec (_observed, untested_).
-
-> Pinned by: "node and edge ids stay unique across functions with identical
-> labels, defs, params, and external names" (instruction, argument, external
-> node ids and edge ids together, across functions); per-node-type
-> namespacing is further pinned in §2.1 and §2.2.
+functions cannot collide. Quoted identifiers are an exception: `uniqueId` strips every
+`@`, `%`, and `"` character anywhere in the name, so a quoted name whose _contents_
+include those characters can still collide with an unrelated name after stripping
+(e.g. `@"a@b"` and `@ab` both prefix to `func_ab`) — an encoding gap shared with the CFG
+builder (`llvmGraphBuilder.ts`) (_observed, untested_).
 
 ### 2.1 Instruction nodes
 
@@ -59,14 +47,8 @@ dataflow** — that is, whose `defs` or `uses` is non-empty. A line with an empt
 a `ret void`, or an `unreachable` would otherwise be an isolated dot with no
 incident edge.
 
-> Pinned by: "one node per instruction with defs or uses",
-> "lines with neither defs nor uses get no node",
-> "terminators that read or define values get nodes"
-
 Debug records (`#dbg_*`) and the §3.4 synthetic empty terminator (no source
 line, `originalText === ""`, no `defs`/`uses`) never produce a node.
-
-> Pinned by: "debug records and the synthetic empty terminator get no node"
 
 `astData` is
 `{ text, def, uses, isTerminator, blockLabel, blockIndex }`:
@@ -78,15 +60,7 @@ line, `originalText === ""`, no `defs`/`uses`) never produce a node.
 | `uses`         | the §3.5 use names (sigil-free, deduplicated) — drives the per-operand target ports (§4)                                                    |
 | `isTerminator` | whether the line is the block's terminator                                                                                                  |
 | `blockLabel`   | the block's **display** label: `"entry"` for a first block whose label is `null`, otherwise the block's label, falling back to its block id |
-| `blockIndex`   | the block's 0-based position within its function, in AST block order                                                                        |
-
-`blockIndex` exists to drive the badge tint (§4); it is a rendering input, not a
-semantic ordering claim.
-
-> Pinned by: "instruction node ids are namespaced per function",
-> "instruction astData carries text, def and isTerminator",
-> "blockLabel is entry for the unlabeled entry block",
-> "blockIndex is the block's position in its function"
+| `blockIndex`   | the block's 0-based position within its function, in AST block order — a rendering input for the badge tint (§4), not a semantic ordering   |
 
 ### 2.2 Value nodes
 
@@ -103,10 +77,6 @@ semantic ordering claim.
   (§3.5), so edge construction must be total rather than throwing on an
   unresolved name.
 
-> Pinned by: "one argument node per named parameter",
-> "unnamed parameters get no argument node",
-> "external value node for names with no known def"
-
 ## 3. Edges
 
 For every emitted node `N` and every name `v` in `N.uses`, one edge from the
@@ -116,8 +86,8 @@ argument value node for `v`, else a lazily created external value node — to `N
 - `id`: `e-<sourceId>-<targetId>-<v>`.
 - `targetHandle`: `"u-<v>"` — the edge lands on the target card's per-operand
   port for `v` (§4). Sources use the defining node's single source handle.
-- **No label.** The defined name is already visible in the source node's text,
-  so a `%v` label would be redundant. Only phi edges are labeled (§3.1).
+- **No label.** The defined name is already visible in the source node's text.
+  Only phi edges are labeled (§3.1).
 - `uses` is already deduplicated per line (§3.5), so a line reading `%v` twice
   gets one edge.
 - Self-reference cannot occur: §3.5 excludes a line's own def from its `uses`.
@@ -125,17 +95,12 @@ argument value node for `v`, else a lazily created external value node — to `N
   values are uses; `invoke`/`callbr` results are defs that source edges into
   other blocks.
 
-> Pinned by: "one edge per use, from the defining node",
-> "plain use-def edges carry no label", "edge ids embed the value name",
-> "a value read twice on one line gets one edge",
-> "uses of parameters connect to the argument node"
-
 ### 3.1 phi edges
 
 For a `phi` line, the incoming `[ value, %block ]` pairs are re-extracted
 **textually** from `originalText`: the AST keeps phi generic (`specs/llvm-ir.md`
-§5, "phi instructions do not contribute edges") and `src/graphBuilder` must not
-import from `src/parser`, so the builder scans the text itself.
+§5) and `src/graphBuilder` must not import from `src/parser`, so the builder
+scans the text itself.
 
 An edge whose value name appears as a local incoming value gets `dashed: true`
 and the label `%v (%bb)` naming the incoming block. When the same value arrives
@@ -146,43 +111,36 @@ edge — they are not in `uses`.
 Quoted local names inside phi incoming lists are not matched by the textual scan
 and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
 
-> Pinned by: "phi incoming edges are dashed and labeled with the incoming block",
-> "a value arriving from several blocks gets one edge listing them",
-> "constant phi incoming values contribute no edge"
-
 ## 4. Layout and rendering behavior
 
 - `GraphData.direction` is `"TD"`, and **no node carries `parentId`** — the view
   deliberately produces a flat graph so that the layered layout's ranking is the
-  dataflow order. Containers are excluded for the sizing and clamping reasons in §1.
+  dataflow order (§1).
 - The view supplies its own `layoutOptions` (_observed, untested_) and reuses
   the standard `codeGraphEdgeBuilder`: edge geometry comes from the live
-  orthogonal router `src/utils/edgeRouter.ts` (`specs/graph-view.md` §4), not
-  from ELK, and a loop-carried phi edge — whose source ends
-  up at or below its target — is flagged and styled as a back edge from the
-  final layout geometry without any special casing here.
-- **Per-operand ports**: an
-  instruction card exposes one target `Handle` (id `u-<name>`) per entry in
-  `uses`, horizontally positioned at the first occurrence of `%name` in the
-  monospace text (measured with the same `getFontMetrics` char width the size
-  estimator uses, shifted right by the inline badge's width plus its gap), on
-  the card's top edge; and a source `Handle` under the `def` name on the
-  bottom edge. A name that cannot be located in the text falls back to the
-  default centered handle. The layout declares the same offsets as ELK
-  `FIXED_POS` ports so routed edges aim at the exact operand slot — a phi's
-  incoming edges visibly land on their own `[ %v, %bb ]` operands.
-  _(observed, untested — visual)_
-- Instruction nodes render as single-row code cards: a block badge chip
-  showing `blockLabel` sits inline to the **left** of the code line, tinted from an 8-color muted
-  palette indexed by `blockIndex % 8`. The badge is what preserves the CFG
-  correspondence in the absence of containers.
+  orthogonal router (`specs/graph-view.md` §4), not from ELK, and a loop-carried
+  phi edge — whose source ends up at or below its target — is flagged and styled
+  as a back edge from the final layout geometry without any special casing here.
+- **Per-operand ports**: an instruction card exposes one target `Handle`
+  (id `u-<name>`) per entry in `uses`, horizontally positioned at the first
+  occurrence of `%name` in the monospace text (measured with the same
+  `getFontMetrics` char width the size estimator uses, shifted right by the
+  inline badge's width plus its gap), on the card's top edge; and a source
+  `Handle` under the `def` name on the bottom edge. A name that cannot be
+  located in the text falls back to the default centered handle. The layout
+  declares the same offsets as ELK `FIXED_POS` ports so routed edges aim at the
+  exact operand slot — a phi's incoming edges visibly land on their own
+  `[ %v, %bb ]` operands. _(observed, untested — visual)_
+- Instruction nodes render as single-row code cards: a block badge chip showing
+  `blockLabel` sits inline to the **left** of the code line, tinted from an
+  8-color muted palette indexed by `blockIndex % 8`. The badge is what preserves
+  the CFG correspondence in the absence of containers.
+  _(observed, untested — visual, covered by Storybook stories only)_
 - Value nodes render as pills; `argument` and `external` are styled differently
   so a dangling reference is visibly not a parameter.
+  _(observed, untested — visual)_
 - `dashed` edges render with a dash pattern via the standard edge factory
   (`contracts/graph-data.md`).
-
-> Pinned by: "direction is TD", "no node carries parentId"; the rendering
-> details are _observed, untested_ (visual, covered by Storybook stories only).
 
 ## 5. Non-goals
 

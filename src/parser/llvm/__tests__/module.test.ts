@@ -1,7 +1,6 @@
 /**
- * Assembler tests for module.ts — the step-8 two-state machine, §3.3
- * implicit block numbering, and the §3.4 error policy
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md).
+ * Assembler tests for module.ts — the two-state machine, implicit block
+ * numbering, and error policy (docs/internal/specs/llvm-ir.md §1, §3.3, §3.4).
  */
 import { describe, expect, it } from "vitest";
 import { buildModule } from "../module";

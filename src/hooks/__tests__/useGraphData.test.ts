@@ -235,7 +235,7 @@ describe("useGraphData", () => {
     });
 
     // Unstable identities re-arm useIRWorkspace's debounced parse effect, which
-    // re-parses unchanged code forever (see plans/2026-08-canvas-first-shell.md).
+    // re-parses unchanged code forever (specs/graph-view.md §1–§2).
     expect(result.current.updateGraph).toBe(firstUpdateGraph);
     expect(result.current.resetLayout).toBe(firstResetLayout);
   });

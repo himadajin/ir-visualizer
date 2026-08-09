@@ -72,7 +72,7 @@ describe("llvm parseInstruction", () => {
 
     it("when line is a phi, should surface incoming values AND block refs as operands", () => {
       // Block references (%a, %b) appearing as Local operands is ACCEPTED
-      // at this layer; the defs/uses pass (plan step 11) applies the
+      // at this layer; the defs/uses pass applies the
       // phi-aware label filtering.
       const inst = parseInstruction(
         lineOf("%x = phi i32 [ 0, %a ], [ 1, %b ]"),

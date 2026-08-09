@@ -4,8 +4,8 @@
  * and by converter.ts's dimension calculations, which must measure the same
  * box the nodes actually render (specs/graph-view.md §5). Change the
  * constant, never a literal, or layout spacing silently drifts from
- * rendering. See plans/2026-08-node-visual-compaction.md for the agreed
- * density and header-band design.
+ * rendering. The density and header-band design are specified in
+ * specs/graph-view.md §5 and §6.6.
  */
 export const NODE_FONT_FAMILY = "monospace";
 export const NODE_FONT_SIZE = "12px";

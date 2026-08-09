@@ -1,7 +1,7 @@
 /**
  * Use-def extraction for LLVM instructions and terminators — one logical
  * line → the SSA local names it defines and reads
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §2, §4, step 11).
+ * (docs/internal/specs/llvm-ir.md §3.5).
  *
  * Parser-only foundation: the module assembler (module.ts) attaches the
  * result to every instruction and terminator parsed from a source line; no

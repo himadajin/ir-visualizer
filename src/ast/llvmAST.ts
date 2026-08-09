@@ -8,13 +8,13 @@ export interface LLVMModule {
   targets: LLVMTarget[];
   sourceFilenames: LLVMSourceFilename[];
   /**
-   * Recoverable parse oddities (plan §3.4) recorded by the line-oriented
+   * Recoverable parse oddities (specs/llvm-ir.md §3.4) recorded by the line-oriented
    * parser; absent for a clean parse. Structural errors still throw.
    */
   diagnostics?: LLVMParseDiagnostic[];
 }
 
-/** One recoverable parse diagnostic (plan §4, step 7). */
+/** One recoverable parse diagnostic (specs/llvm-ir.md §3.4). */
 export interface LLVMParseDiagnostic {
   /** 1-based physical source line number. */
   line: number;
@@ -116,7 +116,8 @@ interface LLVMInstructionBase {
   type: "Instruction";
   originalText: string;
   /**
-   * Use-def foundation (plan step 11, parser-only — no consumer yet).
+   * Use-def foundation consumed by the LLVM Use-Def graph view
+   * (specs/llvm-ir.md §3.5; specs/llvm-use-def-view.md).
    * SSA local names this line defines: the `%x =` assignment result exactly,
    * so 0 or 1 entry (invoke/callbr results included). Names carry no sigil.
    * Never globals. Absent only on nodes with no source line (the §3.4

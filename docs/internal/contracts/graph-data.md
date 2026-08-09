@@ -59,8 +59,9 @@ type GraphNode = GraphNodeBase &
 
 `GraphNodeBase` holds the fields every node has regardless of mode: `id`, `label`, `type?`,
 `language?`, `blockLabel?`. There is **no container/parent field**: every graph this contract
-describes is flat, including the LLVM Use-Def view (see its plan's §2 for why compound layout
-was rejected).
+describes is flat. The LLVM Use-Def view deliberately uses a flat graph so layered layout ranks
+instructions by dataflow; compound nodes were rejected because estimated container sizes drifted
+from rendered sizes and React Flow parent clamping caused child overlap.
 
 The `llvm-useDef*` astData shapes (`LLVMUseDefInstructionData`, `LLVMUseDefValueData`) are
 view-data shapes living in `src/ast/llvmAST.ts` next to `LLVMFunctionHeaderData`, which set

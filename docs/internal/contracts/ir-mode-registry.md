@@ -1,8 +1,8 @@
 # Contract: IR mode registry
 
 - **Status:** Implemented (Phase 2, 2026-07-04)
-- **Motivation:** see `docs/internal/plans/2026-07-refactoring-roadmap.md` — before Phase 2,
-  adding a 4th IR required editing ~14 scattered call sites. This contract defines the single
+- **Motivation:** before the registry, adding a 4th IR required editing roughly 14 scattered
+  dispatch sites. This contract defines the single
   interface an IR mode must implement so that adding one only means adding one registry
   entry (plus the mode's own parser/AST/node-component files).
 
@@ -12,8 +12,8 @@ Each IR mode is a single object implementing `IRModeDefinition` (`src/irModes/ty
 
 ```ts
 interface IRModeDefinition {
-  key: string; // e.g. "llvm-ir", "mermaid", "selectionDAG" — stable, used as the toolbar <Select> value
-  label: string; // toolbar display label, e.g. "LLVM-IR"
+  key: string; // e.g. "llvm-ir", "mermaid", "selectionDAG" — stable, used as the panel <Select> value
+  label: string; // editor-panel display label, e.g. "LLVM-IR"
   editorLanguage: string; // Monaco language id registered in CodeEditor
   defaultCode: string; // code shown when the mode is selected
   parse: (code: string) => GraphData; // text -> graph, throws Error on invalid input
@@ -52,7 +52,7 @@ Rules:
 - `useIRWorkspace` owns the active view key. Switching **views keeps the editor
   code** (that is the point of views); switching **modes resets** the view to the
   default and replaces the code with `defaultCode`, as before.
-- The toolbar renders a view `ToggleButtonGroup` only when the active mode has
+- The editor panel renders a view `ToggleButtonGroup` only when the active mode has
   `views`.
 - A mode's `nodeTypes` covers every view's node renderers (GraphViewer merges
   `nodeTypes` per mode, not per view).
@@ -89,7 +89,7 @@ interface IREdgeBuilder {
 
 All three current modes live in `src/irModes/`: `llvmMode.ts`, `mermaidMode.ts`,
 `selectionDAGMode.ts`, aggregated by `src/irModes/index.ts` into `IR_MODES` (keyed map) and
-`IR_MODE_LIST` (array, for iterating in the toolbar).
+`IR_MODE_LIST` (array, for iterating in the editor panel).
 
 ## What consumes the registry
 

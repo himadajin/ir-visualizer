@@ -1,7 +1,7 @@
 /**
- * Use-def foundation tests — the step-11 `defs`/`uses` extraction on every
+ * Use-def foundation tests — `defs`/`uses` extraction on every
  * instruction and terminator, plus the type-alias table plumbing
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §4, §5.9).
+ * (docs/internal/specs/llvm-ir.md §3.5).
  * Everything goes through `buildModule` so the alias-table wiring and the
  * per-node attachment are exercised, not just the extraction function.
  */

@@ -1,8 +1,8 @@
 /**
  * String-aware tokenizer for one logical line of LLVM IR.
  *
- * Layer-3 primitive of the line-oriented parser
- * (docs/internal/plans/2026-07-llvm-line-oriented-parser.md §3, step 4).
+ * Tokenization primitive of the line-oriented parser
+ * (docs/internal/specs/llvm-ir.md §1).
  * Pure functions only; no newline handling — the logical-line layer owns that.
  *
  * Totality contract: `tokenizeLine` never throws, terminates on any input,
@@ -212,7 +212,7 @@ function scanHash(line: string, start: number): Token {
  * never a token itself. See the totality contract at the top of this file.
  *
  * Note: `%struct.T` and `%val` both tokenize as `local` — separating type
- * aliases from values is a later pass (plan step 11), not the tokenizer's.
+ * aliases from values belongs to the use-def extraction pass, not the tokenizer.
  */
 export function tokenizeLine(line: string): Token[] {
   const tokens: Token[] = [];

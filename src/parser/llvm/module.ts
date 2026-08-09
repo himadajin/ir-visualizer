@@ -1,7 +1,6 @@
 /**
  * Module assembler for the line-oriented LLVM parser — logical lines →
- * `LLVMModule` (docs/internal/plans/2026-07-llvm-line-oriented-parser.md
- * §3, §3.3, §3.4, step 8).
+ * `LLVMModule` (docs/internal/specs/llvm-ir.md §1, §3.3, §3.4).
  *
  * A two-state machine (top-level ⇄ in-function) drives the earlier layers:
  * `readLogicalLines` (layer 1) → `classifyTopLevel` / `classifyBody`

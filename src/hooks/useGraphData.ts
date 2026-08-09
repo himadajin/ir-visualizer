@@ -6,7 +6,7 @@ import {
   useEdgesState,
 } from "@xyflow/react";
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
-import type { IRModeDefinition } from "../irModes/types";
+import type { IRLayoutBehavior } from "../irModes/types";
 import { getLayoutedElements } from "../utils/layout";
 import { createReactFlowNode } from "../utils/converter";
 
@@ -30,11 +30,11 @@ export const useGraphData = () => {
 
   const [current, setCurrent] = useState<{
     graph: GraphData;
-    mode: IRModeDefinition;
+    mode: IRLayoutBehavior;
   } | null>(null);
 
   const updateGraph = useCallback(
-    (graph: GraphData, mode: IRModeDefinition) => {
+    (graph: GraphData, mode: IRLayoutBehavior) => {
       setCurrent({ graph, mode });
       const signature = getTopologySignature(graph);
 

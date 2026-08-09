@@ -1,4 +1,4 @@
-import { parseLLVM } from "../parser/llvm";
+import { parseLLVM, parseLLVMUseDef } from "../parser/llvm";
 import { codeGraphEdgeBuilder } from "../utils/layout";
 import LLVMBasicBlockNode from "../components/Graph/LLVM/LLVMBasicBlockNode";
 import LLVMFunctionHeaderNode from "../components/Graph/LLVM/LLVMFunctionHeaderNode";
@@ -7,6 +7,8 @@ import LLVMAttributeGroupNode from "../components/Graph/LLVM/LLVMAttributeGroupN
 import LLVMMetadataNode from "../components/Graph/LLVM/LLVMMetadataNode";
 import LLVMDeclarationNode from "../components/Graph/LLVM/LLVMDeclarationNode";
 import LLVMExitNode from "../components/Graph/LLVM/LLVMExitNode";
+import LLVMUseDefInstructionNode from "../components/Graph/LLVM/UseDef/LLVMUseDefInstructionNode";
+import LLVMUseDefValueNode from "../components/Graph/LLVM/UseDef/LLVMUseDefValueNode";
 import type { IRModeDefinition } from "./types";
 
 const DEFAULT_CODE = `
@@ -55,6 +57,19 @@ export const llvmMode = {
     llvmMetadata: LLVMMetadataNode,
     llvmDeclaration: LLVMDeclarationNode,
     llvmExit: LLVMExitNode,
+    llvmUseDefInstruction: LLVMUseDefInstructionNode,
+    llvmUseDefValue: LLVMUseDefValueNode,
   },
   edgeBuilder: codeGraphEdgeBuilder,
+  // views[0] shares parse/edgeBuilder with the top-level fields per the
+  // registry contract ("Views"): it IS the default view.
+  views: [
+    { key: "cfg", label: "CFG", parse: parseLLVM },
+    {
+      key: "use-def",
+      label: "Use-Def",
+      parse: parseLLVMUseDef,
+      dagreOptions: { ranksep: 60, nodesep: 40 },
+    },
+  ],
 } satisfies IRModeDefinition;

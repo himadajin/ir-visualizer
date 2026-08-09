@@ -7,10 +7,32 @@ import {
   type SelectChangeEvent,
 } from "@mui/material";
 import { IR_MODE_LIST, type IRModeKey } from "../../irModes";
+import type { IRViewDefinition } from "../../irModes/types";
+
+const toggleGroupSx = {
+  height: 26,
+  "& .MuiToggleButton-root": {
+    fontSize: "11px",
+    px: 1.2,
+    py: 0,
+    textTransform: "none",
+    color: "#666",
+    borderColor: "#d0d0d0",
+    "&.Mui-selected": {
+      backgroundColor: "#e8e8e8",
+      color: "#222",
+      fontWeight: 600,
+    },
+  },
+};
 
 interface ToolbarPaneProps {
   mode: IRModeKey;
   onModeChange: (event: SelectChangeEvent) => void;
+  /** The active mode's views; the toggle renders only when this is set. */
+  views?: IRViewDefinition[];
+  activeViewKey?: string | null;
+  onViewChange?: (viewKey: string) => void;
   isNarrow: boolean;
   activePane: "editor" | "graph";
   onActivePaneChange: (pane: "editor" | "graph") => void;
@@ -19,6 +41,9 @@ interface ToolbarPaneProps {
 export function ToolbarPane({
   mode,
   onModeChange,
+  views,
+  activeViewKey,
+  onViewChange,
   isNarrow,
   activePane,
   onActivePaneChange,
@@ -58,25 +83,28 @@ export function ToolbarPane({
               if (v !== null) onActivePaneChange(v);
             }}
             size="small"
-            sx={{
-              height: 26,
-              "& .MuiToggleButton-root": {
-                fontSize: "11px",
-                px: 1.2,
-                py: 0,
-                textTransform: "none",
-                color: "#666",
-                borderColor: "#d0d0d0",
-                "&.Mui-selected": {
-                  backgroundColor: "#e8e8e8",
-                  color: "#222",
-                  fontWeight: 600,
-                },
-              },
-            }}
+            sx={toggleGroupSx}
           >
             <ToggleButton value="editor">Code</ToggleButton>
             <ToggleButton value="graph">Graph</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+
+        {views && (
+          <ToggleButtonGroup
+            value={activeViewKey}
+            exclusive
+            onChange={(_e, v: string | null) => {
+              if (v !== null) onViewChange?.(v);
+            }}
+            size="small"
+            sx={toggleGroupSx}
+          >
+            {views.map((view) => (
+              <ToggleButton key={view.key} value={view.key}>
+                {view.label}
+              </ToggleButton>
+            ))}
           </ToggleButtonGroup>
         )}
 

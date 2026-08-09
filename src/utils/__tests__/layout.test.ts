@@ -5,7 +5,7 @@ import type { GraphData } from "../../types/graph";
 import { BACK_EDGE_COLOR } from "../converter";
 
 describe("getLayoutedElements", () => {
-  it("should layout a simple graph with positions and routes", async () => {
+  it("should layout a simple graph with positions and no stored edge geometry", async () => {
     const graph: GraphData = {
       nodes: [
         { id: "A", label: "A", language: "mermaid" },
@@ -26,16 +26,14 @@ describe("getLayoutedElements", () => {
       expect(typeof node.position.y).toBe("number");
     }
 
-    // The edge is routed and carries its ELK route and endpoint positions.
+    // The edge is routed, but layout attaches only the structural back-edge
+    // flag — no geometry (specs/graph-view.md §3): edge routing is computed
+    // at render time from live node rects (src/utils/edgeRouter.ts), not by
+    // layout.ts.
     const data = edges[0].data as RoutedEdgeData;
     expect(edges[0].type).toBe("routed");
     expect(data.isBackEdge).toBe(false);
-    expect(data.route).toBeDefined();
-    expect(data.route!.points.length).toBeGreaterThanOrEqual(2);
-    const a = nodes.find((n) => n.id === "A")!;
-    const b = nodes.find((n) => n.id === "B")!;
-    expect(data.route!.sourcePos).toEqual(a.position);
-    expect(data.route!.targetPos).toEqual(b.position);
+    expect(data).not.toHaveProperty("route");
   });
 
   it("should respect direction option", async () => {
@@ -182,16 +180,11 @@ describe("getLayoutedElements", () => {
       ],
     };
 
-    const { nodes, edges } = await getLayoutedElements(graph);
+    const { edges } = await getLayoutedElements(graph);
 
-    // The routed endpoint lands inside the target node's horizontal span at
-    // its top edge (the operand port), not at the node's center-less default.
-    const data = edges[0].data as RoutedEdgeData;
-    const target = nodes.find((n) => n.id === "use1")!;
-    const end = data.route!.points[data.route!.points.length - 1];
-    const width = (target.style as { width: number }).width;
-    expect(end.x).toBeGreaterThanOrEqual(target.position.x);
-    expect(end.x).toBeLessThanOrEqual(target.position.x + width);
+    // ELK's FIXED_POS operand port determines which handle the edge attaches
+    // to; the router (src/utils/edgeRouter.ts) is what routes between the
+    // live handle positions, not layout.ts.
     expect(edges[0].targetHandle).toBe("u-1");
     expect(edges[0].sourceHandle).toBe("def");
   });

@@ -58,14 +58,23 @@ function selectionDAGGraph(): GraphData {
   };
 }
 
-/** Layout is async (specs/graph-view.md §2): wait for it to land. */
+/**
+ * Layout is async (specs/graph-view.md §2): wait for it to land. The elkjs
+ * bundle is dynamically imported on first use (`layout.ts`), which under CPU
+ * load can take longer than `waitFor`'s default 1000 ms timeout even though
+ * the surrounding test's own timeout (vitest's default 5000 ms) would have
+ * tolerated it — so this raises `waitFor`'s ceiling to match.
+ */
 async function waitForNodeCount(
   result: { current: ReturnType<typeof useGraphData> },
   count: number,
 ) {
-  await waitFor(() => {
-    expect(result.current.nodes).toHaveLength(count);
-  });
+  await waitFor(
+    () => {
+      expect(result.current.nodes).toHaveLength(count);
+    },
+    { timeout: 4500 },
+  );
 }
 
 describe("useGraphData", () => {
@@ -78,15 +87,12 @@ describe("useGraphData", () => {
     await waitForNodeCount(result, 2);
 
     expect(result.current.edges).toHaveLength(1);
-    // ELK should have assigned real (non-origin) positions and a route.
+    // ELK should have assigned real (non-origin) positions.
     const positions = result.current.nodes.map((n) => n.position);
     expect(positions.some((p) => p.x !== 0 || p.y !== 0)).toBe(true);
-    expect(
-      (result.current.edges[0].data as RoutedEdgeData).route,
-    ).toBeDefined();
   });
 
-  it("preserves node positions and edge routes on a content-only update (same topology)", async () => {
+  it("preserves node positions and edges' back-edge flags on a content-only update (same topology)", async () => {
     const { result } = renderHook(() => useGraphData());
 
     act(() => {
@@ -94,9 +100,9 @@ describe("useGraphData", () => {
     });
     await waitForNodeCount(result, 2);
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
-    const routeAfterFirst = (result.current.edges[0].data as RoutedEdgeData)
-      .route;
-    expect(routeAfterFirst).toBeDefined();
+    const backEdgeAfterFirst = (result.current.edges[0].data as RoutedEdgeData)
+      .isBackEdge;
+    expect(backEdgeAfterFirst).toBe(false);
 
     act(() => {
       // Same node/edge ids -> same topology signature, only labels differ.
@@ -112,9 +118,9 @@ describe("useGraphData", () => {
       "A changed",
       "B changed",
     ]);
-    // The rebuilt edge inherits the stored route (specs/graph-view.md §2).
-    expect((result.current.edges[0].data as RoutedEdgeData).route).toEqual(
-      routeAfterFirst,
+    // The rebuilt edge inherits the back-edge flag (specs/graph-view.md §2).
+    expect((result.current.edges[0].data as RoutedEdgeData).isBackEdge).toEqual(
+      backEdgeAfterFirst,
     );
   });
 

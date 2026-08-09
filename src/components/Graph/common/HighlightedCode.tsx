@@ -37,6 +37,16 @@ const HighlightedCode = ({
           theme: "github-light",
         });
 
+        // Shiki's <pre> carries the user-agent default block margin (12px
+        // top/bottom in this app), which converter.ts's node-size estimate
+        // does not account for (nodeTextStyle.ts, specs/graph-view.md §5) —
+        // reset it so the rendered box matches the estimate. A no-op when
+        // `inline` strips the tag below.
+        highlighted = highlighted.replace(
+          /(<pre[^>]*\sstyle=")/,
+          "$1margin:0;",
+        );
+
         if (inline) {
           // Remove <pre> and <code> tags
           highlighted = highlighted.replace(/<pre[^>]*>/g, "");

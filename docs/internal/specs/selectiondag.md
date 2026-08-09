@@ -81,9 +81,10 @@ reassoc nofpexcept`.
   `isChainOrGlue` and renders **dashed** (see `createSelectionDAGReactFlowEdge`).
   > Pinned by: `edges.test.ts` ("chain or glue"),
   > `src/utils/__tests__/converter.test.ts` ("dashed edge")
-- The graph is always `direction: "TD"`; SelectionDAG layout uses 50 px between layers
-  (`selectionDAGMode.layoutOptions`).
-  > Pinned by: `invariants.test.ts` (direction); layer spacing: _observed, untested_
+- The graph is always `direction: "TD"`; SelectionDAG layout uses
+  `elk.layered.spacing.nodeNodeBetweenLayers: 50` (`selectionDAGMode.layoutOptions`,
+  an ELK option — see `specs/graph-view.md` §3).
+  > Pinned by: `invariants.test.ts` (direction); the spacing value: _observed, untested_
 
 ## 4. Node rendering
 

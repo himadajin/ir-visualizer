@@ -81,9 +81,11 @@ interface IREdgeBuilder {
 ```
 
 - LLVM/Mermaid (`codeGraphEdgeBuilder`) build `type: "routed"` edges; the ELK layout
-  attaches each edge's computed route and back-edge flag to `edge.data` afterwards
-  (`specs/graph-view.md` §4). There is no position-based classification anymore — whether
-  an edge is a back edge is derived from the final layout geometry, not chosen up front.
+  attaches each edge's back-edge flag to `edge.data` afterwards, and the edge's geometry is
+  computed at render time from the live node rectangles (`specs/graph-view.md` §4). A
+  builder therefore contributes no geometry at all. There is no position-based
+  classification anymore — whether an edge is a back edge is derived from the final layout
+  geometry, not chosen up front.
 - SelectionDAG (`selectionDAGEdgeBuilder`) builds React Flow built-in `default` (bezier)
   edges connecting specific operand/type Handles; routing does not apply to them.
 

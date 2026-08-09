@@ -50,17 +50,25 @@ top-left, and a control cluster at the bottom-right.
   input parses again.
 - **Graph canvas**: scroll/pinch to zoom, drag the background to pan, drag nodes to rearrange
   them. Node positions survive edits that don't change the graph's structure (e.g. editing an
-  instruction inside a block), so your manual arrangement isn't lost while you type.
+  instruction inside a block), so your manual arrangement isn't lost while you type. Edges
+  always follow the live position of the nodes they connect, including while you're mid-drag,
+  so there's nothing to repair afterward — dragging a node never changes how its edges are
+  drawn, only where they point.
 - **Canvas controls** (floating, bottom-right): zoom in, zoom out, and fit view, then — past
   the divider — **Reset Layout**. Fit view accounts for the editor panel, so the graph is
   centred in the part of the canvas you can actually see.
-- **Reset Layout**: recomputes the automatic layout and re-fits the view — use it after
-  dragging nodes around or when a big edit makes the layout messy. It's separated from the
-  zoom buttons by a divider because it discards your manual node positions.
+- **Reset Layout**: recomputes the automatic layout and re-fits the view — use it when a big
+  edit, or a lot of manual dragging, has left the arrangement messy. It's separated from the
+  zoom buttons by a divider because it discards your manual node positions. It tidies node
+  positions, not edges: edges are always current, dragged or not.
 - **Narrow screens** (≤ 768 px): the canvas stays full-screen and the editor panel becomes a
   **bottom sheet** covering roughly the lower half of the viewport. The **Code** pill moves to
   the bottom-left and opens and closes the sheet, and the canvas controls lift above the sheet
   while it's open. There's no Code/Graph toggle, and the drag-resize edge is wide-screen only.
+
+**Known limitation:** edge routing avoids node boxes, and nothing else. If you drag one node
+onto or nearly onto another, an edge can visibly cut between the two boxes instead of routing
+around them. That's about the layout, not something you did wrong.
 
 ## Reading the graphs
 

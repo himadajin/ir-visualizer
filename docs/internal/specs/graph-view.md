@@ -33,14 +33,15 @@ covering test.
 `direction | sorted node ids | sorted source-target pairs`.
 
 - **Signature changed** (first parse, node/edge added or removed, direction changed):
-  full **asynchronous** ELK re-layout; all positions and edge routes are recomputed. A
-  layout that resolves after a newer parse has started is discarded (generation counter),
-  so a stale layout can never overwrite a newer graph.
+  full **asynchronous** ELK re-layout; all node positions are recomputed. A layout that
+  resolves after a newer parse has started is discarded (generation counter), so an
+  outdated layout can never overwrite a newer graph.
 - **Signature unchanged** (content-only edit, e.g. changing an instruction inside a block):
   synchronous update — node **positions are preserved**, labels/content update in place,
-  edges are rebuilt by the mode's `IREdgeBuilder` and inherit the previous edge's stored
-  route and back-edge flag by id (§4). A content edit can change a node's _size_, which the
-  stored route does not track; the next full layout corrects this (accepted drift).
+  and edges are rebuilt by the mode's `IREdgeBuilder`, inheriting the previous edge's
+  back-edge flag by id (§4). Nothing geometric is inherited: edge geometry is recomputed
+  from the live node rectangles on every render (§4), so a content edit that changes a
+  node's rendered _size_ is reflected immediately, with no re-layout needed.
 - Switching views always changes the signature (the two projections emit different node id
   namespaces), so each view switch performs a full re-layout; **positions are not preserved
   across view switches**. This is intended: the two projections have unrelated topologies, so
@@ -55,55 +56,202 @@ re-fits the viewport (after a 50 ms delay — _observed, untested_).
 
 > Pinned by: `useGraphData.test.ts` ("resetLayout ...")
 
-## 3. Layout (ELK)
+## 3. Layout (ELK — node placement)
 
-Layout and edge routing are both computed by ELK (`elkjs`, layered algorithm). ELK is the single
-layout engine because its orthogonal routes, ports, cycle handling, and self-loop routing keep
-layout geometry connected to what React Flow renders.
+Node placement is computed by ELK (`elkjs`, layered algorithm). ELK is the single placement
+engine because its ports, cycle handling and layer ordering keep node geometry connected to
+what React Flow renders. It computes **placement only** — edge geometry is not taken from it
+(§4).
 
 - `getLayoutedElements` is **async**: the elkjs bundle is dynamically imported on first use
   and layout runs on the main thread (graphs are small; no worker).
 - Rank direction: explicit option → `GraphData.direction` → `"TD"`. `TD` maps to ELK
   `elk.direction: DOWN`, `LR` to `RIGHT`.
-- Edge routing is `ORTHOGONAL`; per-mode `layoutOptions` (ELK option map) merge into the
-  root options (e.g. Use-Def's tighter spacing, SelectionDAG's layer spacing).
+- `elk.edgeRouting: ORTHOGONAL` stays set, because ELK consults edge routing when ordering
+  nodes within a layer and it therefore improves **placement**. The route points ELK
+  produces are **discarded**: they are not stored on the React Flow edges.
+- Per-mode `layoutOptions` (ELK option map) merge into the root options (e.g. Use-Def's
+  tighter spacing, SelectionDAG's layer spacing).
 - Node boxes given to ELK use the estimated dimensions from §5, so spacing reflects real
   rendered sizes. Use-Def instruction nodes additionally declare `FIXED_POS` ports at
-  operand text offsets (`specs/llvm-use-def-view.md` §4).
+  operand text offsets (`specs/llvm-use-def-view.md` §4); the ports shape placement and
+  decide which handle an edge attaches to, which is what the router then routes between
+  — _(observed, untested)_.
+- The layout is also where the structural back-edge flag is decided (§4).
 
 > Pinned by: `src/utils/__tests__/layout.test.ts` (positions assigned, direction respected,
-> no overlapping positions, routes attached). `layoutOptions` merging: _observed, untested_.
+> no overlapping positions, back-edge flagging, no geometry attached to edges).
+> `layoutOptions` merging: _observed, untested_.
 
 ## 4. Edge routing and rendering
 
-Every LLVM/Mermaid edge is rendered by one custom edge type, `routed`
-(`RoutedEdge.tsx`), which draws the ELK-computed route; there are no hand-drawn edge
-shapes anymore.
+Every LLVM/Mermaid edge is rendered by one custom edge type, `routed` (`RoutedEdge.tsx`).
+**Edge geometry is a pure function of the live node rectangles**, computed at render time
+by this repo's own orthogonal router (`src/utils/edgeRouter.ts`; the module boundary and
+its guarantees are frozen in `contracts/edge-routing.md`). There is exactly one geometry
+generator: no stored geometry, no second path shape that appears once a node moves, and no
+notion of geometry that can go out of date.
 
-- The layout stores each edge's route on the React Flow edge:
-  `data.route = { points, sourcePos, targetPos }` — the orthogonal polyline's points and
-  the two endpoint nodes' layout positions (top-left), recorded for staleness detection.
-- `RoutedEdge` draws `points` as an orthogonal polyline with **rounded corners**; edge
-  labels (phi) render at the route midpoint.
-- **Drag fallback:** when an endpoint node's current position differs from the recorded
-  layout position (the user dragged it), the edge falls back to a live smoothstep path
-  between the current handle positions. **Reset layout** restores routed rendering.
-- **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a
-  self-loop or its target node lies entirely above its source node. Back edges render in
-  the loop accent color (muted purple `#8250df`, matching arrowhead) — "colored + upward
-  = loop-carried". This accent is graph grammar, not shell chrome (§6.6 still has no
-  accent token).
-- **Self-loops:** when ELK yields no usable route (and in the drag-fallback state), the
-  edge synthesizes a small orthogonal loop hugging the node's right side.
+- **Inputs** are React Flow's measured rects (`internals.positionAbsolute`,
+  `measured.width` / `measured.height`) and the live handle positions. Because those track
+  the current DOM, an edge follows its node while the node is dragged, and follows a size
+  change caused by a content-only edit (§2), with no re-layout involved.
+- **One pass per graph.** `routeEdges` takes all nodes and all requests at once, so it is
+  not called per edge. `src/hooks/useEdgeRoutes.ts` reads React Flow's store, calls the
+  router once per pass, and publishes the resulting `Map<edgeId, Point[]>` through a React
+  context; `RoutedEdge` looks up its own entry by edge id.
+- **Algorithm:** a sparse Hanan grid over node rects inflated by `nodeMargin` (default 12),
+  seeded per edge from the rect lines plus that edge's own endpoints. A grid segment is
+  traversable when it does not cross the interior of an inflated rect. The endpoint-node
+  exemption is **per endpoint**: the source node's rect is exempt only for the segments
+  incident to the pushed source point, the target node's only for those incident to the
+  pushed target point, and every other segment treats both as obstacles — so a **searched**
+  route never crosses the interior of its own endpoint nodes. That clearance is a property
+  of searched routes only, and of their **routed** segments only: the fallback below is
+  exempt **entirely** — its connector does no obstacle avoidance by design, being the last
+  resort once the search has proved no clear path exists — and a searched route's two
+  mandated stubs are exempt too, since with overlapping node rects one node's stub
+  necessarily lies inside the other's. Where the tighter rule leaves no path, the
+  fallback applies. The route is the cheapest grid path under `length + bendPenalty * turns`
+  (`bendPenalty` default 30), with turns counted over the whole polyline, stubs included.
+  Endpoints are pushed `nodeMargin` outward along their handle's side before joining the
+  grid.
+- **Endpoints are exact:** the polyline starts exactly at the source handle position and
+  ends exactly at the target handle position. The `nodeMargin`-pushed point is an interior
+  bend, never `points[0]` or the last point, so a drawn edge always touches its handle.
+  Collinear interior points are collapsed to their bends, but the two pushed points are
+  never collapsed away. **Self-loops are the one exception** — see below.
+- Every route is **orthogonal** and has **≥ 2 points**, and routing is **deterministic**:
+  identical input rects produce identical points, with no dependence on iteration order.
+  **Ties are broken by a fixed total order** — lowest total cost, then fewest bends, then
+  the point sequence compared lexicographically by `(x, y)` — so the chosen shape is a
+  documented property, not an implementation accident.
+- **No path found** yields a fully determined orthogonal fallback, built as a skeleton
+  `sourcePoint → S → P1 → connector → P2 → T → targetPoint`. `S` and `T` are the handles
+  pushed `nodeMargin` outward along their sides; `P1` and `P2` are pushed a further
+  `selfLoopGap` out, so the polyline always leaves straight and always approaches the
+  target from outside — which is what makes the no-reversal rule hold at both stubs
+  unconditionally. The connector is chosen from a fixed ladder (straight run, two-segment
+  elbow continuing along the exit axis, then three-segment lateral dog-legs ordered
+  +x, +y, −x, −y, then a four-segment rectangle for coincident handles), taking the first
+  candidate that satisfies the no-reversal rule; consecutive duplicate points are dropped.
+  **Two connector segments are provably not always enough:** when the source and target
+  normals lie on the same axis pointing opposite ways and the displacement runs backwards
+  along it (e.g. a `bottom → top` pair where the target sits above the source), both
+  two-segment orderings reverse at one of the two stubs, so a three-segment dog-leg is
+  required there — the longer candidates in the ladder are a minimum, not a convenience.
+  The fallback's connector does **no obstacle avoidance whatsoever, by design**: it picks a
+  shape from the endpoint geometry alone and never consults the node rects, because it is
+  reached only after the grid search has already proved no clear path exists — a shape that
+  avoided obstacles is not on offer at that point, only a determined shape that may clip or
+  no edge at all.
+  **Known limitations,** both accepted rather than fixed since the alternatives are a stale
+  route or a second geometry generator:
+  - Because the fallback does no obstacle avoidance, a fallback edge in overlapping-rect
+    geometry can visibly thread between the two boxes. Reachable only by dragging one node
+    onto or nearly onto another — ELK's placement does not produce two _directly connected_
+    nodes whose inflated boxes overlap. _(observed, untested)_
+  - ELK's placement can still leave two _unrelated_ node rects closer than `2 × nodeMargin`
+    apart with no drag at all, closing the corridor a third edge would otherwise route
+    through and forcing that edge to the fallback — a layout-constant question, not a router
+    defect. _(observed, untested)_
+- **No immediate reversals:** no returned polyline — searched, self-loop or fallback — has
+  an interior vertex whose arriving and leaving segments run along the same axis in
+  opposite directions. This is the checkable form of "never a degenerate hook", and it is
+  the rule's only form: "perpendicular segments and `points[i-1] !== points[i+1]`" is not
+  equivalent and must not be substituted. The search satisfies it by never doubling back
+  and by refusing to finish at the target along the target side's outward normal (an edge
+  that leaves unreachable falls back instead); the self-loop and the fallback satisfy it by
+  construction.
+- **Self-loops** are synthesized on the node's **right** side rather than routed, and are
+  the only edges exempt from the exact-endpoint rule: they are built from the node rect
+  alone, so the request's source and target handle positions are ignored (React Flow's
+  default bottom handle is centred, not at 75 %). For a rect `(x, y, w, h)` with
+  `laneX = x + w + selfLoopGap` (default 24), the polyline is exactly six points —
+  `(x + 0.75w, y + h)` on the bottom edge, `(x + 0.75w, y + h + nodeMargin)`,
+  `(laneX, y + h + nodeMargin)`, `(laneX, y - nodeMargin)`,
+  `(x + 0.75w, y - nodeMargin)`, and `(x + 0.75w, y)` on the top edge. The two
+  `nodeMargin` steps are what keep the horizontal runs off the node's own bottom and top
+  borders.
+- **Missing nodes:** a routing request whose source or target id is **not present in the
+  `nodes` array** produces **no entry** in the returned map — the router does not throw and
+  does not substitute a default rect, it omits the request (self-loops included).
+- **Unmeasured endpoints** follow from that rule: `useEdgeRoutes` omits nodes React Flow
+  has not measured yet from the rects it passes in, so their edges resolve to no entry and
+  are **not drawn** for that frame, appearing once measurement lands. There is deliberately
+  no placeholder shape — one would reintroduce the second geometry generator this design
+  removes.
+- **Obstacles are node rectangles only.** Edge labels and other edges are not obstacles,
+  and there is no edge-crossing penalty.
+- **During a drag**, routes recompute continuously, throttled to animation frames, and
+  only the edges incident to a moved node are re-routed; a full pass runs on drag stop.
+  That split is required rather than opportunistic: a full pass overruns the 16.7 ms frame
+  budget from roughly 180 nodes, which the Use-Def view can reach since it emits one node
+  per instruction.
+- **Performance:** a full routing pass over a synthetic 60-node / 80-edge graph completes
+  in under 50 ms, measured out of band (bare Node, warm, median of N). Routing cost depends
+  on graph shape as well as size — the repo's own test graph measures ~6–14 ms at that size,
+  an adjacent-layer graph of the same size ~2–4 ms — so the figure is a budget, not a
+  constant. The in-suite timing test is a catastrophic-regression guard at 300 ms, not a
+  check of this budget: inside a parallel test runner the number measures contention as
+  much as the router. Measured scaling on an ELK-layered-shaped CFG (bare Node, warm,
+  median of N, 2026-08-09):
+
+  | nodes | edges | median ms |
+  | ----- | ----- | --------- |
+  | 60    | 117   | 2.9       |
+  | 120   | 245   | 7.6       |
+  | 180   | ~370  | ~16       |
+  | 260   | 542   | 31.1      |
+  | 400   | 840   | 71.8      |
+
+  This is the basis for the ~180-node threshold above: the 16.7 ms animation-frame budget
+  — the one that matters, since a full pass runs per frame during a drag — is exceeded
+  around there, which is what makes the incident-edges-only drag path required rather than
+  an optimization held in reserve.
+
+- **Rendering:** `RoutedEdge` draws the returned points as an orthogonal polyline with
+  **rounded corners**; edge labels (phi) render at the polyline's arc-length midpoint.
+- **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a self-loop
+  or its target node lies entirely above its source node. The flag is **structural** —
+  decided once from ELK's placement geometry and never re-derived from live rects — so
+  colors do not flicker while a node is dragged; only geometry is live. Back edges render
+  in the loop accent color (muted purple `#8250df`, matching arrowhead) — "colored + upward
+  = loop-carried". This accent is graph grammar, not shell chrome (§6.6 still has no accent
+  token).
+- **Reset layout** (§2) re-runs ELK placement and nothing else. It has no role in edge
+  rendering: edge geometry is always current, dragged or not.
 - **SelectionDAG**: unaffected by routing — its edges connect per-operand/type Handles
   and keep the handle-anchored bezier look via React Flow's built-in `default` edge with
   `pathOptions.curvature`. Chain/glue edges render dashed (see `specs/selectiondag.md`
   §3). SelectionDAG edges place the arrow marker at the **start** (pointing at the
   source), LLVM/Mermaid at the **end**.
 
-> Pinned by: `layout.test.ts` (route attachment, back-edge / self-loop flagging),
-> `useGraphData.test.ts` (route preservation on content-only updates),
-> `converter.test.ts` (dashed chain/glue, markerStart/markerEnd)
+> Pinned by: `src/utils/__tests__/edgeRouter.test.ts` (orthogonality, ≥ 2 points, exact
+> endpoints, obstacle avoidance including that a searched route never crosses the interior
+> of its own endpoint nodes, tie-breaking and determinism, the six-point right-side
+> self-loop and its exemption from the exact-endpoint rule,
+> the no-path fallback skeleton and its connector ladder, the no-immediate-reversal rule
+> across searched, self-loop and fallback routes,
+> omission of requests naming a node absent from
+> `nodes`, and a 300 ms catastrophic-regression guard on the 60-node / 80-edge graph),
+> `src/utils/__tests__/layout.test.ts` (back-edge / self-loop
+> flagging,
+> no geometry stored on edges), `src/hooks/__tests__/useGraphData.test.ts` (back-edge flag
+> inherited on content-only updates), `src/utils/__tests__/converter.test.ts` (dashed
+> chain/glue, markerStart/markerEnd).
+>
+> _(observed, untested)_: that edges track the live DOM rects — following a node while it
+> is dragged and following a size change from a content-only edit — since no named test
+> drives a drag; the one-pass-per-graph `useEdgeRoutes` hook and its context; that
+> `useEdgeRoutes` omits unmeasured nodes from the rects it passes in, and that an edge with
+> no map entry is not drawn; the rounded corners; the midpoint label placement; the accent
+> color; the animation-frame throttling during a drag and the incident-edges-only drag
+> pass; that turns are counted over the whole polyline including the stubs; and the 50 ms
+> budget itself, which is measured out of band rather than by any test in the suite.
+> The **no-immediate-reversal** rule now holds for all three route kinds and is
+> additionally verified out of band (0 violations across a 40,401-position sweep, a
+> 4,096-case grid over all 16 side pairs, and 30,000 random all-sides graphs).
 
 ## 5. Node dimension estimation
 
@@ -123,9 +271,18 @@ ELK needs node sizes before React renders anything, so `converter.ts` estimates 
   2 px, header band 20 px), with `SelectionDAG/selectionDAGStyleConstants.ts` and
   `CodeFragment.tsx`'s exported paddings for their structures. When changing node styling,
   change the constant, never a literal, or layout spacing silently drifts from rendering.
+- Every LLVM node body and the Use-Def instruction card render their code line(s) through
+  `HighlightedCode.tsx`, which wraps Shiki's own `<pre>` output (block mode; SelectionDAG's
+  `CodeFragment.tsx` uses the same component in `inline` mode instead, which strips the
+  `<pre>`/`<code>` tags entirely, so it never carries this margin). Shiki's `<pre>` carries
+  the user-agent default block margin (12 px top/bottom, observed in this app's rendering);
+  `HighlightedCode.tsx` resets it to `0` on the generated HTML before mounting it, because the
+  estimate above assumes no margin. Mermaid nodes render plain text (`MermaidNode.tsx`, no
+  `HighlightedCode` involved) and were never affected.
 
 > Pinned by: `src/utils/__tests__/converter.test.ts` (mermaid/LLVM/wrapping/header-offset/
-> empty-label cases)
+> empty-label cases), `src/components/Graph/common/__tests__/HighlightedCode.test.tsx` (the
+> rendered `<pre>` carries no margin in block mode; inline mode still strips the tag).
 
 ## 6. Shell UI (canvas-first shell)
 

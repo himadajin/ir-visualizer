@@ -7,7 +7,7 @@ import {
 } from "@xyflow/react";
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
 import type { IRLayoutBehavior } from "../irModes/types";
-import { getLayoutedElements, inheritRoutedEdgeData } from "../utils/layout";
+import { getLayoutedElements, inheritBackEdgeFlag } from "../utils/layout";
 import { createReactFlowNode } from "../utils/converter";
 
 // Helper to generate a topology signature
@@ -28,13 +28,14 @@ export const useGraphData = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // `updateGraph` needs the *latest* nodes/edges (a content-only update
-  // preserves the previous positions and inherits edge routes from them), but
-  // it must NOT change identity when they change: `useIRWorkspace`'s debounced
-  // parse effect lists `updateGraph` as a dependency, so an unstable identity
-  // re-arms that effect after every graph update and re-parses unchanged code
-  // every 750 ms forever. That loop also replaces every node object on each
-  // pass, which permanently swallows React Flow's queued `fitView()` calls.
-  // Mirroring the state into refs keeps the callback stable.
+  // preserves the previous positions and inherits edges' back-edge flags
+  // from them), but it must NOT change identity when they change:
+  // `useIRWorkspace`'s debounced parse effect lists `updateGraph` as a
+  // dependency, so an unstable identity re-arms that effect after every
+  // graph update and re-parses unchanged code every 750 ms forever. That
+  // loop also replaces every node object on each pass, which permanently
+  // swallows React Flow's queued `fitView()` calls. Mirroring the state into
+  // refs keeps the callback stable.
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   useEffect(() => {
@@ -84,8 +85,9 @@ export const useGraphData = () => {
 
       if (isTopologyEqual) {
         // Content-only update (synchronous): preserve node positions, and
-        // let each rebuilt edge inherit the previous edge's stored route and
-        // back-edge flag by id.
+        // let each rebuilt edge inherit the previous edge's back-edge flag
+        // by id. Edge geometry is not inherited — it is recomputed from the
+        // live node rectangles on every render (useEdgeRoutes).
         const previousNodes = nodesRef.current;
         const previousEdges = edgesRef.current;
         const positionMap = new Map(
@@ -103,7 +105,7 @@ export const useGraphData = () => {
         nodesRef.current = newNodes;
 
         const newEdges = graph.edges.map((edge: GraphEdge) =>
-          inheritRoutedEdgeData(
+          inheritBackEdgeFlag(
             mode.edgeBuilder.buildReactFlowEdge(edge),
             previousEdgeMap.get(edge.id),
           ),

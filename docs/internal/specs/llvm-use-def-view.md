@@ -156,8 +156,9 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   deliberately produces a flat graph so that the layered layout's ranking is the
   dataflow order. Containers are excluded for the sizing and clamping reasons in §1.
 - The view supplies its own `layoutOptions` (_observed, untested_) and reuses
-  the standard `codeGraphEdgeBuilder`: edges are ELK-routed
-  (`specs/graph-view.md` §4), and a loop-carried phi edge — whose source ends
+  the standard `codeGraphEdgeBuilder`: edge geometry comes from the live
+  orthogonal router `src/utils/edgeRouter.ts` (`specs/graph-view.md` §4), not
+  from ELK, and a loop-carried phi edge — whose source ends
   up at or below its target — is flagged and styled as a back edge from the
   final layout geometry without any special casing here.
 - **Per-operand ports**: an

@@ -158,6 +158,104 @@ test.describe("IR Visualizer smoke tests", () => {
     });
   });
 
+  test("edge paths are orthogonal polylines from the live router, not React Flow's default bezier", async ({
+    page,
+  }) => {
+    // specs/graph-view.md §4: every LLVM/Mermaid edge is drawn by RoutedEdge
+    // from src/utils/edgeRouter.ts's output — an orthogonal, rounded-corner
+    // polyline (`M x y (L x y (Q ...)?)+`) — never React Flow's built-in
+    // smooth/bezier path grammar (which never emits `L`/`Q` segments at all
+    // for a bezier `path.d`, only `C` curve commands). This is the one thing
+    // no unit test can see: edgeRouter.test.ts asserts the *point list*
+    // routeEdges returns, not that RoutedEdge actually renders it.
+    await page.goto("/");
+    const edgePaths = page.locator(".react-flow__edge-path");
+    await expect(edgePaths.first()).toBeVisible();
+
+    const dValues = await edgePaths.evaluateAll((paths) =>
+      paths.map((p) => p.getAttribute("d")),
+    );
+    expect(dValues.length).toBeGreaterThan(0);
+    for (const d of dValues) {
+      expect(d).toBeTruthy();
+      // Orthogonal polyline with rounded corners: starts with an absolute
+      // moveto, then a run of line/quadratic-curve segments. No cubic
+      // bezier ("C") or smooth-curve ("S") commands, which is what a
+      // handle-anchored default/smoothstep edge would draw instead.
+      expect(d).toMatch(/^M[\d.\s-]+(?:L[\d.\s-]+|Q[\d.\s,-]+)+$/);
+      expect(d).not.toMatch(/[CS]/);
+    }
+  });
+
+  test("dragging a node changes its edges' paths, not their shape grammar", async ({
+    page,
+  }) => {
+    // The whole point of live edge routing (specs/graph-view.md §4):
+    // one geometry generator, always, including mid-drag. Before this change,
+    // a drag flipped edges to a visibly different shape (React Flow's
+    // smoothstep fallback) once the node moved far enough from its layout
+    // position. Pin that this no longer happens: the path *coordinates*
+    // change, but every path is still the same orthogonal/rounded grammar
+    // the previous test pins, both before and after.
+    await page.goto("/");
+    await expect(page.locator(".react-flow__node").first()).toBeVisible();
+
+    // Block "7" (`%8 = icmp sgt i32 %1, 0`) has both an incoming edge (from
+    // `entry`) and outgoing edges (to `12` and `9`), so it exercises source
+    // and target geometry together.
+    const node = page.locator(".react-flow__node", {
+      hasText: "icmp sgt i32 %1, 0",
+    });
+    await expect(node).toBeVisible();
+
+    const ORTHOGONAL_RE = /^M[\d.\s-]+(?:L[\d.\s-]+|Q[\d.\s,-]+)+$/;
+    const edgePaths = page.locator(".react-flow__edge-path");
+    const before = await edgePaths.evaluateAll((paths) =>
+      paths.map((p) => p.getAttribute("d")),
+    );
+
+    const box = await node.boundingBox();
+    if (!box) throw new Error("node has no bounding box");
+    // A real, slow, multi-step drag: React Flow's drag handling (d3-drag)
+    // needs a mousedown, movement past its drag threshold, then mouseup —
+    // a single jump can be missed entirely.
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      box.x + box.width / 2 + 180,
+      box.y + box.height / 2 + 160,
+      {
+        steps: 20,
+      },
+    );
+    await page.mouse.up();
+
+    // The dragged node actually moved: confirms the drag was received at
+    // all, so a "nothing changed" result below can't be a no-op drag.
+    const movedBox = await node.boundingBox();
+    if (!movedBox) throw new Error("node has no bounding box after drag");
+    expect(Math.hypot(movedBox.x - box.x, movedBox.y - box.y)).toBeGreaterThan(
+      50,
+    );
+
+    const after = await edgePaths.evaluateAll((paths) =>
+      paths.map((p) => p.getAttribute("d")),
+    );
+    expect(after.length).toBe(before.length);
+
+    let changed = 0;
+    for (const d of after) {
+      expect(d).toBeTruthy();
+      expect(d).toMatch(ORTHOGONAL_RE);
+      expect(d).not.toMatch(/[CS]/);
+    }
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] !== after[i]) changed++;
+    }
+    // At least the edges incident to the dragged node must have moved.
+    expect(changed).toBeGreaterThan(0);
+  });
+
   test("renders a graph from LLVM 2.x era IR with invoke/unwind", async ({
     page,
   }) => {

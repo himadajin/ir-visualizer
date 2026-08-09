@@ -22,7 +22,7 @@ import type {
 } from "../types/edgeRouting";
 
 /**
- * The one routing pass per graph (`plans/2026-08-live-edge-routing.md` §3.4,
+ * The one routing pass per graph (`contracts/edge-routing.md`,
  * `specs/graph-view.md` §4).
  *
  * `routeEdges` takes every node and every request in a single call, so it

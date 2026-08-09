@@ -87,8 +87,8 @@ what React Flow renders. It computes **placement only** — edge geometry is not
 
 Every LLVM/Mermaid edge is rendered by one custom edge type, `routed` (`RoutedEdge.tsx`).
 **Edge geometry is a pure function of the live node rectangles**, computed at render time
-by this repo's own orthogonal router (`src/utils/edgeRouter.ts`; the module boundary is
-frozen in `plans/2026-08-live-edge-routing.md` §3.2). There is exactly one geometry
+by this repo's own orthogonal router (`src/utils/edgeRouter.ts`; the module boundary and
+its guarantees are frozen in `contracts/edge-routing.md`). There is exactly one geometry
 generator: no stored geometry, no second path shape that appears once a node moves, and no
 notion of geometry that can go out of date.
 
@@ -135,9 +135,16 @@ notion of geometry that can go out of date.
   elbow continuing along the exit axis, then three-segment lateral dog-legs ordered
   +x, +y, −x, −y, then a four-segment rectangle for coincident handles), taking the first
   candidate that satisfies the no-reversal rule; consecutive duplicate points are dropped.
-  Two connector segments provably do not suffice for every side/direction combination, so
-  the longer candidates are a minimum, not a convenience. The exact point sequences are in
-  `plans/2026-08-live-edge-routing.md` §3.1.
+  **Two connector segments are provably not always enough:** when the source and target
+  normals lie on the same axis pointing opposite ways and the displacement runs backwards
+  along it (e.g. a `bottom → top` pair where the target sits above the source), both
+  two-segment orderings reverse at one of the two stubs, so a three-segment dog-leg is
+  required there — the longer candidates in the ladder are a minimum, not a convenience.
+  The fallback's connector does **no obstacle avoidance whatsoever, by design**: it picks a
+  shape from the endpoint geometry alone and never consults the node rects, because it is
+  reached only after the grid search has already proved no clear path exists — a shape that
+  avoided obstacles is not on offer at that point, only a determined shape that may clip or
+  no edge at all.
   **Known limitations,** both accepted rather than fixed since the alternatives are a stale
   route or a second geometry generator:
   - Because the fallback does no obstacle avoidance, a fallback edge in overlapping-rect
@@ -183,10 +190,26 @@ notion of geometry that can go out of date.
   per instruction.
 - **Performance:** a full routing pass over a synthetic 60-node / 80-edge graph completes
   in under 50 ms, measured out of band (bare Node, warm, median of N). Routing cost depends
-  on graph shape as well as size — the repo's own test graph measures ~6–14 ms at that size
-  — so the figure is a budget, not a constant. The in-suite timing test is a
-  catastrophic-regression guard at 300 ms, not a check of this budget: inside a parallel
-  test runner the number measures contention as much as the router.
+  on graph shape as well as size — the repo's own test graph measures ~6–14 ms at that size,
+  an adjacent-layer graph of the same size ~2–4 ms — so the figure is a budget, not a
+  constant. The in-suite timing test is a catastrophic-regression guard at 300 ms, not a
+  check of this budget: inside a parallel test runner the number measures contention as
+  much as the router. Measured scaling on an ELK-layered-shaped CFG (bare Node, warm,
+  median of N, 2026-08-09):
+
+  | nodes | edges | median ms |
+  | ----- | ----- | --------- |
+  | 60    | 117   | 2.9       |
+  | 120   | 245   | 7.6       |
+  | 180   | ~370  | ~16       |
+  | 260   | 542   | 31.1      |
+  | 400   | 840   | 71.8      |
+
+  This is the basis for the ~180-node threshold above: the 16.7 ms animation-frame budget
+  — the one that matters, since a full pass runs per frame during a drag — is exceeded
+  around there, which is what makes the incident-edges-only drag path required rather than
+  an optimization held in reserve.
+
 - **Rendering:** `RoutedEdge` draws the returned points as an orthogonal polyline with
   **rounded corners**; edge labels (phi) render at the polyline's arc-length midpoint.
 - **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a self-loop

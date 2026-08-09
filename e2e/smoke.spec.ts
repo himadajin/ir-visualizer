@@ -190,7 +190,7 @@ test.describe("IR Visualizer smoke tests", () => {
   test("dragging a node changes its edges' paths, not their shape grammar", async ({
     page,
   }) => {
-    // The whole point of live edge routing (plans/2026-08-live-edge-routing.md):
+    // The whole point of live edge routing (specs/graph-view.md §4):
     // one geometry generator, always, including mid-drag. Before this change,
     // a drag flipped edges to a visibly different shape (React Flow's
     // smoothstep fallback) once the node moved far enough from its layout

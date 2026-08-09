@@ -7,8 +7,8 @@ import type {
 } from "../types/edgeRouting";
 
 /**
- * Self-contained orthogonal edge router (`plans/2026-08-live-edge-routing.md`
- * §3.1, `specs/graph-view.md` §4). Node rects are the only obstacles; a sparse
+ * Self-contained orthogonal edge router (`contracts/edge-routing.md`,
+ * `specs/graph-view.md` §4). Node rects are the only obstacles; a sparse
  * Hanan grid over the inflated rects is searched per edge with A*, and the
  * result is a rounded-corner-ready polyline whose first and last points are the
  * live handle positions.

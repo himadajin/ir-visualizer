@@ -1,6 +1,6 @@
 /**
  * Module boundary of the orthogonal edge router
- * (`plans/2026-08-live-edge-routing.md` §3.2, `specs/graph-view.md` §4).
+ * (`contracts/edge-routing.md`, `specs/graph-view.md` §4).
  * Edge geometry is a pure function of the live node rectangles, so these are
  * plain geometry types: nothing here depends on React Flow or ELK.
  */

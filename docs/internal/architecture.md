@@ -32,7 +32,7 @@ flowchart TD
   routing pass per graph over React Flow's live measured node rects, calling
   `src/utils/edgeRouter.ts`, and publishes the resulting points per edge id through a
   context that `RoutedEdge` reads — so edges stay correct while nodes are dragged. See
-  `specs/graph-view.md` §4 and `plans/2026-08-live-edge-routing.md`.
+  `specs/graph-view.md` §4 and `contracts/edge-routing.md`.
 
 ## Layers
 
@@ -43,7 +43,7 @@ flowchart TD
 | Graph builder       | `src/graphBuilder`         | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                                                                                                                   | no          |
 | Graph types         | `src/types/graph.ts`       | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                                                                                                                 | no          |
 | IR mode registry    | `src/irModes`              | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                                                                                                                 | import only |
-| Edge-routing types  | `src/types/edgeRouting.ts` | `Point`/`RouteSide`/`RouteNodeRect`/`RouteRequest`/`EdgeRouterOptions` — the frozen router boundary, see `plans/2026-08-live-edge-routing.md` §3.2                                  | no          |
+| Edge-routing types  | `src/types/edgeRouting.ts` | `Point`/`RouteSide`/`RouteNodeRect`/`RouteRequest`/`EdgeRouterOptions` — the frozen router boundary, see `contracts/edge-routing.md`                                                | no          |
 | Layout / conversion | `src/utils`                | ELK node placement (`layout.ts`), live orthogonal edge routing (`edgeRouter.ts`, types in `src/types/edgeRouting.ts`), React Flow node/edge construction, node sizing, font metrics | types only  |
 | Hooks               | `src/hooks`                | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `useEdgeRoutes` (one routing pass per graph, published via context), `usePaneResize`                        | yes         |
 | App shell           | `src/components/AppShell`  | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer)                                                                                       | yes         |
@@ -65,6 +65,8 @@ UI-free pipeline to its React components.
 
 - `contracts/ir-mode-registry.md` — the interface an IR mode implements; how to add a 4th IR.
 - `contracts/graph-data.md` — the `GraphData` shape and the `nodeType`↔`astData` union.
+- `contracts/edge-routing.md` — the frozen `routeEdges` boundary and the guarantees callers
+  may rely on.
 - `specs/llvm-ir.md`, `specs/mermaid.md`, `specs/selectiondag.md` — accepted input syntax and
   graph conversion rules per IR.
 - `specs/llvm-use-def-view.md` — the LLVM-IR mode's second view (SSA dataflow projection).

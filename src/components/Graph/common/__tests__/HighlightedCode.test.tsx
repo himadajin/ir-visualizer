@@ -16,13 +16,13 @@ vi.mock("shiki", () => ({
 }));
 
 /**
- * Regression coverage for the drift fixed alongside
- * plans/2026-08-node-visual-compaction.md: Shiki's <pre> carries the
- * user-agent default block margin, which converter.ts's node-size estimate
- * (nodeTextStyle.ts, specs/graph-view.md §5) does not account for. jsdom
- * cannot run real layout, so this only asserts the rendered frame declares
- * no margin of its own — not that text metrics match — which is what the
- * estimator actually assumes.
+ * Regression coverage for the drift fixed alongside live edge routing
+ * (specs/graph-view.md §5): Shiki's <pre> carries the user-agent default
+ * block margin, which converter.ts's node-size estimate (nodeTextStyle.ts,
+ * specs/graph-view.md §5) does not account for. jsdom cannot run real
+ * layout, so this only asserts the rendered frame declares no margin of its
+ * own — not that text metrics match — which is what the estimator actually
+ * assumes.
  */
 describe("HighlightedCode", () => {
   it("resets the UA margin on the rendered <pre> (block mode)", async () => {

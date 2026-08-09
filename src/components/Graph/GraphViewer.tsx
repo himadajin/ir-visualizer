@@ -14,6 +14,7 @@ import "@xyflow/react/dist/style.css";
 import RoutedEdge from "./RoutedEdge";
 
 import CodeNode from "./CodeNode";
+import { EdgeRoutesProvider } from "../../hooks/useEdgeRoutes";
 import { CanvasControls, type FitViewPadding } from "./CanvasControls";
 import { IR_MODE_LIST } from "../../irModes";
 import {
@@ -103,29 +104,36 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
         backgroundColor: SHELL_COLORS.ground,
       }}
     >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onInit={setRfInstance}
-        edgeTypes={edgeTypes}
-        nodeTypes={nodeTypes}
-        nodesDraggable={true}
-        panActivationKeyCode={null}
-        // React Flow's default minZoom (0.5) clamps fitView before large
-        // graphs — or the narrow-mode visible strip — can fit; 0.1 lets every
-        // fit actually contain the graph (specs/graph-view.md §6.1).
-        minZoom={0.1}
-      >
-        <InitialFit padding={fitViewPadding} />
-        <Background color={SHELL_COLORS.groundDots} />
-        <CanvasControls
-          fitViewPadding={fitViewPadding}
-          bottomInset={fitViewInset.bottom}
-          onResetLayout={handleResetLayout}
-        />
-      </ReactFlow>
+      {/* The routing pass (specs/graph-view.md §4) must wrap `<ReactFlow>`:
+          React Flow renders its own children *beside* the edge renderer, so a
+          provider mounted inside it would never reach a `RoutedEdge`. It reads
+          the store from the app-level `ReactFlowProvider` in `main.tsx` — the
+          same store this `<ReactFlow>` populates. */}
+      <EdgeRoutesProvider>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onInit={setRfInstance}
+          edgeTypes={edgeTypes}
+          nodeTypes={nodeTypes}
+          nodesDraggable={true}
+          panActivationKeyCode={null}
+          // React Flow's default minZoom (0.5) clamps fitView before large
+          // graphs — or the narrow-mode visible strip — can fit; 0.1 lets every
+          // fit actually contain the graph (specs/graph-view.md §6.1).
+          minZoom={0.1}
+        >
+          <InitialFit padding={fitViewPadding} />
+          <Background color={SHELL_COLORS.groundDots} />
+          <CanvasControls
+            fitViewPadding={fitViewPadding}
+            bottomInset={fitViewInset.bottom}
+            onResetLayout={handleResetLayout}
+          />
+        </ReactFlow>
+      </EdgeRoutesProvider>
     </div>
   );
 };

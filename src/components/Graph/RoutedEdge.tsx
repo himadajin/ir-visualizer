@@ -1,18 +1,22 @@
-import {
-  BaseEdge,
-  getSmoothStepPath,
-  useInternalNode,
-  type Edge,
-  type EdgeProps,
-} from "@xyflow/react";
+import { BaseEdge, type Edge, type EdgeProps } from "@xyflow/react";
+import { useEdgeRoute } from "../../hooks/useEdgeRoutes";
 
 /**
- * Geometry attached to every routed edge by the ELK layout
- * (specs/graph-view.md §4). `sourcePos`/`targetPos` are the endpoint nodes'
- * layout positions (top-left), recorded so the renderer can detect that a
- * node was dragged away from where the route was computed.
+ * Data the layout attaches to every routed edge (specs/graph-view.md §4).
+ *
+ * `isBackEdge` is **structural**: it is decided once from ELK's placement
+ * geometry and never re-derived from live rects, so back-edge colors do not
+ * flicker while a node is dragged. Only geometry is live, and geometry does
+ * not live here — it comes from `useEdgeRoutes`.
  */
 export interface RoutedEdgeData extends Record<string, unknown> {
+  /**
+   * Vestigial: ELK's route points, still written by `layout.ts` and still
+   * inherited on content-only updates, but read by nothing. The renderer
+   * ignores it. Removed together with its producers by the follow-up task
+   * that drops route storage from `layout.ts` / `useGraphData`
+   * (plans/2026-08-live-edge-routing.md §3.3, §3.6).
+   */
   route?: {
     points: { x: number; y: number }[];
     sourcePos: { x: number; y: number };
@@ -25,9 +29,6 @@ export type RoutedEdgeType = Edge<RoutedEdgeData, "routed">;
 
 /** Corner radius of routed orthogonal bends, px. */
 const BEND_RADIUS = 8;
-
-/** A node counts as "at its layout position" within this tolerance, px. */
-const STALE_TOLERANCE = 0.5;
 
 /**
  * Rounded-corner path through an orthogonal polyline. Consecutive duplicate
@@ -86,97 +87,28 @@ const midpoint = (points: { x: number; y: number }[]) => {
 };
 
 /**
- * Self-loop drawn from the node's live rect: out of the bottom-right area,
- * up the right side, back into the top. Used when ELK yields no usable
- * route for a self-loop and in the drag-fallback state.
- */
-const selfLoopPoints = (rect: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}): { x: number; y: number }[] => {
-  const lane = rect.x + rect.width + 24;
-  return [
-    { x: rect.x + rect.width * 0.75, y: rect.y + rect.height },
-    { x: rect.x + rect.width * 0.75, y: rect.y + rect.height + 16 },
-    { x: lane, y: rect.y + rect.height + 16 },
-    { x: lane, y: rect.y - 16 },
-    { x: rect.x + rect.width * 0.75, y: rect.y - 16 },
-    { x: rect.x + rect.width * 0.75, y: rect.y },
-  ];
-};
-
-const near = (
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): boolean =>
-  Math.abs(a.x - b.x) <= STALE_TOLERANCE &&
-  Math.abs(a.y - b.y) <= STALE_TOLERANCE;
-
-/**
- * The one edge renderer for LLVM/Mermaid edges: draws the ELK route as a
- * rounded orthogonal polyline; falls back to a live smoothstep path (or a
- * synthesized self-loop) when an endpoint node has been dragged away from
- * its layout position (specs/graph-view.md §4).
+ * The one edge renderer for LLVM/Mermaid edges (specs/graph-view.md §4). It
+ * has no geometry of its own: it looks its polyline up by edge id in the map
+ * `useEdgeRoutes` publishes — the same source for every edge, including the
+ * one being dragged — and draws it with rounded bends. An edge with no entry
+ * (an endpoint React Flow has not measured yet) is not drawn this frame;
+ * there is deliberately no placeholder shape.
  */
 const RoutedEdge = ({
-  source,
-  target,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
+  id,
   label,
   style = {},
   markerStart,
   markerEnd,
 }: EdgeProps<RoutedEdgeType>) => {
-  const sourceNode = useInternalNode(source);
-  const targetNode = useInternalNode(target);
+  const points = useEdgeRoute(id);
+  if (points === undefined || points.length < 2) return null;
 
-  const route = data?.route;
-  const fresh =
-    route !== undefined &&
-    sourceNode !== undefined &&
-    targetNode !== undefined &&
-    near(sourceNode.internals.positionAbsolute, route.sourcePos) &&
-    near(targetNode.internals.positionAbsolute, route.targetPos);
-
-  let path: string;
-  let labelPoint: { x: number; y: number };
-
-  if (fresh && route.points.length >= 2) {
-    path = roundedPath(route.points);
-    labelPoint = midpoint(route.points);
-  } else if (source === target && sourceNode !== undefined) {
-    const points = selfLoopPoints({
-      ...sourceNode.internals.positionAbsolute,
-      width: sourceNode.measured.width ?? 0,
-      height: sourceNode.measured.height ?? 0,
-    });
-    path = roundedPath(points);
-    labelPoint = midpoint(points);
-  } else {
-    const [stepPath, labelX, labelY] = getSmoothStepPath({
-      sourceX,
-      sourceY,
-      sourcePosition,
-      targetX,
-      targetY,
-      targetPosition,
-      borderRadius: BEND_RADIUS,
-    });
-    path = stepPath;
-    labelPoint = { x: labelX, y: labelY };
-  }
+  const labelPoint = midpoint(points);
 
   return (
     <BaseEdge
-      path={path}
+      path={roundedPath(points)}
       label={label}
       labelX={labelPoint.x}
       labelY={labelPoint.y}

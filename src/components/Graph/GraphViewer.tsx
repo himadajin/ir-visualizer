@@ -1,9 +1,7 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ReactFlow,
-  Controls,
   Background,
-  Panel,
   type Node,
   type Edge,
   type OnNodesChange,
@@ -15,7 +13,13 @@ import CustomBezierEdge from "./CustomBezierEdge";
 import BackEdge from "./BackEdge";
 
 import CodeNode from "./CodeNode";
+import { CanvasControls, type FitViewPadding } from "./CanvasControls";
 import { IR_MODE_LIST } from "../../irModes";
+import {
+  SHELL_COLORS,
+  buildFitViewPadding,
+  type ShellFitViewInset,
+} from "../AppShell/shellTokens";
 
 const edgeTypes = {
   customBezier: CustomBezierEdge,
@@ -36,6 +40,14 @@ interface GraphViewerProps {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onResetLayout: () => void;
+  /**
+   * Space (px) the floating editor panel takes up along the viewport edge it
+   * is anchored to — its width plus its margin on the left in wide mode, its
+   * height at the bottom in narrow mode, and nothing while it is collapsed.
+   * Every fit (initial, the Fit view button, the re-fit after Reset Layout)
+   * keeps the graph clear of it. See `specs/graph-view.md` §6.4/§6.5.
+   */
+  fitViewInset: ShellFitViewInset;
 }
 
 export const GraphViewer: React.FC<GraphViewerProps> = ({
@@ -44,21 +56,38 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
   onNodesChange,
   onEdgesChange,
   onResetLayout,
+  fitViewInset,
 }) => {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+
+  const fitViewPadding: FitViewPadding = useMemo(
+    () => buildFitViewPadding(fitViewInset),
+    [fitViewInset],
+  );
+
+  const fitViewOptions = useMemo(
+    () => ({ padding: fitViewPadding }),
+    [fitViewPadding],
+  );
 
   const handleResetLayout = () => {
     onResetLayout();
     // Slight delay to allow nodes to update position before fitting view
     setTimeout(() => {
       if (rfInstance) {
-        rfInstance.fitView({ duration: 0 });
+        void rfInstance.fitView({ padding: fitViewPadding, duration: 0 });
       }
     }, 50);
   };
 
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        backgroundColor: SHELL_COLORS.ground,
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -69,26 +98,19 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
         nodeTypes={nodeTypes}
         nodesDraggable={true}
         panActivationKeyCode={null}
+        // React Flow's default minZoom (0.5) clamps fitView before large
+        // graphs — or the narrow-mode visible strip — can fit; 0.1 lets every
+        // fit actually contain the graph (specs/graph-view.md §6.1).
+        minZoom={0.1}
         fitView
+        fitViewOptions={fitViewOptions}
       >
-        <Background />
-        <Controls />
-        <Panel position="top-right">
-          <button
-            onClick={handleResetLayout}
-            style={{
-              padding: "8px 12px",
-              background: "white",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            }}
-          >
-            Reset Layout
-          </button>
-        </Panel>
+        <Background color={SHELL_COLORS.groundDots} />
+        <CanvasControls
+          fitViewPadding={fitViewPadding}
+          bottomInset={fitViewInset.bottom}
+          onResetLayout={handleResetLayout}
+        />
       </ReactFlow>
     </div>
   );

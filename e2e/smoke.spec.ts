@@ -113,7 +113,7 @@ test.describe("IR Visualizer smoke tests", () => {
     await page.goto("/");
     await expect(page.locator(".react-flow__node").first()).toBeVisible();
 
-    // Clear via the toolbar button, not select-all+type: under CPU load
+    // Clear via the panel header button, not select-all+type: under CPU load
     // Monaco's EditContext can swallow the Ctrl/Cmd+A, and garbage that is
     // merely INSERTED into the default code lands inside the function body,
     // where the parser's error recovery accepts it as an opaque instruction
@@ -127,9 +127,10 @@ test.describe("IR Visualizer smoke tests", () => {
     });
     await expect(page.locator(".view-lines")).toContainText("not valid");
 
-    // Monaco itself renders unrelated `role="alert"` live regions for screen
-    // readers, so scope to our own MUI Alert rather than getByRole("alert").
-    await expect(page.locator(".MuiAlert-root")).toBeVisible({
+    // The panel's status footer is the only place parse status is reported
+    // (spec: specs/graph-view.md §6.3). Monaco renders its own unrelated live
+    // regions for screen readers, so scope by test id rather than by role.
+    await expect(page.getByTestId("parse-status")).toContainText("error:", {
       timeout: 10_000,
     });
   });
@@ -165,7 +166,7 @@ test.describe("IR Visualizer smoke tests", () => {
     await page.goto("/");
     await expect(page.locator(".react-flow__node").first()).toBeVisible();
 
-    // Clear via the toolbar button, not select-all+delete: under CPU load
+    // Clear via the panel header button, not select-all+delete: under CPU load
     // Monaco's EditContext can swallow the Ctrl/Cmd+A, which would leave the
     // corpus text merely inserted into the middle of the default code.
     await page.getByRole("button", { name: "Clear" }).click();
@@ -181,6 +182,11 @@ test.describe("IR Visualizer smoke tests", () => {
       timeout: 10_000,
     });
     expect(await page.locator(".react-flow__node").count()).toBeGreaterThan(0);
-    await expect(page.locator(".MuiAlert-root")).toHaveCount(0);
+
+    // The status footer reports success, not an error (spec: §6.3): the 2.x
+    // constructs above parsed rather than merely leaving the old graph up.
+    const status = page.getByTestId("parse-status");
+    await expect(status).toContainText("✓ parsed", { timeout: 10_000 });
+    await expect(status).not.toContainText("error:");
   });
 });

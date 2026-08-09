@@ -170,6 +170,29 @@ describe("useGraphData", () => {
     expect(result.current.edges).toHaveLength(0);
   });
 
+  it("keeps updateGraph/resetLayout identities stable across graph updates", () => {
+    const { result } = renderHook(() => useGraphData());
+    const firstUpdateGraph = result.current.updateGraph;
+    const firstResetLayout = result.current.resetLayout;
+
+    act(() => {
+      result.current.updateGraph(twoNodeGraph(), llvmMode);
+    });
+    act(() => {
+      result.current.updateGraph(threeNodeGraph(), llvmMode);
+    });
+    act(() => {
+      result.current.setNodes(
+        result.current.nodes.map((n) => ({ ...n, position: { x: 7, y: 7 } })),
+      );
+    });
+
+    // Unstable identities re-arm useIRWorkspace's debounced parse effect, which
+    // re-parses unchanged code forever (see plans/2026-08-canvas-first-shell.md).
+    expect(result.current.updateGraph).toBe(firstUpdateGraph);
+    expect(result.current.resetLayout).toBe(firstResetLayout);
+  });
+
   it("lays out SelectionDAG nodes via the SelectionDAG mode", () => {
     const { result } = renderHook(() => useGraphData());
 

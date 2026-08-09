@@ -11,8 +11,12 @@ flowchart TD
   Workspace -->|"mode.parse(code)"| Parser["Parser (src/parser, Ohm-js)"]
   Parser -->|AST| Builder["graphBuilder (src/graphBuilder)"]
   Builder -->|GraphData| GraphHook["useGraphData<br/>(topology signature,<br/>position preservation)"]
-  GraphHook -->|"getLayoutedElements"| Layout["layout.ts (ELK) +<br/>converter.ts (sizing)"]
+  GraphHook -->|"getLayoutedElements"| Layout["layout.ts (ELK placement) +<br/>converter.ts (sizing)"]
   Layout -->|"React Flow nodes/edges"| Viewer["GraphViewer (React Flow)<br/>node components from registry"]
+  Viewer -->|"live measured rects"| Routes["useEdgeRoutes<br/>(one pass per graph)"]
+  Routes -->|"routeEdges(nodes, requests)"| Router["edgeRouter.ts<br/>(orthogonal edge geometry)"]
+  Router -->|"Map&lt;edgeId, points&gt;"| Routes
+  Routes -->|"context"| Viewer
 ```
 
 - Typing in the editor updates `code` state; after a 750 ms debounce, the active mode's
@@ -22,22 +26,29 @@ flowchart TD
 - `useGraphData` decides between a full (async) ELK re-layout (topology changed) and a
   position-preserving content update (same topology). See `specs/graph-view.md`.
 - Layout converts `GraphData` to React Flow nodes/edges, estimating node dimensions from
-  shared font/style constants so ELK's boxes match what CSS later renders.
+  shared font/style constants so ELK's boxes match what CSS later renders. ELK computes
+  **node placement only**.
+- Edge geometry is not part of the layout result. `src/hooks/useEdgeRoutes.ts` runs one
+  routing pass per graph over React Flow's live measured node rects, calling
+  `src/utils/edgeRouter.ts`, and publishes the resulting points per edge id through a
+  context that `RoutedEdge` reads — so edges stay correct while nodes are dragged. See
+  `specs/graph-view.md` §4 and `plans/2026-08-live-edge-routing.md`.
 
 ## Layers
 
-| Layer               | Directory                 | Responsibility                                                                                | React?      |
-| ------------------- | ------------------------- | --------------------------------------------------------------------------------------------- | ----------- |
-| Grammar + parser    | `src/parser`              | Ohm-js grammars (`*.ohm`) and semantics producing ASTs; lazy compile via `grammarCache.ts`    | no          |
-| AST types           | `src/ast`                 | Per-IR AST type definitions and small formatting helpers                                      | no          |
-| Graph builder       | `src/graphBuilder`        | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                             | no          |
-| Graph types         | `src/types/graph.ts`      | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                           | no          |
-| IR mode registry    | `src/irModes`             | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                           | import only |
-| Layout / conversion | `src/utils`               | ELK layout and edge routing, React Flow node/edge construction, node sizing, font metrics     | types only  |
-| Hooks               | `src/hooks`               | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `usePaneResize`       | yes         |
-| App shell           | `src/components/AppShell` | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer) | yes         |
-| Graph rendering     | `src/components/Graph`    | React Flow node/edge components (+ colocated `*.stories.tsx`)                                 | yes         |
-| Editor              | `src/components/Editor`   | Monaco editor with Shiki highlighting for `llvm`/`mermaid`                                    | yes         |
+| Layer               | Directory                  | Responsibility                                                                                                                                                                      | React?      |
+| ------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Grammar + parser    | `src/parser`               | Ohm-js grammars (`*.ohm`) and semantics producing ASTs; lazy compile via `grammarCache.ts`                                                                                          | no          |
+| AST types           | `src/ast`                  | Per-IR AST type definitions and small formatting helpers                                                                                                                            | no          |
+| Graph builder       | `src/graphBuilder`         | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                                                                                                                   | no          |
+| Graph types         | `src/types/graph.ts`       | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                                                                                                                 | no          |
+| IR mode registry    | `src/irModes`              | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                                                                                                                 | import only |
+| Edge-routing types  | `src/types/edgeRouting.ts` | `Point`/`RouteSide`/`RouteNodeRect`/`RouteRequest`/`EdgeRouterOptions` — the frozen router boundary, see `plans/2026-08-live-edge-routing.md` §3.2                                  | no          |
+| Layout / conversion | `src/utils`                | ELK node placement (`layout.ts`), live orthogonal edge routing (`edgeRouter.ts`, types in `src/types/edgeRouting.ts`), React Flow node/edge construction, node sizing, font metrics | types only  |
+| Hooks               | `src/hooks`                | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `useEdgeRoutes` (one routing pass per graph, published via context), `usePaneResize`                        | yes         |
+| App shell           | `src/components/AppShell`  | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer)                                                                                       | yes         |
+| Graph rendering     | `src/components/Graph`     | React Flow node/edge components (+ colocated `*.stories.tsx`)                                                                                                                       | yes         |
+| Editor              | `src/components/Editor`    | Monaco editor with Shiki highlighting for `llvm`/`mermaid`                                                                                                                          | yes         |
 
 The shell is **canvas-first**: `App.tsx` composes two layers — `CanvasShell`, which makes
 `GraphViewer` the full-viewport root, and `EditorPanel`, a floating card (a DOM sibling of the
@@ -58,7 +69,7 @@ UI-free pipeline to its React components.
   graph conversion rules per IR.
 - `specs/llvm-use-def-view.md` — the LLVM-IR mode's second view (SSA dataflow projection).
 - `specs/graph-view.md` — mode-independent viewer behavior (debounce, position preservation,
-  layout, sizing, canvas-first shell and its design tokens).
+  ELK placement, live edge routing, sizing, canvas-first shell and its design tokens).
 
 ## Test / tooling layout
 

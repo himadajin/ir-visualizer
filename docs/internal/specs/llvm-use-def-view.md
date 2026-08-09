@@ -157,8 +157,9 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   dataflow order (see the plan's §2 retrospective for why containers were
   rejected).
 - The view supplies its own `layoutOptions` (_observed, untested_) and reuses
-  the standard `codeGraphEdgeBuilder`: edges are ELK-routed
-  (`specs/graph-view.md` §4), and a loop-carried phi edge — whose source ends
+  the standard `codeGraphEdgeBuilder`: edge geometry comes from the live
+  orthogonal router `src/utils/edgeRouter.ts` (`specs/graph-view.md` §4), not
+  from ELK, and a loop-carried phi edge — whose source ends
   up at or below its target — is flagged and styled as a back edge from the
   final layout geometry without any special casing here.
 - **Per-operand ports** (`plans/2026-08-elk-edge-routing.md` §3.5): an

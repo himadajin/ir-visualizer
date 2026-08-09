@@ -16,7 +16,8 @@ flowchart TD
 ```
 
 - Typing in the editor updates `code` state; after a 750 ms debounce, the active mode's
-  `parse()` runs. Parse errors are caught and shown as a snackbar; the previous graph stays.
+  `parse()` runs. Parse errors are caught and shown in the editor panel's status footer; the
+  previous graph stays.
 - `parse()` is parser + graphBuilder composed: text → AST → `GraphData` (plain, React-free).
 - `useGraphData` decides between a full Dagre re-layout (topology changed) and a
   position-preserving content update (same topology). See `specs/graph-view.md`.
@@ -25,18 +26,25 @@ flowchart TD
 
 ## Layers
 
-| Layer               | Directory                 | Responsibility                                                                             | React?      |
-| ------------------- | ------------------------- | ------------------------------------------------------------------------------------------ | ----------- |
-| Grammar + parser    | `src/parser`              | Ohm-js grammars (`*.ohm`) and semantics producing ASTs; lazy compile via `grammarCache.ts` | no          |
-| AST types           | `src/ast`                 | Per-IR AST type definitions and small formatting helpers                                   | no          |
-| Graph builder       | `src/graphBuilder`        | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                          | no          |
-| Graph types         | `src/types/graph.ts`      | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                        | no          |
-| IR mode registry    | `src/irModes`             | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                        | import only |
-| Layout / conversion | `src/utils`               | Dagre layout, React Flow node/edge construction, node sizing, font metrics                 | types only  |
-| Hooks               | `src/hooks`               | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `usePaneResize`    | yes         |
-| App shell           | `src/components/AppShell` | Toolbar, editor pane, graph pane, error display                                            | yes         |
-| Graph rendering     | `src/components/Graph`    | React Flow node/edge components (+ colocated `*.stories.tsx`)                              | yes         |
-| Editor              | `src/components/Editor`   | Monaco editor with Shiki highlighting for `llvm`/`mermaid`                                 | yes         |
+| Layer               | Directory                 | Responsibility                                                                                | React?      |
+| ------------------- | ------------------------- | --------------------------------------------------------------------------------------------- | ----------- |
+| Grammar + parser    | `src/parser`              | Ohm-js grammars (`*.ohm`) and semantics producing ASTs; lazy compile via `grammarCache.ts`    | no          |
+| AST types           | `src/ast`                 | Per-IR AST type definitions and small formatting helpers                                      | no          |
+| Graph builder       | `src/graphBuilder`        | AST → `GraphData` (nodes/edges with `nodeType` + typed `astData`)                             | no          |
+| Graph types         | `src/types/graph.ts`      | `GraphData`/`GraphNode`/`GraphEdge` — see `contracts/graph-data.md`                           | no          |
+| IR mode registry    | `src/irModes`             | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                           | import only |
+| Layout / conversion | `src/utils`               | Dagre layout, React Flow node/edge construction, node sizing, font metrics                    | types only  |
+| Hooks               | `src/hooks`               | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `usePaneResize`       | yes         |
+| App shell           | `src/components/AppShell` | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer) | yes         |
+| Graph rendering     | `src/components/Graph`    | React Flow node/edge components (+ colocated `*.stories.tsx`)                                 | yes         |
+| Editor              | `src/components/Editor`   | Monaco editor with Shiki highlighting for `llvm`/`mermaid`                                    | yes         |
+
+The shell is **canvas-first**: `App.tsx` composes two layers — `CanvasShell`, which makes
+`GraphViewer` the full-viewport root, and `EditorPanel`, a floating card (a DOM sibling of the
+React Flow canvas) holding the mode selector, the view toggle, Clear, the Monaco editor, and a
+status footer that reports parse success/failure. There is no app toolbar, editor toolbar, or
+error snackbar; viewport and layout controls live in a `CanvasControls` cluster inside the
+canvas. See `specs/graph-view.md` §6 and `plans/2026-08-canvas-first-shell.md`.
 
 Dependency direction: everything above the hooks row is UI-free and imports downward only
 (parser → ast, graphBuilder → ast + types). The registry is the one place that ties an IR's
@@ -50,7 +58,7 @@ UI-free pipeline to its React components.
   graph conversion rules per IR.
 - `specs/llvm-use-def-view.md` — the LLVM-IR mode's second view (SSA dataflow projection).
 - `specs/graph-view.md` — mode-independent viewer behavior (debounce, position preservation,
-  layout, sizing, responsive mode).
+  layout, sizing, canvas-first shell and its design tokens).
 
 ## Test / tooling layout
 

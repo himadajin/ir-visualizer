@@ -98,6 +98,10 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
         nodeTypes={nodeTypes}
         nodesDraggable={true}
         panActivationKeyCode={null}
+        // React Flow's default minZoom (0.5) clamps fitView before large
+        // graphs — or the narrow-mode visible strip — can fit; 0.1 lets every
+        // fit actually contain the graph (specs/graph-view.md §6.1).
+        minZoom={0.1}
         fitView
         fitViewOptions={fitViewOptions}
       >

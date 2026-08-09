@@ -107,6 +107,9 @@ design decisions this section encodes.
 - `GraphViewer` is the root layer (`position: fixed; inset: 0`); its dot `<Background />`
   covers the whole viewport and is the app's ground. There is no full-width app toolbar and
   no separate editor toolbar. _(observed, untested)_
+- The canvas allows zooming out to 10 % (`minZoom={0.1}`; React Flow's 0.5 default would
+  clamp `fitView` before large graphs — or the narrow-mode visible strip — can contain the
+  graph). _(observed, untested)_
 
 ### 6.2 Floating editor panel
 

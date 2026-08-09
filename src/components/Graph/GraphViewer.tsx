@@ -1,9 +1,7 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ReactFlow,
-  Controls,
   Background,
-  Panel,
   type Node,
   type Edge,
   type OnNodesChange,
@@ -15,7 +13,9 @@ import CustomBezierEdge from "./CustomBezierEdge";
 import BackEdge from "./BackEdge";
 
 import CodeNode from "./CodeNode";
+import { CanvasControls, type FitViewPadding } from "./CanvasControls";
 import { IR_MODE_LIST } from "../../irModes";
+import { SHELL_COLORS, buildFitViewPadding } from "../AppShell/shellTokens";
 
 const edgeTypes = {
   customBezier: CustomBezierEdge,
@@ -36,6 +36,13 @@ interface GraphViewerProps {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onResetLayout: () => void;
+  /**
+   * Horizontal space (px) the floating editor panel takes up on the left —
+   * its width plus its viewport margin, or 0 while it is collapsed. Every fit
+   * (initial, the Fit view button, the re-fit after Reset Layout) keeps the
+   * graph clear of it. See `specs/graph-view.md` §6.4.
+   */
+  fitViewPaddingLeft: number;
 }
 
 export const GraphViewer: React.FC<GraphViewerProps> = ({
@@ -44,21 +51,38 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
   onNodesChange,
   onEdgesChange,
   onResetLayout,
+  fitViewPaddingLeft,
 }) => {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+
+  const fitViewPadding: FitViewPadding = useMemo(
+    () => buildFitViewPadding(fitViewPaddingLeft),
+    [fitViewPaddingLeft],
+  );
+
+  const fitViewOptions = useMemo(
+    () => ({ padding: fitViewPadding }),
+    [fitViewPadding],
+  );
 
   const handleResetLayout = () => {
     onResetLayout();
     // Slight delay to allow nodes to update position before fitting view
     setTimeout(() => {
       if (rfInstance) {
-        rfInstance.fitView({ duration: 0 });
+        void rfInstance.fitView({ padding: fitViewPadding, duration: 0 });
       }
     }, 50);
   };
 
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        backgroundColor: SHELL_COLORS.ground,
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -70,25 +94,13 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
         nodesDraggable={true}
         panActivationKeyCode={null}
         fitView
+        fitViewOptions={fitViewOptions}
       >
-        <Background />
-        <Controls />
-        <Panel position="top-right">
-          <button
-            onClick={handleResetLayout}
-            style={{
-              padding: "8px 12px",
-              background: "white",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            }}
-          >
-            Reset Layout
-          </button>
-        </Panel>
+        <Background color={SHELL_COLORS.groundDots} />
+        <CanvasControls
+          fitViewPadding={fitViewPadding}
+          onResetLayout={handleResetLayout}
+        />
       </ReactFlow>
     </div>
   );

@@ -36,6 +36,47 @@ export interface LLVMFunctionHeaderData {
   name: string;
 }
 
+/**
+ * astData shape for a Use-Def view instruction node (not a distinct AST node
+ * in its own right). See docs/internal/specs/llvm-use-def-view.md §2.1.
+ */
+export interface LLVMUseDefInstructionData {
+  /** The line's originalText. */
+  text: string;
+  /** The §3.5 def name (sigil-free), or null when the line defines nothing. */
+  def: string | null;
+  /** Whether the line is the block's terminator. */
+  isTerminator: boolean;
+  /**
+   * The block's display label: "entry" for a first block whose label is
+   * null, otherwise the block's label, falling back to its block id.
+   */
+  blockLabel: string;
+  /**
+   * The block's 0-based position within its function, in AST block order.
+   * Drives the badge tint (blockIndex % 8); not a semantic ordering claim.
+   */
+  blockIndex: number;
+}
+
+/**
+ * astData shape for a Use-Def view value node — an argument or an
+ * externally-resolved value (not a distinct AST node in its own right). See
+ * spec §2.2.
+ */
+export interface LLVMUseDefValueData {
+  /** Sigil-free local name. */
+  name: string;
+  /**
+   * "argument" for a named function parameter; "external" for a use with no
+   * known def in the function (degraded parses, undefined names, implicit
+   * parameter names).
+   */
+  kind: "argument" | "external";
+  /** The parameter's raw type text, for kind "argument" when known. */
+  paramType?: string;
+}
+
 export interface LLVMParam {
   type: string;
   name: string | null;

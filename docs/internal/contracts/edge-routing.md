@@ -121,13 +121,12 @@ ever negative zero.
 
 For a caller that already passes integers, quantization is the identity **on the input**:
 every rect, point and option reaches the router unchanged, so the obstacle set and the
-search see exactly what they saw before. Two behavioral changes still reach such a caller,
-both of them in self-loops (see Self-loops). The stub offset is now rounded, so a node whose
+search see exactly what they saw before. One behavioral change still reaches such a caller,
+and it is in self-loops (see Self-loops): the stub offset is now rounded, so a node whose
 integer width is not a multiple of 4 has its loop leave and re-enter at `round(x + 0.75w)`,
 up to half a pixel from where it did before — a quarter of a pixel for a width that is odd,
-half a pixel for one that is even but not a multiple of 4. And a self-loop's consecutive
-duplicate vertices are now collapsed, which a caller passing `nodeMargin: 0` or
-`selfLoopGap: 0` can observe.
+half a pixel for one that is even but not a multiple of 4. A caller passing a clearance of
+`0` sees two more: the duplicate collapse, and the one-pixel floor below.
 
 ### Degenerate input
 
@@ -146,41 +145,42 @@ guard of its own.
   become one point — `10.2` and `10.4` do, `10.4` and `10.6` do not. For the options it
   means a `nodeMargin` or `selfLoopGap` anywhere in `[-0.5, 0.5)` becomes exactly `0`, which
   can make two vertices of a polyline coincide. Consecutive duplicates are collapsed
-  wherever they arise (see Self-loops); what is promised once a clearance has reached `0` is
-  bounded by the note below.
+  wherever they arise (see Self-loops), and a clearance of `0` is given a shape by the floor
+  described below.
 - Rounding is monotonic, so no ordering between boundaries can invert: what was to the left
   of something else is afterwards to the left of it or coincident with it, never to the right
   of it. Nothing that depends on an ordering can change sign because of quantization.
 
-**Clearance that rounds to zero is outside the domain.** A `nodeMargin` or `selfLoopGap` of
-`0` asks for geometry with no room in it, and such a shape has degenerated rather than
-merely lost precision. A self-loop is asked to leave its node, go around it and come back
-across no distance at all: on a narrow enough rect the lane coincides with the stub, the
-loop has nowhere to run, and what is left of it doubles back on itself. A routed edge is
-asked for something equally impossible when its two request points quantize to the same
-point and `nodeMargin` is `0` — what comes back can then be nothing but that one point,
-twice. Three of the guarantees below are therefore stated for a `nodeMargin` and a
-`selfLoopGap` that round to at least `1`: **Orthogonality**, **≥ 2 points** and **no
-immediate reversals**. What the router returns outside that domain is left unspecified here
-on purpose — a follow-up issue covers making these shapes well defined at zero clearance,
-and pinning values now would pin values that issue is going to change.
+**A clearance of zero is floored at one pixel where a shape is synthesized.** A `nodeMargin`
+or a `selfLoopGap` of `0` asks for geometry with no room in it. Taken literally there is no
+valid answer left: a self-loop asked to leave its node, go around it and come back across no
+distance at all doubles back on itself, and a routed edge whose two request points quantize
+to the same point with a `nodeMargin` of `0` has nothing but that one point to return twice.
+Every shape the router **synthesizes** therefore keeps at least one pixel of room where the
+clearance it is given leaves none — the self-loop's lane against its stub and its vertical
+extent (see Self-loops), and the outward steps of the no-path fallback, which is also what
+an otherwise empty route falls back to. The floor is a maximum against the requested
+distance, so it binds only below a pixel: a shape that had room in the first place is not
+moved, and no output changes anywhere for a `nodeMargin` and a `selfLoopGap` of `1` or more.
+Every guarantee below is therefore unconditional — it holds for any options, zero and
+fractional alike.
 
-The remaining guarantees are unconditional. **Integer coordinates**, **determinism**, the
-**tie-break order**, **missing-node omission** and **duplicate-id handling** hold whatever
-the options are, fractional or zero — fractional options are exactly the input this
-quantization exists to serve, so the bound must not touch them. The bound itself is a
-property of asking for geometry with no room to exist, not of quantization: an exactly-zero
-option reaches the same corner with no rounding involved, and quantization only widens the
-set of inputs that land there from `{0}` to the half-open interval `[-0.5, 0.5)` that rounds
-to it. `bendPenalty` carries no such bound either: it is a cost, not a clearance, and zero
-or fractional values of it are ordinary input.
+The floor applies to synthesis only, not to the obstacle set: a `nodeMargin` of `0` still
+inflates nothing and still blocks nothing (see the collapsed-rect case above), because there
+the zero is a meaningful answer rather than an impossible one. The corner it addresses is
+not a product of quantization either — an exactly-zero option reaches it with no rounding
+involved, and quantization only widens the set of inputs that land there from `{0}` to the
+half-open interval `[-0.5, 0.5)` that rounds to it. `bendPenalty` is floored nowhere and
+needs no floor: it is a cost, not a clearance, and zero or fractional values of it are
+ordinary input.
 
 ## Guarantees callers may rely on
 
 - **Orthogonality.** Every returned polyline is axis-aligned: consecutive points always
-  share exactly one coordinate. Stated within the clearance domain above (`nodeMargin` and
-  `selfLoopGap` rounding to at least `1`): at a `nodeMargin` of `0`, two request points that
-  quantize to the same point can leave nothing to return but that point twice.
+  share exactly one coordinate — never both, so no two consecutive points are identical.
+  This holds at any clearance: two request points that quantize to the same point with a
+  `nodeMargin` of `0` come back as the fallback's loop around that point, not as the point
+  twice.
 - **Integer coordinates.** Every `x` and every `y` of every point in every returned
   polyline is an integer — searched routes, self-loops and fallback routes alike, for any
   finite input. This is a consequence of the quantization above rather than of a rounding
@@ -192,7 +192,7 @@ or fractional values of it are ordinary input.
   formed (see Self-loops below). Callers therefore never have to round router output, and no
   returned coordinate is `-0`.
 - **≥ 2 points.** Every entry in the returned map has at least two points, however
-  degenerate the rects and the requests are. Stated within the clearance domain above.
+  degenerate the rects, the requests and the clearances are.
 - **Endpoints are exact on the quantized points.** A routed (non-self-loop) polyline starts
   exactly at the quantized `RouteRequest.sourcePoint` and ends exactly at the quantized
   `RouteRequest.targetPoint` — that is, at `(round(x), round(y))` of each, with `-0`
@@ -214,10 +214,12 @@ or fractional values of it are ordinary input.
   neighbours, and keeping them is what "Endpoints are exact" above requires. This is what
   makes the returned polyline a bend list rather than a trace: a consumer that rounds
   corners has one vertex per corner to round, and adding an unrelated node near a straight
-  edge does not change the edge's geometry. Stated within the clearance domain above, and
-  binding on routed and self-loop polylines; the fallback shape the router emits for an
-  edge it can find no path for places its vertices by construction (see the ladder named in
-  the opening paragraph) and may leave collinear ones among them.
+  edge does not change the edge's geometry. Binding on searched and self-loop polylines at
+  any clearance; the fallback shape places its vertices by construction (see the ladder named
+  in the opening paragraph) and may leave collinear ones among them. The router emits that
+  shape for an edge it can find no path for, and for one whose search collapses to a single
+  point — which is what two request points quantizing together with a `nodeMargin` of `0`
+  does.
 - **Determinism.** Identical input rects and requests always produce byte-identical
   points, with no dependence on the iteration order of either the `nodes` array or the
   `requests` array — reordering either changes no individual route.
@@ -238,10 +240,11 @@ or fractional values of it are ordinary input.
   fallback alike: no interior vertex has its arriving and leaving segments running along
   the same axis in opposite directions. This is the precise, checkable form of "never a
   degenerate hook"; `points[i - 1] !== points[i + 1]` is _not_ an equivalent test (an
-  out-16-then-back-48 detour satisfies it while being exactly the shape banned). Stated
-  within the clearance domain above, for the reason given there: a shape with no room to
-  exist has nothing but a doubling-back left in it. A `selfLoopGap` of `0` reaches this for
-  fallback routes as well as for self-loops, since the fallback's detours are sized by it.
+  out-16-then-back-48 detour satisfies it while being exactly the shape banned). This holds
+  at any clearance: a doubling-back is precisely what a shape with no room to exist has left
+  in it, and the one-pixel floor above is what keeps that room. The floor is needed by the
+  fallback as much as by the self-loop, since the fallback's detours are sized by
+  `selfLoopGap` too.
 - **Missing nodes.** A `RouteRequest` whose `source` or `target` id is **not present** in
   the `nodes` array produces **no entry** in the returned map. `routeEdges` does not throw
   and does not substitute a default rect — it simply omits that request. Self-loops are
@@ -300,20 +303,33 @@ polyline runs through these six points in this order, subject to the collapse de
 below, with
 
 - `stubX = round(x + 0.75w)`, the offset along the bottom and top edges where the loop
-  leaves and re-enters, and
-- `laneX = x + w + selfLoopGap`, the vertical lane to the right of the node:
+  leaves and re-enters,
+- `laneX = max(x + w + selfLoopGap, stubX + 1)`, the vertical lane to the right of the node,
+- `aboveY = y - nodeMargin` and `belowY = max(y + h + nodeMargin, aboveY + 1)`, the two
+  horizontal runs that pass the node:
 
-| #   | point                         |                            |
-| --- | ----------------------------- | -------------------------- |
-| 0   | `(stubX, y + h)`              | leaves the **bottom** edge |
-| 1   | `(stubX, y + h + nodeMargin)` | steps clear of the node    |
-| 2   | `(laneX, y + h + nodeMargin)` | runs **right** to the lane |
-| 3   | `(laneX, y - nodeMargin)`     | runs **up** past the node  |
-| 4   | `(stubX, y - nodeMargin)`     | comes back **left**        |
-| 5   | `(stubX, y)`                  | re-enters the **top** edge |
+| #   | point             |                            |
+| --- | ----------------- | -------------------------- |
+| 0   | `(stubX, y + h)`  | leaves the **bottom** edge |
+| 1   | `(stubX, belowY)` | steps clear of the node    |
+| 2   | `(laneX, belowY)` | runs **right** to the lane |
+| 3   | `(laneX, aboveY)` | runs **up** past the node  |
+| 4   | `(stubX, aboveY)` | comes back **left**        |
+| 5   | `(stubX, y)`      | re-enters the **top** edge |
 
-`laneX` needs no rounding of its own — `x`, `w` and `selfLoopGap` are all integers by the
-time it is formed — and neither do the four `y` values. `stubX` is the only non-integer
+The two maxima are the one-pixel floor of "A clearance of zero is floored at one pixel"
+above, and they are what keeps this shape a loop at any clearance. Without the first, a
+`selfLoopGap` of `0` on a rect that quantizes to `w ≤ 2` puts the lane exactly on the stub
+(`round(0.75w) === w` for `w ∈ {0, 1, 2}`) and the loop runs down, back up and down again —
+an immediate reversal. Without the second, a `nodeMargin` of `0` on a rect that quantizes to
+`h = 0` collapses all six points onto one. Both bind only where the requested clearance is
+worth less than a pixel: with `selfLoopGap ≥ 1` the lane already clears the stub, since
+`stubX ≤ x + w`, and with `nodeMargin ≥ 1` or `h ≥ 1` the extent is already at least a pixel
+tall. The default `12`/`24` loop of a real node rect is exactly the unfloored shape.
+
+Neither maximum needs rounding of its own — `x`, `y`, `w`, `h`, `nodeMargin` and
+`selfLoopGap` are all integers by the time they are formed, `stubX` is rounded, and a
+maximum of integers is an integer. `stubX` is the only non-integer
 value that can reach the output: three quarters of a width is fractional whenever the width
 is not a multiple of 4, so the sum is rounded there and the integer guarantee holds for
 self-loops too. For example `w = 100` gives `stubX = x + 75`, `w = 101` gives
@@ -326,22 +342,20 @@ differ only in the sign of zero, e.g. `x = -1, w = 1`).
 returned is that shape with every pair of identical consecutive points folded into one. This
 is required behavior, not an incidental detail, and it is the same duplicate collapse that
 searched and fallback routes already pass through — self-loops are no longer the exception.
-It is load-bearing because an option can round to zero: a `nodeMargin` in `[-0.5, 0.5)`
-makes points 0 and 1 coincide (and 4 and 5), and a `selfLoopGap` in `[-0.5, 0.5)` makes
-`stubX === laneX` on a rect that quantizes to `w ≤ 2`, which makes 1 coincide with 2 and 3
-with 4. Two identical consecutive points share both coordinates rather than exactly one, so
-leaving them in the output would break Orthogonality.
+It is load-bearing because `nodeMargin` can round to zero and, unlike the room `laneX` and
+`belowY` are given, is not floored where it appears on its own: a `nodeMargin` in
+`[-0.5, 0.5)` puts point 1 on point 0 whenever `h ≥ 1`, and puts point 4 on point 5 always. The other fold the table used
+to admit is gone — `laneX > stubX` by construction now, so 1 and 2, and 3 and 4, are never
+identical. Two identical consecutive points share both coordinates rather than exactly one,
+so leaving them in the output would break Orthogonality.
 
-A self-loop therefore returns **at most** six points, and can return fewer when a clearance
-rounds to zero — whether it does depends on the rect, and a `selfLoopGap` of `0` folds
-nothing unless the rect is narrow enough for the lane to reach the stub. What is returned in
-that case is left unspecified here, since those inputs are outside the domain the guarantees
-are given for (see "Clearance that rounds to zero" above). What the collapse does buy is
-that **a self-loop is orthogonal at any clearance**: no two consecutive returned points are
-ever identical, so every consecutive pair shares exactly one coordinate, in domain or out of
-it. Within the domain there is nothing to fold — with `nodeMargin` and `selfLoopGap` of `1`
-or more, no two _consecutive_ vertices of the six coincide — so the collapse is only ever
-observable outside it.
+A self-loop therefore returns six points whenever `nodeMargin` is `1` or more, and, when it
+rounds to `0`, four for a rect that quantizes to `h ≥ 1` or five for one that quantizes to
+`h = 0`, where the floored `belowY` keeps points 0 and 1 apart. Every one of those
+shapes is a loop: orthogonal, at least two points, no immediate reversal, every interior
+vertex a corner. That is the whole point of flooring the room rather than bounding the
+domain, and it is why the collapse is a fold of _identical_ points and not of collinear
+ones.
 
 The side is the **right** side, always — not chosen per node and not derived from free
 space. Points 1 and 4 are load-bearing, not decoration: without them the first/last

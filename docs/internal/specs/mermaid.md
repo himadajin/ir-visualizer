@@ -23,6 +23,10 @@ header), `parse` throws an `Error` with Ohm's match diagnostic.
 - **Statements** after the header, separated by newlines and/or `;`:
   - Node declaration: `Id` with an optional label (see shapes below).
   - Edge: `Node Link Node`.
+  - Comment: `%%` and everything up to the end of the line. A comment is a statement like any
+    other, so it may stand on its own line or follow another statement on the same line; it
+    contributes no node and no edge. Comments before the header are not accepted, since only
+    separators may precede it.
 - **Node ids** are alphanumeric (`alnum+`). **Shapes** by label bracket:
 
   | Syntax     | `shape`  | Rendered as (see `MermaidNode.tsx`) |
@@ -40,7 +44,8 @@ header), `parse` throws an `Error` with Ohm's match diagnostic.
 > Pinned by: `src/parser/__tests__/mermaid/headerAndDirection.test.ts`,
 > `src/parser/__tests__/mermaid/statements.test.ts`,
 > `src/parser/__tests__/mermaid/nodes.test.ts`,
-> `src/parser/__tests__/mermaid/edges.test.ts`
+> `src/parser/__tests__/mermaid/edges.test.ts`,
+> `src/parser/__tests__/mermaid/comments.test.ts`
 
 ## 3. Node deduplication and label back-fill
 
@@ -82,7 +87,3 @@ These are current, test-pinned behavior — changing them is a spec change:
   handlers, other node shapes (`((...))`, `>...]`, `[/.../]`, ...), multi-link chains
   (`A --> B --> C`), and `&`-lists are not in the grammar; input using them throws.
   _(observed, untested)_
-- **`%%` comment lines crash the parser at runtime** ("Missing semantic action for
-  'comment'"): the grammar accepts them as statements but the semantics has no action for
-  the `comment` rule. Tracked by
-  [Issue #75](https://github.com/himadajin/ir-visualizer/issues/75).

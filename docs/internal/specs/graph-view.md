@@ -84,6 +84,40 @@ no immediate reversals, missing-node omission), and its option defaults are froz
 `contracts/edge-routing.md`; the algorithm behind those guarantees is documented in
 `src/utils/edgeRouter.ts` itself.
 
+**Overlap is a meaning, not an accident.** Two edges drawn along the same pixels read as
+one flow, so the router may only produce that shape where it is true. Three rules fix what
+shared geometry means:
+
+1. **Two edges share geometry iff they carry the same value.** A _bundle_ is the fan-out
+   of one entity — in the Use-Def view, the out-edges of a single def. Within a bundle,
+   edges share a trunk and split at explicit junction points; between bundles nothing may
+   be shared. Bundle membership is IR-specific and is declared by the mode registry's
+   `bundleOf` (`contracts/ir-mode-registry.md`). An edge in no bundle is a bundle of one,
+   so "this mode has no bundles" means "nothing here may overlap".
+2. **Junctions are marked.** A split inside a bundle carries a visible junction mark — the
+   circuit-schematic idiom: a dot means connected, an unmarked crossing means two unrelated
+   edges pass over each other.
+3. **Convergence is never drawn.** Fan-in edges stay geometrically independent all the way
+   to the target, each keeping its own arrival point and its own arrowhead. This is
+   semantically load-bearing at a phi node, where every incoming edge carries a _different_
+   value: one shared tail into the node would assert the opposite.
+
+CFG conditional successors (`br i1`, `switch`) are mutually exclusive alternatives rather
+than one flow that splits, and they carry distinct labels besides, so they are never
+bundled. That the CFG view therefore holds no bundles at all is a consequence of these
+semantics, not a gap in them.
+
+The bundle id reaches the router through the existing pipeline rather than a second
+channel: `getLayoutedElements` stamps `bundleOf(edge)` onto the React Flow edge's
+`data.bundleId`, and `useEdgeRoutes` copies it into `RouteRequest.bundleId`
+(`contracts/edge-routing.md`). The router is never told what an IR is.
+
+**These rules are not yet held.** They are the target the router is being moved toward, and
+four things stand in the way: every in-edge of a node lands on one top-center handle (#87),
+CFG successors leave through one bottom-center handle (#67), unrelated routes coincide by
+accident on the shared search grid (#86), and same-value fan-out is not drawn as a trunk at
+all (#88). Until those land, an overlap in the rendered graph means nothing.
+
 - **Inputs** are React Flow's measured rects (`internals.positionAbsolute`,
   `measured.width` / `measured.height`) and the live handle positions. Because those track
   the current DOM, an edge follows its node while the node is dragged, and follows a size
@@ -139,7 +173,8 @@ no immediate reversals, missing-node omission), and its option defaults are froz
 > one-pass `useEdgeRoutes` hook and its context, the unmeasured-node omission, the rounded
 > corners, the midpoint label placement, the accent color, and the drag-time
 > throttling/incident-edges pass. The frame-budget figures are measured out of band, not by
-> the test suite.
+> the test suite. The overlap semantics are _specified, unimplemented_ — a different marker
+> from the two above: there is nothing to observe and nothing to pin until #86–#88 land.
 
 ## 5. Node dimension estimation
 

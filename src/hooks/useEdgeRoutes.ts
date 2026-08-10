@@ -61,27 +61,44 @@ interface HandleAnchor {
 }
 
 /**
- * Where a handle actually sits, in flow coordinates. This mirrors React Flow's
- * own `getHandlePosition`, so a route's endpoints land exactly on the pixels
- * React Flow reports as `sourceX`/`sourceY` for the same edge.
+ * Where an edge attaches, in flow coordinates: the handle's center *along* the
+ * side it sits on, projected onto the node's measured rect *across* it
+ * (`specs/graph-view.md` §4).
+ *
+ * This deliberately does **not** mirror React Flow's own `getHandlePosition`.
+ * A handle is positioned from the node's padding box, so its measured bounds
+ * sit one border-width inside the rect the router treats as the obstacle;
+ * anchoring on the handle box would leave the drawn attachment point and the
+ * router's clearance geometry as two independently derived numbers. Taking the
+ * across-side coordinate from the rect makes the `nodeMargin`-pushed point
+ * coincide with the node's inflated boundary by construction. The along-side
+ * coordinate keeps coming from the handle, so per-operand ports (the Use-Def
+ * view) still leave from their own offsets.
+ *
+ * `null` when React Flow has not measured the node yet — such a node is
+ * omitted from the rects too (`collectRects`), so its edges are not drawn this
+ * frame either way.
  */
 const anchorOf = (
   node: InternalNode,
   handle: MeasuredHandle,
 ): HandleAnchor | null => {
-  const x = node.internals.positionAbsolute.x + handle.x;
-  const y = node.internals.positionAbsolute.y + handle.y;
-  const { width, height } = handle;
+  const { width, height } = node.measured;
+  if (width === undefined || height === undefined) return null;
+  const left = node.internals.positionAbsolute.x;
+  const top = node.internals.positionAbsolute.y;
+  const alongX = left + handle.x + handle.width / 2;
+  const alongY = top + handle.y + handle.height / 2;
   const side = SIDE_BY_POSITION[handle.position];
   switch (handle.position) {
     case Position.Top:
-      return { point: { x: x + width / 2, y }, side };
+      return { point: { x: alongX, y: top }, side };
     case Position.Right:
-      return { point: { x: x + width, y: y + height / 2 }, side };
+      return { point: { x: left + width, y: alongY }, side };
     case Position.Bottom:
-      return { point: { x: x + width / 2, y: y + height }, side };
+      return { point: { x: alongX, y: top + height }, side };
     case Position.Left:
-      return { point: { x, y: y + height / 2 }, side };
+      return { point: { x: left, y: alongY }, side };
   }
 };
 
@@ -89,7 +106,8 @@ const anchorOf = (
  * The handle an edge end attaches to. A named handle (the Use-Def view's
  * per-operand ports) resolves to that port's own bounds and `Position`; an
  * unnamed one takes the node's first handle of that type, exactly as React
- * Flow does. `null` when React Flow has not measured the handles yet.
+ * Flow does. `null` when React Flow has not measured the handles — or the node
+ * itself — yet.
  */
 const handleAnchor = (
   node: InternalNode,

@@ -13,6 +13,11 @@ documentation for how the guarantees below are achieved.
 The router implementation and its test suite are written against this boundary. It is
 frozen — names and signature are reproduced here verbatim and must not be "improved".
 
+One exception to "verbatim", and it is deliberate: `RouteRequest.bundleId` is not in
+`src/types/edgeRouting.ts` yet. It is fixed here ahead of its use so the boundary is
+decided once rather than reopened twice, and it lands in code with #86. Everything else in
+the block is what the source declares today.
+
 ```ts
 // src/types/edgeRouting.ts
 export interface Point {
@@ -37,6 +42,7 @@ export interface RouteRequest {
   targetPoint: Point;
   sourceSide: RouteSide;
   targetSide: RouteSide;
+  bundleId?: string; // requests sharing one carry the same value — see Bundles
 }
 
 export interface EdgeRouterOptions {
@@ -55,7 +61,10 @@ export const routeEdges: (
 
 `routeEdges` is a **pure function**: nothing here depends on React Flow or ELK, and no
 side effect crosses the boundary in either direction. `nodes` are the only obstacles;
-there is no notion of edges, labels, or anything else blocking a route.
+there is no notion of edges, labels, or anything else blocking a route. Routes are not
+independent of one another for all that — separation (see Bundles) is a relation between
+the returned polylines — but that is a property of the pass, which sees every request at
+once, not an obstacle in the search.
 
 ### Defaults
 
@@ -221,6 +230,46 @@ or fractional values of it are ordinary input.
   repeated id in `nodes`, or in `requests`, does not throw. The documented behavior is
   "the last one wins": the last rect with a given id is the one routed against, and the
   last request with a given id is the one left in the returned map.
+
+Every guarantee above is a property of one polyline in isolation. How two of them may
+relate is the separate question below, and it is not yet answered by the implementation.
+
+## Bundles and separation
+
+Nothing above says whether two returned polylines may run along the same pixels. Today they
+may and do: every route is searched on the same grid, so unrelated edges coincide by
+accident. `specs/graph-view.md` §4 fixes what such an overlap is allowed to mean — shared
+geometry means one value carried by several edges — and this section is that rule in the
+router's own terms. `bundleId` is how the caller states it; the router never asks what an
+IR is.
+
+- **Bundle.** The set of requests carrying one `bundleId`. A request whose `bundleId` is
+  `undefined` is a bundle of one — `undefined` is not a wildcard, so a caller that supplies
+  no bundle ids is asking for pairwise separation of everything. Self-loops take part like
+  any other request.
+- **Sharing.** Two polylines _share geometry_ when their point sets intersect in a subset
+  of positive length — a common sub-segment. Crossing at a point does not count, and
+  neither does meeting at a single common endpoint; those are exactly the shapes the spec's
+  junction mark is there to tell apart.
+- **The guarantee.** For any two requests with distinct ids, the returned polylines share
+  geometry **only if** both carry the same defined `bundleId`.
+
+The converse is deliberately not promised. Drawing a bundle as one distribution tree (#88)
+is a rendering intent, and stating the biconditional would outlaw a legal shape: a bundle
+whose branches leave the source in opposite directions has a zero-length trunk and shares
+nothing but its departure point, yet is correctly rendered. "Overlap iff same value" is the
+reading given to the picture; "share only if same bundle" is what the router can be held
+to.
+
+**Status: not held.** The router ignores `bundleId`; the guarantee and the unit tests that
+pin it land with #86. Search behavior is not the only thing in the way — two facts about
+the handles produce shared geometry whatever the search does, and neither is fixable here:
+every in-edge of a node ends at one top-center handle (#87) and CFG successors leave
+through one bottom-center handle (#67), so those routes share a tail or a stub before the
+router has any say. (#88, the distribution tree, is the other half of the picture — the
+sharing this contract permits but does not yet produce.) Until #86, an edge overlap in the
+output is not a contract violation but unspecified behavior, so `docs/README.md`'s "code
+that violates a contract is a bug" does not apply to it.
 
 ## Self-loops (right side, six points)
 

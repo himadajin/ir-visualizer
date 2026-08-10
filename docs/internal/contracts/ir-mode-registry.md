@@ -19,6 +19,7 @@ interface IRModeDefinition {
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
   layoutOptions?: Record<string, string>; // ELK layout options, e.g. layer spacing
+  bundleOf?: (edge: GraphEdge) => string | undefined; // see "Bundles" below
   views?: IRViewDefinition[]; // optional alternative projections — see "Views" below
 }
 ```
@@ -37,13 +38,14 @@ interface IRViewDefinition {
   parse: (code: string) => GraphData; // same throw-on-invalid rule as the mode's parse
   edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
   layoutOptions?: Record<string, string>; // defaults to the mode's layoutOptions
+  bundleOf?: (edge: GraphEdge) => string | undefined; // defaults to the mode's bundleOf
 }
 ```
 
 Rules:
 
 - `views` is optional. A mode without it has a single implicit view built from
-  its top-level `parse`/`edgeBuilder`/`layoutOptions`.
+  its top-level `parse`/`edgeBuilder`/`layoutOptions`/`bundleOf`.
 - When present, `views` has ≥ 2 entries and `views[0]` is the **default view**;
   it must behave identically to the mode's top-level fields (share the same
   function references — don't duplicate logic).
@@ -62,12 +64,15 @@ The layout-relevant half of a mode is named separately so a view-resolved value
 can be passed wherever layout behavior is needed:
 
 ```ts
-type IRLayoutBehavior = Pick<IRModeDefinition, "edgeBuilder" | "layoutOptions">;
+type IRLayoutBehavior = Pick<
+  IRModeDefinition,
+  "edgeBuilder" | "layoutOptions" | "bundleOf"
+>;
 ```
 
 `useGraphData.updateGraph(graph, behavior)` takes `IRLayoutBehavior` rather than
 the full `IRModeDefinition`; a mode object satisfies it structurally, and the
-workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`.
+workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`/`bundleOf`.
 
 `IREdgeBuilder` (`src/utils/layout.ts`) captures how a mode turns a `GraphEdge`
 into a React Flow edge:
@@ -90,13 +95,46 @@ All three current modes live in `src/irModes/`: `llvmMode.ts`, `mermaidMode.ts`,
 `selectionDAGMode.ts`, aggregated by `src/irModes/index.ts` into `IR_MODES` (keyed map) and
 `IR_MODE_LIST` (array, for iterating in the editor panel).
 
+## Bundles
+
+Whether two edges may be drawn on top of one another is decided by whether they carry the
+same value (`specs/graph-view.md` §4). "The same value" is an IR-level question that the
+router cannot answer and must not try to — so it belongs here, answered once per mode.
+
+`bundleOf` maps an edge to the id of the bundle it belongs to, or `undefined` for none.
+Two edges may share geometry exactly when it returns the same defined id for both.
+`undefined` is a bundle of one rather than a wildcard: an edge outside every bundle must
+stay separate from everything.
+
+| mode / view       | `bundleOf`              | why                                                                                           |
+| ----------------- | ----------------------- | --------------------------------------------------------------------------------------------- |
+| LLVM-IR · Use-Def | `(edge) => edge.source` | the out-edges of one instruction node are the uses of that node's single def — one SSA value  |
+| LLVM-IR · CFG     | omitted                 | conditional successors are mutually exclusive alternatives with distinct labels, not one flow |
+| Mermaid           | omitted                 | an edge is a user-authored relation; the language has no notion of a value being carried      |
+| SelectionDAG      | omitted                 | not routed at all — bezier edges on operand handles                                           |
+
+Use-Def keys on the source **node** because an instruction node has exactly one def. An IR
+whose nodes expose several def ports would key on the port instead
+(`` `${edge.source}:${edge.sourceHandle}` ``); that is a change to one mode's `bundleOf`,
+not to this contract.
+
+`bundleOf` is view-resolved like `edgeBuilder`/`layoutOptions` and travels with them in
+`IRLayoutBehavior` — LLVM-IR is the case that needs this, since its two views disagree.
+`getLayoutedElements` applies it once when it builds the React Flow edges, stamping the
+result on `data.bundleId`; `useEdgeRoutes` copies that onto `RouteRequest.bundleId`
+(`contracts/edge-routing.md`). The registry is therefore consulted at build time only —
+nothing on the render path asks a mode a question.
+
+**Status: declared here, not yet in `src/irModes/types.ts`.** The field and the Use-Def
+implementation land with #88; the router-side guarantee it feeds lands with #86.
+
 ## What consumes the registry
 
 - `App.tsx` / `useIRWorkspace` — looks up the active mode by key, calls `mode.parse(code)`,
   uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the editor.
 - `useGraphData` — takes an `IRLayoutBehavior` into `updateGraph(graph, behavior)` /
-  `resetLayout()`, so layout and edge-building are mode- (or view-) driven rather than
-  branching by string.
+  `resetLayout()`, so layout, edge-building and bundling are mode- (or view-) driven rather
+  than branching by string.
 - `GraphViewer` — merges `nodeTypes` from every entry in `IR_MODE_LIST` (plus the
   mode-agnostic fallback `codeNode`) instead of importing each mode's node components directly.
 
@@ -106,7 +144,9 @@ All three current modes live in `src/irModes/`: `llvmMode.ts`, `mermaidMode.ts`,
    `src/graphBuilder`.
 2. Add the mode's node component(s) under `src/components/Graph/<NewMode>/`.
 3. Write `src/irModes/newMode.ts` implementing `IRModeDefinition`. Reuse `codeGraphEdgeBuilder`
-   unless the new IR needs custom edge semantics like SelectionDAG.
+   unless the new IR needs custom edge semantics like SelectionDAG. Declare `bundleOf` only
+   if the IR has same-value fan-out (see Bundles); omitting it means no two of its edges may
+   overlap, which is the right answer for a control-flow graph.
 4. Add the new entry to `IR_MODES`/`IR_MODE_LIST` in `src/irModes/index.ts`.
 
 No other file should need to change. If it does, that's a signal the registry contract has a gap.

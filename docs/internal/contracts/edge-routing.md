@@ -204,6 +204,20 @@ or fractional values of it are ordinary input.
   pixel at a handle is invisible, and it buys output with no sub-pixel geometry anywhere in
   it. **Self-loops are exempt from this rule**: they are synthesized from the node rect alone
   (see below), so `sourcePoint`/`targetPoint` play no part in their shape at all.
+- **Interior points are corners, except the two pushed points.** Every interior vertex of a
+  routed polyline is either one of the two `nodeMargin`-pushed points above or a **corner**:
+  a vertex whose arriving and leaving segments run along different axes. A run that
+  continues straight across several rect boundaries comes back as the two ends of that run
+  and nothing in between, so a route's point count is set by how many times it actually
+  turns and not by how many other nodes happen to sit along the line it takes. The two
+  pushed points are the sole interior vertices that survive being collinear with their
+  neighbours, and keeping them is what "Endpoints are exact" above requires. This is what
+  makes the returned polyline a bend list rather than a trace: a consumer that rounds
+  corners has one vertex per corner to round, and adding an unrelated node near a straight
+  edge does not change the edge's geometry. Stated within the clearance domain above, and
+  binding on routed and self-loop polylines; the fallback shape the router emits for an
+  edge it can find no path for places its vertices by construction (see the ladder named in
+  the opening paragraph) and may leave collinear ones among them.
 - **Determinism.** Identical input rects and requests always produce byte-identical
   points, with no dependence on the iteration order of either the `nodes` array or the
   `requests` array — reordering either changes no individual route.

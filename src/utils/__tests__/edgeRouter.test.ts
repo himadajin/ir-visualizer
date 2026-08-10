@@ -175,6 +175,33 @@ function hasImmediateReversal(points: Point[]): boolean {
   return false;
 }
 
+/**
+ * The interior vertices that are neither of the two pushed points, i.e. the
+ * ones the contract ("Interior points are corners, except the two pushed
+ * points") requires to be corners. Interior vertices run from index 1 to
+ * `length - 2`; `points[1]` and `points[length - 2]` are the pushed points and
+ * are exempt.
+ */
+function nonPushedInteriorIndices(points: Point[]): number[] {
+  const indices: number[] = [];
+  for (let i = 2; i < points.length - 2; i++) indices.push(i);
+  return indices;
+}
+
+/**
+ * True when every interior vertex other than the two pushed points is a
+ * corner: its arriving and leaving segments run along different axes. A vertex
+ * that fails this is a point in the middle of a straight run — the polyline is
+ * then a trace of the vertices it passed rather than a list of its bends.
+ */
+function interiorVerticesAreCorners(points: Point[]): boolean {
+  return nonPushedInteriorIndices(points).every((i) => {
+    const arrivesHorizontally = points[i - 1].y === points[i].y;
+    const leavesHorizontally = points[i].y === points[i + 1].y;
+    return arrivesHorizontally !== leavesHorizontally;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Quantization helpers (contract "Input quantization"). `q` restates the
 // contract's own rounding rule — `Math.round`, with `-0` normalized to `0` —
@@ -876,6 +903,172 @@ describe("routeEdges — pushed points survive collinear collapse (contract: 'En
 
     expect(points[1]).toEqual(pushedSource);
     expect(points[points.length - 2]).toEqual(pushedTarget);
+  });
+});
+
+describe("routeEdges — a straight run is returned as its end points (contract: 'Interior points are corners, except the two pushed points')", () => {
+  // The companion of the block above, pinning the other half of the same
+  // sentence. That block fixes which collinear points are *kept* (the two
+  // pushed ones); this one fixes that every other point in the middle of a
+  // straight run is *dropped*, so that a route's point count is set by how
+  // many times it turns and not by how many rects happen to sit along the
+  // line it takes. The difference is invisible on `simpleTwoNodeCase` —
+  // nothing there puts a rect boundary between the two pushed points — so
+  // each fixture below deliberately spreads unrelated nodes along the route's
+  // straight legs.
+
+  /**
+   * Bystander nodes strung out along one horizontal line. They block nothing —
+   * the fixtures place them clear of the route — but each contributes a pair
+   * of vertical rect boundaries the route runs straight through.
+   */
+  function bystandersAlongX(xs: number[], y: number): RouteNodeRect[] {
+    return xs.map((x) => ({
+      id: `BY-${x}-${y}`,
+      x,
+      y,
+      width: 40,
+      height: 40,
+    }));
+  }
+
+  it("returns a dead-straight route as four points, however many rect boundaries it crosses", () => {
+    // A -> B is a clear horizontal line at y = 20. The bystanders sit far
+    // below it and block nothing, but their left and right boundaries cross
+    // the line at x = 68, 132, 148, 212, 228, 292, 308 and 372 — eight
+    // points the route runs straight through.
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 0, width: 40, height: 40 },
+      { id: "B", x: 400, y: 0, width: 40, height: 40 },
+      ...bystandersAlongX([80, 160, 240, 320], 200),
+    ];
+    const request: RouteRequest = {
+      id: "e-A-B",
+      source: "A",
+      target: "B",
+      sourcePoint: { x: 40, y: 20 },
+      targetPoint: { x: 400, y: 20 },
+      sourceSide: "right",
+      targetSide: "left",
+    };
+
+    const points = routeEdges(nodes, [request]).get(request.id)!;
+
+    // sourcePoint, the pushed source, the pushed target, targetPoint — and
+    // nothing else: the whole route is one straight run.
+    expect(points).toEqual([
+      { x: 40, y: 20 },
+      { x: 52, y: 20 },
+      { x: 388, y: 20 },
+      { x: 400, y: 20 },
+    ]);
+  });
+
+  it("returns each leg of a one-corner route as its end points", () => {
+    // Right side of A to top of B, which a single corner at (420, 20)
+    // connects. Bystanders cross the horizontal leg (below it) and the
+    // vertical leg (to its right), so both legs run straight through several
+    // boundaries.
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 0, width: 40, height: 40 },
+      { id: "B", x: 400, y: 400, width: 40, height: 40 },
+      ...bystandersAlongX([80, 160, 240], 600),
+      { id: "BY-right-1", x: 600, y: 100, width: 40, height: 40 },
+      { id: "BY-right-2", x: 600, y: 180, width: 40, height: 40 },
+      { id: "BY-right-3", x: 600, y: 260, width: 40, height: 40 },
+    ];
+    const request: RouteRequest = {
+      id: "e-A-B",
+      source: "A",
+      target: "B",
+      sourcePoint: { x: 40, y: 20 },
+      targetPoint: { x: 420, y: 400 },
+      sourceSide: "right",
+      targetSide: "top",
+    };
+
+    const points = routeEdges(nodes, [request]).get(request.id)!;
+
+    expect(points).toEqual([
+      { x: 40, y: 20 },
+      { x: 52, y: 20 },
+      { x: 420, y: 20 }, // the one corner
+      { x: 420, y: 388 },
+      { x: 420, y: 400 },
+    ]);
+  });
+
+  it("reports only corners at the interior vertices of every route across a field of obstacles", () => {
+    // The two fixtures above pin exact shapes; this widens the same property
+    // to a sweep whose routes have to bend around a 3x3 field of nodes. Every
+    // interior vertex that is not one of the two pushed points must be a
+    // corner. Fallback-shaped results are skipped: their vertices are placed
+    // by the ladder rather than found, and the contract exempts them.
+    const field: RouteNodeRect[] = [];
+    for (const x of [120, 240, 360]) {
+      for (const y of [120, 240, 360]) {
+        field.push({ id: `F-${x}-${y}`, x, y, width: 60, height: 60 });
+      }
+    }
+    const aRect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 60, height: 60 };
+    const bPositions = [
+      { x: 480, y: 0 },
+      { x: 480, y: 240 },
+      { x: 480, y: 480 },
+      { x: 240, y: 480 },
+      { x: 0, y: 480 },
+    ];
+    const sidePairs: { sourceSide: RouteSide; targetSide: RouteSide }[] = [
+      { sourceSide: "right", targetSide: "left" },
+      { sourceSide: "right", targetSide: "top" },
+      { sourceSide: "bottom", targetSide: "top" },
+      { sourceSide: "bottom", targetSide: "left" },
+    ];
+
+    const failures: string[] = [];
+    let checked = 0;
+    let withInteriorCorner = 0;
+
+    for (const position of bPositions) {
+      for (const { sourceSide, targetSide } of sidePairs) {
+        const bRect: RouteNodeRect = {
+          id: "B",
+          x: position.x,
+          y: position.y,
+          width: 60,
+          height: 60,
+        };
+        const request: RouteRequest = {
+          id: "e-A-B",
+          source: "A",
+          target: "B",
+          sourcePoint: sideCenterPoint(aRect, sourceSide),
+          targetPoint: sideCenterPoint(bRect, targetSide),
+          sourceSide,
+          targetSide,
+        };
+
+        const points = routeEdges([aRect, bRect, ...field], [request]).get(
+          request.id,
+        )!;
+        if (isFallbackShape(points, request)) continue;
+
+        checked++;
+        if (nonPushedInteriorIndices(points).length > 0) withInteriorCorner++;
+        if (!interiorVerticesAreCorners(points)) {
+          failures.push(
+            `B at (${position.x},${position.y}) ${sourceSide}->${targetSide}: ` +
+              `${JSON.stringify(points)}`,
+          );
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+    // The sweep is only worth anything if it produced routes with interior
+    // vertices to judge in the first place.
+    expect(checked).toBeGreaterThan(0);
+    expect(withInteriorCorner).toBeGreaterThan(0);
   });
 });
 

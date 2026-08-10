@@ -156,6 +156,40 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   check of this budget.
 - **Rendering:** `RoutedEdge` draws the returned points as an orthogonal polyline with
   **rounded corners**; edge labels (phi) render at the polyline's arc-length midpoint.
+- **The bend radius is derived from the router's node margin, not chosen.** Two
+  inequalities relate it to the spacing constants around it:
+
+  ```
+  2 · bendRadius ≤ nodeMargin
+  2 · nodeMargin + 2 · bendRadius ≤ ELK node spacing
+  ```
+
+  The first is what makes a bend at a route's first and last corner drawable at full size:
+  the contract's exact-endpoints rule (`contracts/edge-routing.md`) means the pushed point
+  survives as `points[1]` and as the second-to-last point, so every route's end segments are
+  exactly `nodeMargin` long and a corner there can consume at most half of that. The second
+  is the same statement for the interior: the corridor between two nodes' clearance bands is
+  `spacing − 2 × nodeMargin` wide, and one bend needs `2 × bendRadius` of it.
+
+  Both are solved by **`bendRadius = nodeMargin / 2`** — 6 px at the default `nodeMargin` of
+  12, requiring 36 px of node spacing, which every configured ELK value already exceeds (40
+  / 50 by default, 40 / 60 in the Use-Def view). Holding the radius at 8 instead would
+  demand `nodeMargin = 16` and 48 px of spacing, above the configured `elk.spacing.nodeNode`,
+  and would widen the clearance band that already closes corridors between unrelated rects
+  ("Known limitations" below); shrinking the radius is the safer of the two directions. The
+  radius is therefore computed from the router's exported margin
+  (`src/components/Graph/roundedPath.ts`), never restated as a literal of its own; it moves
+  into the shared spacing module once #91 introduces one.
+
+  The shrink-to-fit in `roundedPath` (`min(bendRadius, inLen / 2, outLen / 2)`) stays as the
+  safety valve, and after this it engages only where the layout genuinely leaves a corridor
+  narrower than `2 × bendRadius` — today, where ELK lays out on estimated rather than
+  measured sizes and delivers less gap than it was asked for (#91). What is deliberately
+  _not_ done is making the router guarantee a minimum run length so the radius is always
+  nominal: that would put a stroke-appearance constraint into the topology search and could
+  make an edge unroutable for a cosmetic reason. Clearance and topology are the router's
+  concern; stroke appearance is not.
+
 - **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a self-loop
   or its target node lies entirely above its source node. The flag is **structural** —
   decided once from ELK's placement geometry and never re-derived from live rects — so
@@ -179,14 +213,15 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   source), LLVM/Mermaid at the **end**.
 
 > Pinned by: `src/utils/__tests__/edgeRouter.test.ts` (the contract's guarantees),
-> `src/utils/__tests__/layout.test.ts` (back-edge / self-loop flagging, no geometry stored
-> on edges), `src/hooks/__tests__/useGraphData.test.ts` (back-edge flag inherited on
-> content-only updates), `src/utils/__tests__/converter.test.ts` (dashed chain/glue,
-> markerStart/markerEnd).
+> `src/components/Graph/__tests__/roundedPath.test.ts` (the bend radius and its derivation
+> from the node margin), `src/utils/__tests__/layout.test.ts` (back-edge / self-loop
+> flagging, no geometry stored on edges), `src/hooks/__tests__/useGraphData.test.ts`
+> (back-edge flag inherited on content-only updates),
+> `src/utils/__tests__/converter.test.ts` (dashed chain/glue, markerStart/markerEnd).
 >
 > _(observed, untested)_: live-rect tracking while dragging and after content edits, the
-> one-pass `useEdgeRoutes` hook and its context, the unmeasured-node omission, the rounded
-> corners, the midpoint label placement, the accent color, and the drag-time
+> one-pass `useEdgeRoutes` hook and its context, the unmeasured-node omission, the midpoint
+> label placement, the accent color, and the drag-time
 > throttling/incident-edges pass. The frame-budget figures are measured out of band, not by
 > the test suite. The overlap semantics are _specified, unimplemented_ — a different marker
 > from the two above: there is nothing to observe and nothing to pin until #86–#88 land.

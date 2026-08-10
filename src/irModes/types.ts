@@ -18,9 +18,12 @@ export interface IRModeDefinition {
   editorLanguage: string;
   /** Code shown in the editor when this mode is selected. */
   defaultCode: string;
-  /** Text -> graph. Throws Error on invalid input (see the registry contract
-   * for SelectionDAG's per-line tolerance, which is not an exception to this). */
-  parse: (code: string) => GraphData;
+  /** Text -> graph. Rejects with an Error on invalid input (see the registry
+   * contract for SelectionDAG's per-line tolerance, which is not an exception
+   * to this). Async because a parser may need to load before it can parse; a
+   * synchronous parser is adapted here, not rewritten. Stale results are
+   * discarded by the caller — see the contract, "Parsing is asynchronous". */
+  parse: (code: string) => Promise<GraphData>;
   /** This mode's React Flow node renderers, keyed by the camelCase nodeType.
    * Covers every view's renderers (GraphViewer merges per mode, not per view). */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,8 +47,8 @@ export interface IRViewDefinition {
   key: string;
   /** Toggle label, e.g. "CFG". */
   label: string;
-  /** Text -> graph; same throw-on-invalid rule as the mode's parse. */
-  parse: (code: string) => GraphData;
+  /** Text -> graph; same reject-on-invalid rule as the mode's parse. */
+  parse: (code: string) => Promise<GraphData>;
   /** Defaults to the mode's edgeBuilder. */
   edgeBuilder?: IREdgeBuilder;
   /** Defaults to the mode's layoutOptions. */

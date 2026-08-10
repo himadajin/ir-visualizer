@@ -8,7 +8,7 @@ One-page orientation for the codebase. Read this first; follow the links for the
 flowchart TD
   Editor["CodeEditor (Monaco + Shiki)"] -->|"onChange(text)"| Workspace["useIRWorkspace<br/>(mode state + 750ms debounce)"]
   Registry["IR mode registry (src/irModes)<br/>parser / defaultCode / editorLanguage /<br/>nodeTypes / edgeBuilder / layoutOptions"] -.->|"active mode"| Workspace
-  Workspace -->|"mode.parse(code)"| Parser["Mode-specific parser (src/parser)"]
+  Workspace -->|"await mode.parse(code)"| Parser["Mode-specific parser (src/parser)"]
   Parser -->|AST| Builder["graphBuilder (src/graphBuilder)"]
   Builder -->|GraphData| GraphHook["useGraphData<br/>(topology signature,<br/>position preservation)"]
   GraphHook -->|"getLayoutedElements"| Layout["layout.ts (ELK placement) +<br/>converter.ts (sizing)"]
@@ -20,9 +20,12 @@ flowchart TD
 ```
 
 - Typing in the editor updates `code` state; after a 750 ms debounce, the active mode's
-  `parse()` runs. Parse errors are caught and shown in the editor panel's status footer; the
+  `parse()` runs. Parse failures are caught and shown in the editor panel's status footer; the
   previous graph stays.
 - `parse()` is parser + graphBuilder composed: text → AST → `GraphData` (plain, React-free).
+  It is **async** (`contracts/ir-mode-registry.md`, "Parsing is asynchronous"): a parse whose
+  code/mode/view changed while it was in flight is discarded, so a slow parse can never
+  overwrite a newer one.
 - `useGraphData` decides between a full (async) ELK re-layout (topology changed) and a
   position-preserving content update (same topology). See `specs/graph-view.md`.
 - Layout converts `GraphData` to React Flow nodes/edges, estimating node dimensions from

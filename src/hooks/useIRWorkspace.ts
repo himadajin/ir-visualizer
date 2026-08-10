@@ -33,22 +33,36 @@ export function useIRWorkspace() {
     resetLayout,
   } = useGraphData();
 
+  // Parsing is async (contracts/ir-mode-registry.md, "Parsing is
+  // asynchronous"). The effect's deps cover every input a parse depends on, so
+  // a `cancelled` flag set by the cleanup is enough to keep a parse that is
+  // still in flight when the code/mode/view changes from landing: neither its
+  // graph nor its error reaches state. Layout staleness is guarded separately,
+  // by useGraphData's generation counter.
   useEffect(() => {
+    let cancelled = false;
     const timer = setTimeout(() => {
-      try {
-        const parse = activeView?.parse ?? mode.parse;
-        const graph = parse(code);
-        updateGraph(graph, {
-          edgeBuilder: activeView?.edgeBuilder ?? mode.edgeBuilder,
-          layoutOptions: activeView?.layoutOptions ?? mode.layoutOptions,
-        });
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      }
+      void (async () => {
+        try {
+          const parse = activeView?.parse ?? mode.parse;
+          const graph = await parse(code);
+          if (cancelled) return;
+          updateGraph(graph, {
+            edgeBuilder: activeView?.edgeBuilder ?? mode.edgeBuilder,
+            layoutOptions: activeView?.layoutOptions ?? mode.layoutOptions,
+          });
+          setError(null);
+        } catch (err) {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Unknown error");
+        }
+      })();
     }, PARSE_DEBOUNCE_MS);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [code, mode, activeView, updateGraph]);
 
   const changeMode = useCallback((newModeKey: IRModeKey) => {

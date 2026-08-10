@@ -1599,9 +1599,9 @@ function fractionalScenario(next: () => number, i: number) {
     targetSide: "top",
   };
   // Fractional options too: the contract makes the integer guarantee
-  // unconditional by rounding `nodeMargin` and `selfLoopGap`. Both stay in the
-  // stated clearance domain (they round to 12/13 and 24/25, never to 0), so
-  // orthogonality and no-immediate-reversal are in force here.
+  // unconditional by rounding `nodeMargin` and `selfLoopGap`. Both round well
+  // clear of 0 here (to 12/13 and 24/25), so this scenario exercises the
+  // shapes as they are built, with the one-pixel floor never binding.
   const options = {
     nodeMargin: 12 + next(),
     selfLoopGap: 24 + next(),
@@ -1886,8 +1886,9 @@ describe("routeEdges — quantization: no sub-pixel runs (issue #89 acceptance c
   });
 
   it("keeps orthogonality and the no-reversal invariant on fractional input", () => {
-    // Both guarantees are stated for a `nodeMargin` and `selfLoopGap` that
-    // round to at least 1, which every option this sweep generates does.
+    // Both guarantees are unconditional. This sweep covers the fractional
+    // clearances quantization exists to serve; the zero-clearance half of the
+    // domain is swept separately, under "the one-pixel floor" below.
     const next = fractionStream(4211);
     const failures: string[] = [];
 
@@ -2091,8 +2092,9 @@ describe("routeEdges — quantization: a rect that collapses to zero extent stil
   // "A collapsed rect is still an obstacle: every rect is inflated by
   // `nodeMargin` before the obstacle set is built, so a rect of no extent keeps
   // a band of that width clear around where it sits, exactly as a full-size one
-  // does." Unconditional — not one of the three guarantees bounded to a
-  // clearance of at least 1, and not left unspecified.
+  // does." This is the one place a `nodeMargin` of 0 is taken literally: the
+  // one-pixel floor applies where a shape is synthesized, never to the
+  // obstacle set, so a zero margin still inflates nothing and blocks nothing.
   //
   // The wrong implementation is the tempting one: drop rects whose quantized
   // extent is zero from the obstacle set, on the reasoning that a rect of no
@@ -2486,15 +2488,11 @@ describe("routeEdges — quantization: the self-loop stub offset is rounded (con
 });
 
 describe("routeEdges — quantization: the self-loop duplicate collapse (contract 'Consecutive duplicate vertices are collapsed')", () => {
-  // The collapse "is only ever observable outside" the clearance domain, so
-  // this block is the one place a clearance rounding to 0 is exercised. What
-  // the contract promises there is exactly three things and no more: integer
-  // coordinates, no consecutive duplicate vertices, and — as a consequence —
-  // that every consecutive pair shares exactly one coordinate. The point
-  // count and the point values are documented as unspecified at zero
-  // clearance and are deliberately not asserted. Without the collapse, two
-  // identical consecutive points would share *both* coordinates and break
-  // orthogonality, which is the failure this catches.
+  // The collapse is only ever observable at a `nodeMargin` of 0, where points
+  // 0/1 and 4/5 of the table coincide. Without it those pairs would share
+  // *both* coordinates rather than exactly one and break orthogonality, which
+  // is the failure this catches. The shapes those inputs produce are pinned
+  // under "the one-pixel floor" below; here the concern is only the fold.
 
   it("never returns two identical consecutive vertices, at any clearance", () => {
     const rects: RouteNodeRect[] = [
@@ -2547,11 +2545,12 @@ describe("routeEdges — quantization: the self-loop duplicate collapse (contrac
     expect(failures).toEqual([]);
   });
 
-  it("has nothing to fold inside the clearance domain: the six-point shape survives intact", () => {
-    // "Within the domain there is nothing to fold — with `nodeMargin` and
-    // `selfLoopGap` of 1 or more, no two *consecutive* vertices of the six
-    // coincide". A collapse implemented too eagerly (folding collinear points
-    // rather than identical ones) would shorten this to four.
+  it("has nothing to fold at a clearance of 1: the six-point shape survives intact", () => {
+    // "A self-loop returns six points whenever `nodeMargin` is 1 or more". A
+    // collapse implemented too eagerly (folding collinear points rather than
+    // identical ones) would shorten this to four. A width of 2 also puts the
+    // lane one pixel from the stub without the floor having to do anything —
+    // the smallest gap the floor would otherwise have had to create.
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 2, height: 20 };
     const request: RouteRequest = {
       id: "loop-A",
@@ -2577,6 +2576,242 @@ describe("routeEdges — quantization: the self-loop duplicate collapse (contrac
       { x: 2, y: -1 },
       { x: 2, y: 0 },
     ]);
+  });
+});
+
+describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is floored at one pixel')", () => {
+  // A `nodeMargin` or `selfLoopGap` of 0 asks a synthesized shape to exist
+  // across no distance at all. The floor gives it a pixel to exist in, which is
+  // what makes Orthogonality, `>= 2 points` and No immediate reversals hold for
+  // every input rather than only above a clearance of 1. These are the cases
+  // that motivated the floor and the sweep that says nothing else is left.
+
+  /** The three guarantees the floor exists to keep, plus the integer rule. */
+  function guaranteeFailures(points: Point[], label: string): string[] {
+    const failures: string[] = [];
+    if (points.length < 2) failures.push(`${label}: fewer than 2 points`);
+    if (!isOrthogonalPolyline(points))
+      failures.push(`${label}: not orthogonal`);
+    if (hasConsecutiveDuplicatePoint(points)) {
+      failures.push(`${label}: consecutive duplicate point`);
+    }
+    if (hasImmediateReversal(points)) {
+      failures.push(`${label}: immediate reversal`);
+    }
+    if (!allCoordinatesAreIntegers(points)) {
+      failures.push(`${label}: non-integer coordinate`);
+    }
+    if (hasNegativeZeroCoordinate(points))
+      failures.push(`${label}: contains -0`);
+    return failures;
+  }
+
+  function loopRequest(rect: RouteNodeRect): RouteRequest {
+    return {
+      id: "loop-A",
+      source: "A",
+      target: "A",
+      // Ignored — a self-loop is synthesized from the rect alone — but a real
+      // caller passes the live handle positions, so this one does too.
+      sourcePoint: { x: rect.x + rect.width / 2, y: rect.y + rect.height },
+      targetPoint: { x: rect.x + rect.width / 2, y: rect.y },
+      sourceSide: "bottom",
+      targetSide: "top",
+    };
+  }
+
+  it("keeps every self-loop a loop across the clearance sweep, zero included", () => {
+    // The sweep of issue #96: widths across the `w <= 2` boundary where
+    // `round(0.75w) === w`, heights that quantize to zero and to a real
+    // extent, both clearances at 0 and above, over origins that put the rect
+    // on and off the lattice. Every case that failed before the floor had a
+    // clearance of 0; none with both at 1 or more did.
+    const failures: string[] = [];
+
+    for (const originX of [0, -7, 3.4]) {
+      for (const originY of [0, -5, 2.6]) {
+        for (let width = 0; width <= 8; width++) {
+          for (const height of [0, 1, 2, 3, 40]) {
+            for (const nodeMargin of [0, 1, 2, 12]) {
+              for (const selfLoopGap of [0, 1, 2, 24]) {
+                const rect: RouteNodeRect = {
+                  id: "A",
+                  x: originX,
+                  y: originY,
+                  width,
+                  height,
+                };
+                const request = loopRequest(rect);
+                const points = routeEdges([rect], [request], {
+                  nodeMargin,
+                  selfLoopGap,
+                }).get(request.id)!;
+                const label = `(${originX},${originY}) w=${width} h=${height} nodeMargin=${nodeMargin} selfLoopGap=${selfLoopGap}`;
+
+                failures.push(...guaranteeFailures(points, label));
+                if (!interiorVerticesAreCorners(points)) {
+                  failures.push(`${label}: interior vertex is not a corner`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  it("floors the lane against the stub: a selfLoopGap of 0 on a narrow rect still leaves room to run", () => {
+    // w = 2 is the boundary case — `round(0.75 * 2) = 2 = w`, so the unfloored
+    // lane would land exactly on the stub and the loop would run down, back up
+    // and down again. `laneX = max(0 + 2 + 0, 2 + 1) = 3`.
+    const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 2, height: 20 };
+    const points = routeEdges([rect], [loopRequest(rect)], {
+      nodeMargin: 12,
+      selfLoopGap: 0,
+    }).get("loop-A")!;
+
+    expect(points).toEqual([
+      { x: 2, y: 20 },
+      { x: 2, y: 32 },
+      { x: 3, y: 32 },
+      { x: 3, y: -12 },
+      { x: 2, y: -12 },
+      { x: 2, y: 0 },
+    ]);
+  });
+
+  it("floors the vertical extent: a rect of no height at zero clearance still yields a loop, not a point", () => {
+    // Every one of the six vertices used to collapse onto `(0, 0)` here.
+    // `aboveY = 0`, `belowY = max(0 + 0 + 0, 0 + 1) = 1`, `laneX = max(0, 1)`,
+    // and the fold at the top edge takes the six to five.
+    const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 0, height: 0 };
+    const points = routeEdges([rect], [loopRequest(rect)], {
+      nodeMargin: 0,
+      selfLoopGap: 0,
+    }).get("loop-A")!;
+
+    expect(points).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 1, y: 0 },
+      { x: 0, y: 0 },
+    ]);
+  });
+
+  it("does not move a loop that had room in the first place", () => {
+    // The acceptance criterion the floor must not cost anything: at the
+    // defaults, on a node-sized rect, the shape is the unfloored vertex table
+    // exactly. `max` is a floor, not an offset.
+    const rect: RouteNodeRect = {
+      id: "A",
+      x: 40,
+      y: 80,
+      width: 180,
+      height: 60,
+    };
+    const points = routeEdges([rect], [loopRequest(rect)]).get("loop-A")!;
+
+    expect(points).toEqual([
+      { x: 175, y: 140 }, // stubX = 40 + 135
+      { x: 175, y: 152 }, // + nodeMargin 12
+      { x: 244, y: 152 }, // laneX = 40 + 180 + 24
+      { x: 244, y: 68 },
+      { x: 175, y: 68 },
+      { x: 175, y: 80 },
+    ]);
+  });
+
+  it("returns a loop around the point, not the point twice, when both request points quantize together at a nodeMargin of 0", () => {
+    // The other shape with nowhere to go: the search collapses to a single
+    // point, and returning it twice would share both coordinates instead of
+    // exactly one. The fallback's floored steps out draw a loop around it.
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 0, width: 10, height: 10 },
+      { id: "B", x: 0, y: 0, width: 10, height: 10 },
+    ];
+    const request: RouteRequest = {
+      id: "e-A-B",
+      source: "A",
+      target: "B",
+      sourcePoint: { x: 5, y: 10 },
+      targetPoint: { x: 5, y: 10 },
+      sourceSide: "bottom",
+      targetSide: "top",
+    };
+
+    const points = routeEdges(nodes, [request], {
+      nodeMargin: 0,
+      selfLoopGap: 0,
+    }).get(request.id)!;
+
+    expect(guaranteeFailures(points, "coincident")).toEqual([]);
+    expect(points.length).toBeGreaterThan(2);
+    // Endpoints are still exact on the quantized request points.
+    expect(points[0]).toEqual({ x: 5, y: 10 });
+    expect(points[points.length - 1]).toEqual({ x: 5, y: 10 });
+  });
+
+  it("keeps the no-path fallback reversal-free at a selfLoopGap of 0, on every pair of sides", () => {
+    // The fallback's whole ladder is sized by `selfLoopGap`: at 0 its step out
+    // has no length, P2 lands on T, and the approach doubles back over the
+    // segment that reached it. The wall forces every request here onto the
+    // fallback (see the ladder block above for the same fixture).
+    const wall: RouteNodeRect = {
+      id: "WALL",
+      x: -1000,
+      y: -1000,
+      width: 3000,
+      height: 3000,
+    };
+    const a: RouteNodeRect = {
+      id: "A",
+      x: -900,
+      y: -900,
+      width: 10,
+      height: 10,
+    };
+    const b: RouteNodeRect = { id: "B", x: 900, y: 900, width: 10, height: 10 };
+    const sides: RouteSide[] = ["top", "right", "bottom", "left"];
+    const failures: string[] = [];
+
+    for (const sourceSide of sides) {
+      for (const targetSide of sides) {
+        // Coincident request points as well as distinct ones: the four-segment
+        // rectangle rung of the ladder is the one a zero gap flattens hardest.
+        for (const targetPoint of [
+          { x: 300, y: 170 },
+          { x: 20, y: 40 },
+        ]) {
+          for (const nodeMargin of [0, 1, 12]) {
+            const request: RouteRequest = {
+              id: "e-A-B",
+              source: "A",
+              target: "B",
+              sourcePoint: { x: 20, y: 40 },
+              targetPoint,
+              sourceSide,
+              targetSide,
+            };
+            const points = routeEdges([a, b, wall], [request], {
+              nodeMargin,
+              selfLoopGap: 0,
+            }).get(request.id)!;
+
+            failures.push(
+              ...guaranteeFailures(
+                points,
+                `${sourceSide}->${targetSide} target=(${targetPoint.x},${targetPoint.y}) nodeMargin=${nodeMargin}`,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
   });
 });
 

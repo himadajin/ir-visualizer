@@ -24,6 +24,21 @@ export const DEFAULT_BEND_PENALTY = 30;
 export const DEFAULT_SELF_LOOP_GAP = 24;
 
 /**
+ * Room a synthesized shape keeps where the clearance it is given leaves none
+ * (`contracts/edge-routing.md`, "A clearance of zero is floored at one pixel").
+ * A `nodeMargin` or `selfLoopGap` of `0` asks a self-loop to go around its node
+ * across no distance at all, and asks the fallback to approach a target it is
+ * already standing on; both answers are a doubling-back, which the no-reversal
+ * guarantee forbids. Flooring the room these shapes are built from is what
+ * makes that guarantee — and orthogonality, and `>= 2` points — hold for every
+ * input rather than only for callers that pass a clearance of at least a pixel.
+ *
+ * Applied at synthesis only, never to the obstacle set: a `nodeMargin` of `0`
+ * genuinely means "inflate nothing", and the search is entitled to that answer.
+ */
+const MIN_CLEARANCE = 1;
+
+/**
  * Costs closer than this count as equal, so that geometrically symmetric
  * alternatives fall through to the documented tie-break order
  * (`contracts/edge-routing.md`, "A fixed tie-break total order") instead of
@@ -561,12 +576,18 @@ const hasImmediateReversal = (points: Point[]): boolean => {
  * of `specs/graph-view.md` §4, which does no obstacle avoidance at all:
  * `sourcePoint → S → P1 → connector → P2 → T → targetPoint`.
  *
- * `P1` steps a further `selfLoopGap` out along the source normal and `P2` sits a
- * `selfLoopGap` outside `T`, so the polyline always leaves straight and always
- * approaches the target from outside. That makes the no-reversal rule hold at
- * `S` and `T` unconditionally, and reduces the whole problem to two conditions on
- * the connector: its first segment must not run along `-n_s`, its last must not
- * run along `+n_t`.
+ * `P1` steps a further `gap` out along the source normal and `P2` sits a `gap`
+ * outside `T`, so the polyline always leaves straight and always approaches the
+ * target from outside. That makes the no-reversal rule hold at `S` and `T`
+ * unconditionally, and reduces the whole problem to two conditions on the
+ * connector: its first segment must not run along `-n_s`, its last must not run
+ * along `+n_t`.
+ *
+ * The whole ladder is sized by that one distance, which is why it is the
+ * `selfLoopGap` floored at `MIN_CLEARANCE` rather than the raw option: at a
+ * `selfLoopGap` of `0` every step out has zero length, `P2` lands on `T`, and
+ * the approach doubles back over the segment that reached it — the shape the
+ * no-reversal guarantee exists to forbid.
  *
  * Connector candidates are tried in a fixed order and the first one satisfying
  * the rule wins, which keeps the choice deterministic. Two segments suffice for
@@ -579,6 +600,7 @@ const fallbackPoints = (
   nodeMargin: number,
   selfLoopGap: number,
 ): Point[] => {
+  const gap = Math.max(selfLoopGap, MIN_CLEARANCE);
   const sourceNormal = OUTWARD_DIR[request.sourceSide];
   const start = pushOutward(
     request.sourcePoint,
@@ -589,12 +611,12 @@ const fallbackPoints = (
   const p1 = pushOutward(
     request.sourcePoint,
     request.sourceSide,
-    nodeMargin + selfLoopGap,
+    nodeMargin + gap,
   );
   const p2 = pushOutward(
     request.targetPoint,
     request.targetSide,
-    nodeMargin + selfLoopGap,
+    nodeMargin + gap,
   );
   const verticalExit = sourceNormal === DIR_UP || sourceNormal === DIR_DOWN;
 
@@ -613,10 +635,10 @@ const fallbackPoints = (
   }
   // Three-segment lateral dog-legs, positive side first — a fixed order, so the
   // choice stays deterministic.
-  const xPositive = Math.max(p1.x, p2.x) + selfLoopGap;
-  const xNegative = Math.min(p1.x, p2.x) - selfLoopGap;
-  const yPositive = Math.max(p1.y, p2.y) + selfLoopGap;
-  const yNegative = Math.min(p1.y, p2.y) - selfLoopGap;
+  const xPositive = Math.max(p1.x, p2.x) + gap;
+  const xNegative = Math.min(p1.x, p2.x) - gap;
+  const yPositive = Math.max(p1.y, p2.y) + gap;
+  const yNegative = Math.min(p1.y, p2.y) - gap;
   connectors.push(
     [
       { x: xPositive, y: p1.y },
@@ -638,10 +660,10 @@ const fallbackPoints = (
   if (p1.x === p2.x && p1.y === p2.y) {
     // Coincident handles on the same side: the only way back to a point without
     // retracing is to go around it.
-    const lateralX = verticalExit ? selfLoopGap : 0;
-    const lateralY = verticalExit ? 0 : selfLoopGap;
-    const outX = DIR_DX[sourceNormal] * selfLoopGap;
-    const outY = DIR_DY[sourceNormal] * selfLoopGap;
+    const lateralX = verticalExit ? gap : 0;
+    const lateralY = verticalExit ? 0 : gap;
+    const outX = DIR_DX[sourceNormal] * gap;
+    const outY = DIR_DY[sourceNormal] * gap;
     connectors.push([
       { x: p1.x + lateralX, y: p1.y + lateralY },
       { x: p1.x + lateralX + outX, y: p1.y + lateralY + outY },
@@ -675,11 +697,20 @@ const fallbackPoints = (
  * unless that width is a multiple of 4 — and it is rounded here, where it is
  * formed. This is the one rounding that happens behind the input boundary.
  *
+ * The lane and the vertical extent are floored at `MIN_CLEARANCE` against the
+ * points they have to clear, which is what gives the loop a shape at a clearance
+ * of `0`: without the first floor a `selfLoopGap` of `0` puts the lane on the
+ * stub for any rect that quantizes to `w <= 2` (`round(0.75w) === w` there) and
+ * the loop doubles back; without the second a `nodeMargin` of `0` on a rect of
+ * no height collapses all six points onto one. Both are maxima, so a loop with
+ * room to begin with is not moved.
+ *
  * Consecutive duplicates are collapsed, the same way searched and fallback
- * routes are: a clearance that quantizes to `0` makes two of the six points
- * coincide, and a coincident pair shares both coordinates instead of exactly
- * one, which would break orthogonality. A self-loop therefore returns at most
- * six points.
+ * routes are: `nodeMargin` is not floored — it is the caller's clearance around
+ * the node, not room this shape needs — so a `nodeMargin` of `0` still makes the
+ * stub ends coincide with the horizontal runs, and a coincident pair shares both
+ * coordinates instead of exactly one, which would break orthogonality. A
+ * self-loop therefore returns at most six points.
  */
 const selfLoopPoints = (
   rect: RouteNodeRect,
@@ -687,9 +718,12 @@ const selfLoopPoints = (
   selfLoopGap: number,
 ): Point[] => {
   const x = quantize(rect.x + rect.width * 0.75);
-  const lane = rect.x + rect.width + selfLoopGap;
-  const below = rect.y + rect.height + nodeMargin;
+  const lane = Math.max(rect.x + rect.width + selfLoopGap, x + MIN_CLEARANCE);
   const above = rect.y - nodeMargin;
+  const below = Math.max(
+    rect.y + rect.height + nodeMargin,
+    above + MIN_CLEARANCE,
+  );
   return dropDuplicates([
     { x, y: rect.y + rect.height },
     { x, y: below },
@@ -720,7 +754,9 @@ const selfLoopPoints = (
  * axis in opposite directions (`contracts/edge-routing.md`, "No immediate
  * reversals"). That is the checkable form of "never a degenerate hook". The
  * search gets it by refusing to double back, the self-loop by construction, the
- * fallback via its lateral detour case.
+ * fallback via its lateral detour case. All three hold at any clearance,
+ * including one that quantizes to `0`, because the room a synthesized shape is
+ * built from is floored at `MIN_CLEARANCE`.
  */
 export const routeEdges = (
   nodes: RouteNodeRect[],
@@ -800,11 +836,16 @@ export const routeEdges = (
           ]
         : fallbackPoints(request, nodeMargin, selfLoopGap),
     );
+    // A route can still collapse to a single point: with a `nodeMargin` of `0`,
+    // two request points that quantize to the same point leave the search
+    // nothing to return but that point. Returning it twice would share both
+    // coordinates instead of exactly one, so the fallback — whose steps out are
+    // floored at `MIN_CLEARANCE` — draws the loop around it instead.
     routes.set(
       request.id,
       points.length >= 2
         ? points
-        : [clonePoint(request.sourcePoint), clonePoint(request.targetPoint)],
+        : fallbackPoints(request, nodeMargin, selfLoopGap),
     );
   }
   return routes;

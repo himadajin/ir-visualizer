@@ -43,12 +43,18 @@ define i32 @func(i32 %0, i32 %1, i1  %2) {
 }
 `;
 
+// The LLVM parsers are synchronous; the registry contract is async. Adapt them
+// here rather than making the parser layer lie about being async. Each adapter
+// is a single const because views[0] must share the top-level parse's identity.
+const parseCfg = async (code: string) => parseLLVM(code);
+const parseUseDef = async (code: string) => parseLLVMUseDef(code);
+
 export const llvmMode = {
   key: "llvm-ir" as const,
   label: "LLVM-IR",
   editorLanguage: "llvm",
   defaultCode: DEFAULT_CODE,
-  parse: parseLLVM,
+  parse: parseCfg,
   nodeTypes: {
     llvmBasicBlock: LLVMBasicBlockNode,
     llvmFunctionHeader: LLVMFunctionHeaderNode,
@@ -64,11 +70,11 @@ export const llvmMode = {
   // views[0] shares parse/edgeBuilder with the top-level fields per the
   // registry contract ("Views"): it IS the default view.
   views: [
-    { key: "cfg", label: "CFG", parse: parseLLVM },
+    { key: "cfg", label: "CFG", parse: parseCfg },
     {
       key: "use-def",
       label: "Use-Def",
-      parse: parseLLVMUseDef,
+      parse: parseUseDef,
       layoutOptions: {
         "elk.layered.spacing.nodeNodeBetweenLayers": "60",
         "elk.spacing.nodeNode": "40",

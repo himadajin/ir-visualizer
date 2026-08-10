@@ -15,7 +15,7 @@ interface IRModeDefinition {
   label: string; // editor-panel display label, e.g. "LLVM-IR"
   editorLanguage: string; // Monaco language id registered in CodeEditor
   defaultCode: string; // code shown when the mode is selected
-  parse: (code: string) => GraphData; // text -> graph, throws Error on invalid input
+  parse: (code: string) => Promise<GraphData>; // text -> graph, rejects with Error on invalid input
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
   layoutOptions?: Record<string, string>; // ELK layout options, e.g. layer spacing
@@ -23,6 +23,32 @@ interface IRModeDefinition {
   views?: IRViewDefinition[]; // optional alternative projections — see "Views" below
 }
 ```
+
+## Parsing is asynchronous
+
+`parse` returns a promise because a mode's parser may need to do async work before it can
+produce a graph — Mermaid's upstream parser lazy-loads its diagram definitions
+(`specs/mermaid.md`), and nothing in this contract should force a parser to be synchronous
+just because two of the three current ones happen to be.
+
+The rules:
+
+- **Invalid input rejects with an `Error`.** A parser that detects the problem synchronously
+  may simply `throw` inside its async function — that is the same thing. Callers see one
+  failure shape.
+- **The parser layer stays synchronous where the IR allows it.** `src/parser/**` exports the
+  natural shape for its grammar; a mode whose parser is synchronous adapts it in its registry
+  entry (`const parseCfg = async (code: string) => parseLLVM(code)`) rather than making the
+  parser lie about being async.
+- **Stale results are discarded, not applied.** `useIRWorkspace` parses in a debounced effect;
+  when the code, mode, or view changes while a parse is in flight, the effect's cleanup marks
+  that parse cancelled and neither its graph nor its error reaches state. A slow parse can
+  therefore never overwrite the result of a newer one. This is the parse-stage counterpart of
+  the layout generation counter in `useGraphData` (`specs/graph-view.md` §2); the two stages
+  guard independently.
+- **`parse` is not cancellable.** It takes no `AbortSignal` — the caller drops the result. No
+  current parser can be interrupted mid-run, and adding a signal nothing honors would be
+  indirection without a payer.
 
 ## Views
 
@@ -35,7 +61,7 @@ same editor language, same default code, same parser front-end, different
 interface IRViewDefinition {
   key: string; // stable, e.g. "cfg", "use-def"
   label: string; // toggle label, e.g. "CFG"
-  parse: (code: string) => GraphData; // same throw-on-invalid rule as the mode's parse
+  parse: (code: string) => Promise<GraphData>; // same reject-on-invalid rule as the mode's parse
   edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
   layoutOptions?: Record<string, string>; // defaults to the mode's layoutOptions
   bundleOf?: (edge: GraphEdge) => string | undefined; // defaults to the mode's bundleOf
@@ -48,7 +74,9 @@ Rules:
   its top-level `parse`/`edgeBuilder`/`layoutOptions`/`bundleOf`.
 - When present, `views` has ≥ 2 entries and `views[0]` is the **default view**;
   it must behave identically to the mode's top-level fields (share the same
-  function references — don't duplicate logic).
+  function references — don't duplicate logic). When `parse` is an async adapter
+  around a synchronous parser, that adapter is a single module-level `const` used
+  by both sites, not two `async` arrows that happen to have the same body.
 - `useIRWorkspace` owns the active view key. Switching **views keeps the editor
   code** (that is the point of views); switching **modes resets** the view to the
   default and replaces the code with `defaultCode`.
@@ -130,8 +158,10 @@ implementation land with #88; the router-side guarantee it feeds lands with #86.
 
 ## What consumes the registry
 
-- `App.tsx` / `useIRWorkspace` — looks up the active mode by key, calls `mode.parse(code)`,
-  uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the editor.
+- `App.tsx` / `useIRWorkspace` — looks up the active mode by key, awaits `mode.parse(code)`
+  in the debounced parse effect (discarding the result if it is stale, see "Parsing is
+  asynchronous"), uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the
+  editor.
 - `useGraphData` — takes an `IRLayoutBehavior` into `updateGraph(graph, behavior)` /
   `resetLayout()`, so layout, edge-building and bundling are mode- (or view-) driven rather
   than branching by string.
@@ -154,9 +184,9 @@ No other file should need to change. If it does, that's a signal the registry co
 ## Known behavior difference not covered by this contract
 
 SelectionDAG's `parse` (`parseSelectionDAGToGraphData`) tolerates unparseable lines by treating
-them as comments rather than throwing, because real SelectionDAG dumps mix a free-text header line
+them as comments rather than failing, because real SelectionDAG dumps mix a free-text header line
 with the actual `tN: ... = ...` node lines. This is intentional per-line tolerance, not a violation
-of the "`parse` throws `Error` on invalid input" rule above — the SelectionDAG grammar's unit of
-parsing is a line, and a "failure" for one line does not fail the whole `parse` call. LLVM and
-Mermaid parse the entire input as one document and do throw on failure. See
+of the "`parse` rejects with `Error` on invalid input" rule above — the SelectionDAG grammar's unit
+of parsing is a line, and a "failure" for one line does not fail the whole `parse` call. LLVM and
+Mermaid parse the entire input as one document and do fail on invalid input. See
 `src/parser/selectionDAG.ts` for the code-level comment.

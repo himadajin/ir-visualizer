@@ -22,12 +22,16 @@ SelectionDAG has 22 nodes:
   t22: ch = RISCVISD::RET_GLUE t21, Register:i64 $x10, t21:1
 `;
 
+// parseSelectionDAGToGraphData is synchronous; the registry contract is async.
+// See llvmMode.ts for why the adapter lives here and not in the parser layer.
+const parse = async (code: string) => parseSelectionDAGToGraphData(code);
+
 export const selectionDAGMode = {
   key: "selectionDAG" as const,
   label: "SelectionDAG",
   editorLanguage: "llvm",
   defaultCode: DEFAULT_CODE,
-  parse: parseSelectionDAGToGraphData,
+  parse,
   nodeTypes: {
     selectionDAGNode: SelectionDAGNode,
   },

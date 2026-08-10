@@ -109,9 +109,10 @@ const handleAnchor = (
 
 /**
  * Rects for the router. A node React Flow has not measured yet is **omitted**
- * (D6): its edges then get no entry from `routeEdges` and are not drawn this
- * frame. No placeholder shape — one would reintroduce the second geometry
- * generator this design exists to remove.
+ * (`specs/graph-view.md` §4, "Unmeasured endpoints"): its edges then get no
+ * entry from `routeEdges` and are not drawn this frame. No placeholder shape —
+ * one would reintroduce the second geometry generator this design exists to
+ * remove.
  */
 const collectRects = (
   nodeLookup: ReadonlyMap<string, InternalNode>,
@@ -134,7 +135,7 @@ const collectRects = (
 /**
  * One request per `routed` edge. SelectionDAG's edges use React Flow's
  * built-in `default` type and are deliberately left alone — they keep their
- * handle-anchored beziers (plan §2 decision 8).
+ * handle-anchored beziers (`specs/graph-view.md` §4).
  */
 const collectRequests = (
   edges: readonly Edge[],
@@ -194,7 +195,7 @@ const inputSignature = (
  *
  * Throttled to animation frames. **During a drag only the edges incident to a
  * moved node are re-routed** and the results are merged over the previous map;
- * a full pass runs on drag stop (R8 / plan §2 decision 5). That split is
+ * a full pass runs on drag stop (`specs/graph-view.md` §4). That split is
  * required rather than opportunistic: a full pass overruns the 16.7 ms frame
  * budget from roughly 180 nodes, which the Use-Def view can reach. The router
  * is a pure function of the rects it is given, so an incident-only pass is

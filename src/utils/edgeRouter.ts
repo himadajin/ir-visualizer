@@ -25,7 +25,8 @@ export const DEFAULT_SELF_LOOP_GAP = 24;
 
 /**
  * Costs closer than this count as equal, so that geometrically symmetric
- * alternatives fall through to the documented tie-break order (§3.1) instead of
+ * alternatives fall through to the documented tie-break order
+ * (`contracts/edge-routing.md`, "A fixed tie-break total order") instead of
  * being decided by float noise.
  */
 const COST_EPSILON = 1e-9;
@@ -53,7 +54,12 @@ const OUTWARD_DIR: Record<RouteSide, number> = {
 
 const reverseDir = (dir: number): number => (dir + 2) % 4;
 
-/** A handle position moved `distance` px out of the node along its side (§3.1 step 5). */
+/**
+ * A handle position moved `distance` px out of the node along its side. At
+ * `nodeMargin` this is the interior bend that `contracts/edge-routing.md`
+ * ("Endpoints are exact on the quantized points") keeps off the ends of the
+ * polyline.
+ */
 const pushOutward = (
   point: Point,
   side: RouteSide,
@@ -164,7 +170,10 @@ const dropCollinearInterior = (points: Point[]): Point[] => {
   return kept;
 };
 
-/** Lexicographic order on point sequences, prefix-first (§3.1 tie-breaking). */
+/**
+ * Lexicographic order on point sequences, prefix-first — the third and last key
+ * of `contracts/edge-routing.md`, "A fixed tie-break total order".
+ */
 const comparePointSequences = (a: Point[], b: Point[]): number => {
   const shared = Math.min(a.length, b.length);
   for (let i = 0; i < shared; i++) {
@@ -196,7 +205,8 @@ interface InflatedRect {
 /**
  * "Is this point strictly inside an obstacle?" over a uniform spatial hash.
  * Built once per `routeEdges` call rather than once per edge, which is what
- * keeps the 60-node / 80-edge pass inside the 50 ms budget (§2 decision 10).
+ * keeps a full pass inside the frame budget measured in `specs/graph-view.md`
+ * §4.
  *
  * A grid segment runs between two consecutive grid lines and every rect edge is
  * a grid line, so a segment lies either wholly inside a rect's interior or
@@ -263,7 +273,10 @@ interface RouterContext {
   ) => boolean;
 }
 
-/** Binary heap over the §3.1 total order. */
+/**
+ * Binary heap over the tie-break total order (`contracts/edge-routing.md`,
+ * "A fixed tie-break total order").
+ */
 const createQueue = (compare: (a: Label, b: Label) => number) => {
   const items: Label[] = [];
   return {
@@ -390,9 +403,9 @@ const routeOnGrid = (
     return label.points;
   };
 
-  // The total order of §3.1: cost, then bend count, then the point sequence.
-  // Every key is non-decreasing along a path, so the first pop of a state is
-  // its optimum under that order.
+  // The contract's tie-break total order: cost, then bend count, then the point
+  // sequence. Every key is non-decreasing along a path, so the first pop of a
+  // state is its optimum under that order.
   const compare = (a: Label, b: Label): number => {
     if (a.priority - b.priority > COST_EPSILON) return 1;
     if (b.priority - a.priority > COST_EPSILON) return -1;
@@ -442,9 +455,9 @@ const routeOnGrid = (
     if (label.goal) return pointsOf(label);
 
     // Arriving at T along +n_t would make the mandated `T → targetPoint` stub
-    // double back on the approach, which the no-immediate-reversal rule forbids
-    // (§3.1). Such an approach simply cannot finish; if nothing else reaches T,
-    // the edge falls back to D4.
+    // double back on the approach, which `contracts/edge-routing.md` ("No
+    // immediate reversals") forbids. Such an approach simply cannot finish; if
+    // nothing else reaches T, the edge falls back to `fallbackPoints` below.
     if (
       label.xi === endXi &&
       label.yi === endYi &&
@@ -475,7 +488,7 @@ const routeOnGrid = (
       }
       const nextX = xs[nextXi];
       const nextY = ys[nextYi];
-      // §3.1 step 3: the exemption is per endpoint. The source node's rect is
+      // The obstacle exemption is per endpoint. The source node's rect is
       // exempt only for the segments incident to S, the target's only for those
       // incident to T; every other segment treats both as obstacles, so a
       // searched route can never clip its own endpoint node. Where that makes
@@ -516,9 +529,9 @@ const routeOnGrid = (
 /**
  * An interior vertex where the arriving and leaving segments run along the same
  * axis in opposite directions — the one and only form of the no-reversal rule
- * (§3.1 "No immediate reversals"). Note that `points[i - 1] !== points[i + 1]`
- * is _not_ an equivalent test: "out 16, back 48" passes it and is exactly the
- * shape being banned.
+ * (`contracts/edge-routing.md`, "No immediate reversals"). Note that
+ * `points[i - 1] !== points[i + 1]` is _not_ an equivalent test: "out 16, back
+ * 48" passes it and is exactly the shape being banned.
  */
 const hasImmediateReversal = (points: Point[]): boolean => {
   for (let i = 1; i < points.length - 1; i++) {
@@ -544,8 +557,9 @@ const hasImmediateReversal = (points: Point[]): boolean => {
 };
 
 /**
- * Deterministic shape used when the grid offers no path (§3.1 "No-path
- * fallback"): `sourcePoint → S → P1 → connector → P2 → T → targetPoint`.
+ * Deterministic shape used when the grid offers no path — the no-path fallback
+ * of `specs/graph-view.md` §4, which does no obstacle avoidance at all:
+ * `sourcePoint → S → P1 → connector → P2 → T → targetPoint`.
  *
  * `P1` steps a further `selfLoopGap` out along the source normal and `P2` sits a
  * `selfLoopGap` outside `T`, so the polyline always leaves straight and always
@@ -558,7 +572,7 @@ const hasImmediateReversal = (points: Point[]): boolean => {
  * the rule wins, which keeps the choice deterministic. Two segments suffice for
  * most geometry; 36 of the 144 side/direction combinations need the three-segment
  * lateral dog-leg, and coincident handles on the same side need the four-segment
- * rectangle (§3.1 documents the full ladder).
+ * rectangle. The full ladder is the `connectors` array below, in order.
  */
 const fallbackPoints = (
   request: RouteRequest,
@@ -597,7 +611,8 @@ const fallbackPoints = (
       verticalExit ? [acrossExit] : [alongExit],
     );
   }
-  // Three-segment lateral dog-legs, positive side first (R1's convention).
+  // Three-segment lateral dog-legs, positive side first — a fixed order, so the
+  // choice stays deterministic.
   const xPositive = Math.max(p1.x, p2.x) + selfLoopGap;
   const xNegative = Math.min(p1.x, p2.x) - selfLoopGap;
   const yPositive = Math.max(p1.y, p2.y) + selfLoopGap;
@@ -688,10 +703,10 @@ const selfLoopPoints = (
 /**
  * Routes every request against the live node rects. Pure: the same rects and
  * requests always produce byte-identical polylines, and no route depends on the
- * order of either input array (§3.1 "Determinism is a hard requirement").
+ * order of either input array (`contracts/edge-routing.md`, "Determinism").
  *
  * Keyed by `RouteRequest.id`; a request naming a node absent from `nodes` gets
- * no entry at all (§3.1 "Missing nodes").
+ * no entry at all (`contracts/edge-routing.md`, "Missing nodes").
  *
  * Every coordinate in the input is quantized here, before the obstacle set is
  * built and before any search runs, so every returned coordinate is an integer
@@ -702,10 +717,10 @@ const selfLoopPoints = (
  * Every returned polyline — searched, self-loop and fallback alike — is
  * orthogonal, has at least 2 points, and contains **no immediate reversal**: at
  * no interior vertex do the arriving and leaving segments run along the same
- * axis in opposite directions (§3.1 "No immediate reversals"). That is the
- * checkable form of "never a degenerate hook". The search gets it by refusing to
- * double back, the self-loop by construction, the fallback via its lateral
- * detour case.
+ * axis in opposite directions (`contracts/edge-routing.md`, "No immediate
+ * reversals"). That is the checkable form of "never a degenerate hook". The
+ * search gets it by refusing to double back, the self-loop by construction, the
+ * fallback via its lateral detour case.
  */
 export const routeEdges = (
   nodes: RouteNodeRect[],

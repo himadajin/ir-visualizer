@@ -8,9 +8,10 @@ import type {
 } from "../../types/edgeRouting";
 
 // ---------------------------------------------------------------------------
-// Local geometry helpers. The router's frozen boundary (plan §3.2) only
-// returns points, so intersection/orthogonality checks live here rather than
-// depending on any router internals.
+// Local geometry helpers. The router's frozen boundary
+// (`contracts/edge-routing.md`, "The frozen boundary") only returns points, so
+// intersection/orthogonality checks live here rather than depending on any
+// router internals.
 // ---------------------------------------------------------------------------
 
 /** True when every consecutive pair of points forms an axis-aligned segment. */
@@ -32,9 +33,10 @@ interface Rect {
 
 /**
  * True when the axis-aligned segment a→b passes through the *interior* of
- * `rect` (touching an edge/corner does not count as crossing the interior —
- * plan §3.1 step 3: "a grid segment is traversable when it does not cross
- * the interior of any inflated rect").
+ * `rect` (touching an edge/corner does not count as crossing the interior,
+ * matching the router's own traversability rule: a grid segment is traversable
+ * when it does not cross the interior of any inflated rect — see
+ * `src/utils/edgeRouter.ts`).
  */
 function segmentCrossesRectInterior(a: Point, b: Point, rect: Rect): boolean {
   const left = rect.x;
@@ -75,10 +77,11 @@ function anySegmentCrossesRectInterior(points: Point[], rect: Rect): boolean {
 /**
  * Same as `anySegmentCrossesRectInterior`, but excludes the first segment
  * (`points[0]` -> `points[1]`) and the last segment (the final pair) — the
- * two mandated D2 stubs (`sourcePoint -> S` and `T -> targetPoint`), which
- * "Endpoints are exact" can force through a node's own rect when a pushed
- * point lands inside it. For a polyline with fewer than 4 points there is
- * no segment other than the first/last, so this is trivially false.
+ * two mandated stubs (`sourcePoint -> S` and `T -> targetPoint`), which
+ * "Endpoints are exact on the quantized points" can force through a node's own
+ * rect when a pushed point lands inside it. For a polyline with fewer than 4
+ * points there is no segment other than the first/last, so this is trivially
+ * false.
  */
 function anyMiddleSegmentCrossesRectInterior(
   points: Point[],
@@ -121,9 +124,9 @@ function outwardNormal(side: RouteSide): Point {
 }
 
 /**
- * True when `points` is shaped like the D4 fallback rather than a searched
- * route, without mirroring the whole R15 connector ladder. Only the
- * fallback skeleton (plan §3.1 "No-path fallback") mandates a *second*
+ * True when `points` is shaped like the no-path fallback rather than a searched
+ * route, without mirroring the whole connector ladder. Only the fallback
+ * skeleton (`fallbackPoints` in `src/utils/edgeRouter.ts`) mandates a *second*
  * outward step past `S`, to `P1 = S + n_s·selfLoopGap` — a searched route's
  * third point is whatever the grid search finds next and has no reason to
  * land exactly there. So `points[2] === P1` identifies a fallback: it is
@@ -152,8 +155,8 @@ function isFallbackShape(
 /**
  * True when `points` contains an "immediate reversal": an interior vertex
  * where the segment arriving and the segment leaving run along the same
- * axis but in opposite directions (arbitration-B3 R12 — the checkable form
- * of "never a degenerate hook").
+ * axis but in opposite directions (`contracts/edge-routing.md`, "No immediate
+ * reversals" — the checkable form of "never a degenerate hook").
  */
 function hasImmediateReversal(points: Point[]): boolean {
   for (let i = 1; i < points.length - 1; i++) {
@@ -291,7 +294,7 @@ describe("routeEdges — orthogonality and point count", () => {
   });
 });
 
-describe("routeEdges — exact endpoints (plan §3.1 'Endpoints are exact', D2)", () => {
+describe("routeEdges — exact endpoints (contract: 'Endpoints are exact on the quantized points')", () => {
   it("starts exactly at sourcePoint and ends exactly at targetPoint", () => {
     const { nodes, request } = simpleTwoNodeCase();
     const routes = routeEdges(nodes, [request]);
@@ -324,7 +327,7 @@ describe("routeEdges — exact endpoints (plan §3.1 'Endpoints are exact', D2)"
   });
 });
 
-describe("routeEdges — obstacle avoidance (plan §3.1 step 3)", () => {
+describe("routeEdges — obstacle avoidance (nodes are the only obstacles)", () => {
   it("never draws a segment through the interior of a node squarely between source and target", () => {
     const obstacle: RouteNodeRect = {
       id: "OBS",
@@ -357,7 +360,7 @@ describe("routeEdges — obstacle avoidance (plan §3.1 step 3)", () => {
   });
 });
 
-describe("routeEdges — determinism (plan §3.1 'Determinism is a hard requirement')", () => {
+describe("routeEdges — determinism (contract: 'Determinism')", () => {
   it("returns identical points for identical input on repeated calls", () => {
     const nodes: RouteNodeRect[] = [
       { id: "A", x: 0, y: 0, width: 40, height: 40 },
@@ -417,7 +420,7 @@ describe("routeEdges — determinism (plan §3.1 'Determinism is a hard requirem
   });
 });
 
-describe("routeEdges — tie-breaking (plan §3.1 'Tie-breaking', D3)", () => {
+describe("routeEdges — tie-breaking (contract: 'A fixed tie-break total order')", () => {
   // A perfectly mirror-symmetric obstacle scenario: S, the obstacle, and T
   // all share the same x-span (0..40), so the grid's candidate X lines are
   // exactly {left-inflated, 20 (both endpoints' x), right-inflated} and the
@@ -425,7 +428,7 @@ describe("routeEdges — tie-breaking (plan §3.1 'Tie-breaking', D3)", () => {
   // obstacle therefore has an exact mirror right-detour path of identical
   // length and identical bend count — a genuine, spec-derivable tie.
   //
-  // Per D3, ties are broken by comparing the point sequence lexicographically
+  // Ties are broken by comparing the point sequence lexicographically
   // by (x, y). Both candidate paths coincide through points[0] (sourcePoint,
   // x=20) and points[1] (the nodeMargin-pushed point, still x=20 because the
   // push is purely vertical). At the first point where the two candidates
@@ -460,18 +463,18 @@ describe("routeEdges — tie-breaking (plan §3.1 'Tie-breaking', D3)", () => {
   });
 });
 
-describe("routeEdges — self-loops hug the node's right side (plan §3.1 'Self-loops', D1; arbitration-B R1/R2)", () => {
+describe("routeEdges — self-loops hug the node's right side (contract: 'Self-loops (right side, six points)')", () => {
   it("produces the documented six-point right-side loop shape, derived from the rect and not from sourcePoint/targetPoint", () => {
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 100, height: 50 };
-    const nodeMargin = 12; // default per plan §3.2 EdgeRouterOptions
-    const selfLoopGap = 24; // default per plan §3.2 EdgeRouterOptions
+    const nodeMargin = 12; // contract default
+    const selfLoopGap = 24; // contract default
     const laneX = rect.x + rect.width + selfLoopGap;
 
-    // R2: self-loops are synthesized from the node rect and are exempt from
-    // D2 — sourcePoint/targetPoint are ignored for them. Use React Flow's
-    // real default (a centred handle), deliberately *not* the 75%-offset
-    // point, so this test actually pins that the loop shape comes from the
-    // rect rather than merely echoing back a pre-shaped request.
+    // Self-loops are synthesized from the node rect and are exempt from the
+    // exact-endpoints rule — sourcePoint/targetPoint are ignored. Use React
+    // Flow's real default (a centred handle), deliberately *not* the
+    // 75%-offset point, so this test actually pins that the loop shape comes
+    // from the rect rather than merely echoing back a pre-shaped request.
     const centredBottom: Point = {
       x: rect.x + rect.width / 2,
       y: rect.y + rect.height,
@@ -490,7 +493,7 @@ describe("routeEdges — self-loops hug the node's right side (plan §3.1 'Self-
 
     const points = routeEdges([rect], [request]).get(request.id)!;
 
-    // arbitration-B R1: the six-point form, exact vertex table.
+    // The contract's six-point form, exact vertex table.
     const expected: Point[] = [
       { x: rect.x + 0.75 * rect.width, y: rect.y + rect.height },
       { x: rect.x + 0.75 * rect.width, y: rect.y + rect.height + nodeMargin },
@@ -501,8 +504,9 @@ describe("routeEdges — self-loops hug the node's right side (plan §3.1 'Self-
     ];
     expect(points).toEqual(expected);
 
-    // R2 in action: the loop does not start/end at the centred handle we
-    // supplied — it starts/ends at the 75%-offset points derived from rect.
+    // The exemption in action: the loop does not start/end at the centred
+    // handle we supplied — it starts/ends at the 75%-offset points derived
+    // from rect.
     expect(points[0]).not.toEqual(request.sourcePoint);
     expect(points[points.length - 1]).not.toEqual(request.targetPoint);
 
@@ -510,10 +514,10 @@ describe("routeEdges — self-loops hug the node's right side (plan §3.1 'Self-
   });
 });
 
-describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladder (plan §3.1 'No-path fallback')", () => {
+describe("routeEdges — no-path fallback: the skeleton + connector ladder (`fallbackPoints`)", () => {
   // A single huge obstacle node, distinct from source and target, that
   // encloses the entire region every fixture below uses. Because the
-  // source/target rect exemption (plan §3.1 step 3) only applies to the
+  // source/target rect exemption only applies to the
   // source and target's *own* rects, every grid path must cross this
   // obstacle's interior somewhere — guaranteeing routeEdges finds no path
   // and must emit the fully-specified fallback. A and B's own rects are
@@ -530,10 +534,10 @@ describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladd
   const b: RouteNodeRect = { id: "B", x: 900, y: 900, width: 10, height: 10 };
   const nodes = [a, b, wall];
 
-  const nodeMargin = 12; // default per plan §3.2
-  const g = 24; // selfLoopGap default per plan §3.2 — also the ladder's own gap
+  const nodeMargin = 12; // contract default
+  const g = 24; // selfLoopGap contract default — also the ladder's own gap
 
-  // Every expected polyline below is hand-computed directly from plan §3.1's
+  // Every expected polyline below is hand-computed directly from the
   // skeleton (sourcePoint -> S -> P1 -> …connector… -> P2 -> T ->
   // targetPoint, with P1 = S + n_s·g, P2 = T + n_t·g) and its candidate
   // table, not by calling any reimplementation of the ladder.
@@ -647,7 +651,7 @@ describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladd
 
   it("rung 4 — dog-leg +x: selected when source and target share the vertical axis pointing opposite ways, running backward", () => {
     // n_s = (0,1) ("bottom"), n_t = (0,-1) ("top") — the "same axis,
-    // opposite ways" case plan §3.1 calls out as needing 3 segments.
+    // opposite ways" case that needs 3 segments.
     const request: RouteRequest = {
       id: "e-A-B",
       source: "A",
@@ -665,7 +669,7 @@ describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladd
     // dx = 200, dy = -80: both nonzero. Both along-exit and across-exit
     // fail here — P2 sits "behind" P1 along the shared vertical axis, so
     // whichever L goes vertical-first reverses at P1 and whichever goes
-    // horizontal-first reverses at P2 (plan §3.1 "Coverage"). Dog-leg +x's
+    // horizontal-first reverses at P2. Dog-leg +x's
     // segments are horizontal, orthogonal to the vertical n_s/n_t, so
     // neither of its two guard conditions can ever fire — it's always
     // valid whenever offered, and it's tried before +y.
@@ -689,7 +693,7 @@ describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladd
     // Source and target handles coincide and sit on the same side, so
     // P1 = P2 exactly — "the two handles coincide and sit on the same
     // side, where returning to a point without retracing requires going
-    // around it" (plan §3.1). n_s = (0,1) ("bottom").
+    // around it". n_s = (0,1) ("bottom").
     const request: RouteRequest = {
       id: "e-A-B",
       source: "A",
@@ -733,7 +737,7 @@ describe("routeEdges — no-path fallback: the R15/R16 skeleton + connector ladd
   });
 });
 
-describe("routeEdges — requests naming a node absent from `nodes` (plan §3.1 'Missing nodes', D7)", () => {
+describe("routeEdges — requests naming a node absent from `nodes` (contract: 'Missing nodes')", () => {
   const nodes: RouteNodeRect[] = [
     { id: "A", x: 0, y: 0, width: 40, height: 40 },
     { id: "B", x: 200, y: 0, width: 40, height: 40 },
@@ -813,15 +817,14 @@ describe("routeEdges — requests naming a node absent from `nodes` (plan §3.1 
   });
 });
 
-describe("routeEdges — pushed points survive collinear collapse (plan §3.1 'Endpoints are exact'; arbitration-B2 R9/RF4)", () => {
-  // "Collinear interior points are collapsed, but the two pushed points are
-  // never collapsed away" (arbitration-B R3b, restated as a real assertion
-  // by arbitration-B2 R9/RF4). points[1] must be sourcePoint pushed
+describe("routeEdges — pushed points survive collinear collapse (contract: 'Endpoints are exact on the quantized points')", () => {
+  // Collinear interior points are collapsed, but the two pushed points are
+  // never collapsed away: points[1] must be sourcePoint pushed
   // nodeMargin outward along sourceSide, and the second-to-last point must
   // be targetPoint pushed outward along targetSide, even when those pushed
   // points are collinear with everything around them — the case a naive
   // "collapse all collinear points" pass would break.
-  const nodeMargin = 12; // default per plan §3.2
+  const nodeMargin = 12; // contract default
 
   it("keeps points[1] / second-to-last as the pushed points on a dead-straight route", () => {
     // simpleTwoNodeCase: A's right-center to B's left-center, both at y=20 —
@@ -876,18 +879,18 @@ describe("routeEdges — pushed points survive collinear collapse (plan §3.1 'E
   });
 });
 
-describe("routeEdges — own-node clearance is a searched-route property (plan §3.1 'Own-node clearance is a searched-route property', R5/R11)", () => {
-  // R11 (reinstated): the no-clipping rule binds *searched* routes only.
-  // The D4 fallback is exempt by design — its skeleton mandates a second
-  // outward step past S to P1, which can land inside the *other* node's
-  // rect when the two nodes are close or overlapping, and its connector
-  // ladder does no obstacle avoidance at all (plan §3.1 "No-path
-  // fallback"). A fallback-shaped result is identified via
-  // `isFallbackShape` (points[2] === P1) and skipped rather than asserted
-  // clear; every other (searched) result must stay clear on every segment
-  // but the first and the last (the two mandated D2 stubs, which "Endpoints
-  // are exact" can force through a node's own rect even for a searched
-  // route when a pushed point lands inside it).
+describe("routeEdges — own-node clearance is a searched-route property (the per-endpoint obstacle exemption in `edgeRouter.ts`)", () => {
+  // The no-clipping rule binds *searched* routes only. The no-path fallback
+  // is exempt by design — its skeleton mandates a second outward step past S
+  // to P1, which can land inside the *other* node's rect when the two nodes
+  // are close or overlapping, and its connector ladder does no obstacle
+  // avoidance at all (`specs/graph-view.md` §4, "Known limitations"). A
+  // fallback-shaped result is identified via `isFallbackShape`
+  // (points[2] === P1) and skipped rather than asserted clear; every other
+  // (searched) result must stay clear on every segment but the first and the
+  // last (the two mandated stubs, which "Endpoints are exact on the quantized
+  // points" can force through a node's own rect even for a searched route
+  // when a pushed point lands inside it).
 
   it("keeps every non-stub segment of a searched route clear of A's and B's own rect interiors across a sweep of B's position", () => {
     // Regression case origin: two ordinary basic-block-sized nodes,
@@ -932,8 +935,8 @@ describe("routeEdges — own-node clearance is a searched-route property (plan �
 
         const points = routeEdges([aRect, bRect], [request]).get(request.id)!;
 
-        // The fallback is exempt (R5/R11) — skip a fallback-shaped result
-        // rather than asserting clearance on it.
+        // The fallback is exempt — skip a fallback-shaped result rather than
+        // asserting clearance on it.
         if (isFallbackShape(points, request)) continue;
 
         if (anyMiddleSegmentCrossesRectInterior(points, aRect)) {
@@ -953,13 +956,12 @@ describe("routeEdges — own-node clearance is a searched-route property (plan �
   });
 
   it("holds the no-reversal and orthogonality invariants (not clearance) for forced no-path fallback routes, including overlapping source/target rects", () => {
-    // These configs are forced into the D4 fallback via WALL (same
+    // These configs are forced into the no-path fallback via WALL (same
     // technique as the "no-path fallback" describe block above), which is
     // exempt from own-node clearance by design — so this checks the
     // invariants the fallback *is* bound by instead: every returned
     // polyline is still orthogonal and still has no immediate reversal.
-    // Overlapping rects are exactly the case plan §3.1 "Own-node clearance
-    // is a searched-route property" calls out as where a mandated stub can
+    // Overlapping rects are exactly the case where a mandated stub can
     // legitimately land inside the *other* node's rect; a non-overlapping
     // config is included too, to broaden the sample.
     const wall: RouteNodeRect = {
@@ -1024,12 +1026,12 @@ describe("routeEdges — own-node clearance is a searched-route property (plan �
   });
 });
 
-describe("routeEdges — no immediate reversal / never a degenerate hook (arbitration-B3 R12)", () => {
+describe("routeEdges — no immediate reversal / never a degenerate hook (contract: 'No immediate reversals')", () => {
   // "No polyline may contain an immediate reversal: no interior vertex where
   // the segment arriving and the segment leaving run along the same axis in
   // opposite directions." Binding on every returned polyline — searched,
-  // self-loop, and fallback alike. The defect this guards against (the old,
-  // unamended D4 collapsing onto one line and retracing part of itself) only
+  // self-loop, and fallback alike. The defect this guards against (an earlier
+  // fallback shape collapsing onto one line and retracing part of itself) only
   // showed up in 0.83% of fallbacks per the reviewer's sampling, so each
   // case below sweeps a range of configurations rather than asserting one.
 
@@ -1110,7 +1112,7 @@ describe("routeEdges — no immediate reversal / never a degenerate hook (arbitr
   });
 
   it("holds for the no-path fallback across sourceSide/direction combinations and every ladder rung", () => {
-    // A single huge wall forces every one of these requests into the D4
+    // A single huge wall forces every one of these requests into the no-path
     // fallback (same technique as the "no-path fallback" describe block
     // above). A and B are placed far from the geometry the requests
     // describe — the fallback construction depends only on the request's
@@ -1149,12 +1151,11 @@ describe("routeEdges — no immediate reversal / never a degenerate hook (arbitr
 
     // For each vertical/horizontal exit side, one config where source and
     // target push in the same direction along that axis and one where they
-    // push oppositely (the "down 16, up 48, down 16" degenerate hook from
-    // the pre-R15 fallback design lived exactly here — sourceSide "bottom"
-    // below), plus two generic configs and, since R15/R16 replaced D4 with
-    // the skeleton + connector ladder, one config landing on the dog-leg
-    // rung and one on the rectangle rung (plan §3.1 "No-path fallback")
-    // for direct breadth on the newest part of the construction.
+    // push oppositely (the "down 16, up 48, down 16" degenerate hook of the
+    // earlier fallback design lived exactly here — sourceSide "bottom"
+    // below), plus two generic configs and one config landing on each of the
+    // connector ladder's dog-leg and rectangle rungs, for direct breadth on
+    // the newest part of the construction.
     const configs: Config[] = [
       {
         label: "bottom, with normal (elbow omitted, unchanged)",
@@ -2392,13 +2393,14 @@ describe("routeEdges — quantization: determinism on fractional input (contract
   });
 });
 
-describe("routeEdges — performance (plan §2 decision 10; arbitration-B2 R7)", () => {
-  // The real design budget is 50ms for a 60-node / 80-edge pass, but that is
-  // measured out of band (bare Node, warm, median of N) — see the plan and
-  // arbitration-B2 R7. A tight wall-clock bound cannot be held reliably
-  // inside a parallel vitest run, where this number measures scheduler
-  // contention as much as the router itself (observed failing 3/18 full-
-  // suite runs at 52-59ms against a 50ms bound). This assertion is
+describe("routeEdges — performance (`specs/graph-view.md` §4)", () => {
+  // The real budget is the 16.7ms animation frame, and it is measured out of
+  // band (bare Node, warm, median of N) — see `specs/graph-view.md` §4, which
+  // records the figures and says in as many words that this in-suite test is
+  // not a check of that budget. A tight wall-clock bound cannot be held
+  // reliably inside a parallel vitest run, where this number measures
+  // scheduler contention as much as the router itself (observed failing 3/18
+  // full-suite runs at 52-59ms against a 50ms bound). This assertion is
   // deliberately loosened to a generous 300ms ceiling: it is a
   // catastrophic-regression guard (e.g. an accidental O(n^3) blowup), not a
   // budget check, and it must not be "fixed" with warm-up loops or best-of-N

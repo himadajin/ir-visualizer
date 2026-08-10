@@ -78,10 +78,11 @@ Every LLVM/Mermaid edge is rendered by one custom edge type, `routed` (`RoutedEd
 **Edge geometry is a pure function of the live node rectangles**, computed at render time
 by this repo's own orthogonal router. There is exactly one geometry generator: no stored
 geometry, and no notion of geometry that can go out of date. The router's module boundary,
-its guarantees (orthogonality, determinism, exact endpoints, the self-loop shape, the
-no-path fallback, no immediate reversals, missing-node omission), and its option defaults
-are frozen in `contracts/edge-routing.md`; the algorithm behind those guarantees is
-documented in `src/utils/edgeRouter.ts` itself.
+its guarantees (orthogonality, integer coordinates from quantized inputs, determinism,
+endpoints exact on the quantized handle points, the self-loop shape, the no-path fallback,
+no immediate reversals, missing-node omission), and its option defaults are frozen in
+`contracts/edge-routing.md`; the algorithm behind those guarantees is documented in
+`src/utils/edgeRouter.ts` itself.
 
 - **Inputs** are React Flow's measured rects (`internals.positionAbsolute`,
   `measured.width` / `measured.height`) and the live handle positions. Because those track

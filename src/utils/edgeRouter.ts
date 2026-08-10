@@ -8,10 +8,12 @@ import type {
 
 /**
  * Self-contained orthogonal edge router (`contracts/edge-routing.md`,
- * `specs/graph-view.md` §4). Node rects are the only obstacles; a sparse
- * Hanan grid over the inflated rects is searched per edge with A*, and the
- * result is a rounded-corner-ready polyline whose first and last points are the
- * live handle positions.
+ * `specs/graph-view.md` §4). Every input coordinate is snapped to an integer
+ * lattice at the entry of `routeEdges`; node rects are the only obstacles; a
+ * sparse Hanan grid over the inflated rects is searched per edge with A*, and
+ * the result is a rounded-corner-ready polyline. A routed edge begins and ends
+ * exactly at its quantized handle positions; a self-loop is synthesized from its
+ * node's rect alone and is exempt from that rule.
  */
 
 /** Clearance kept around every node rect, px. */
@@ -68,6 +70,71 @@ const pushOutward = (
  */
 const clonePoint = (point: Point): Point => ({ x: point.x, y: point.y });
 
+/**
+ * Snaps one coordinate to the integer lattice (`contracts/edge-routing.md`,
+ * "Input quantization"). The router's inputs are DOM measurements, which carry
+ * fractional parts as a matter of course, and a fraction anywhere in the input
+ * puts fractions in the output: routes whose last decimals differ between two
+ * visually identical states, segments a fraction of a pixel long, corners whose
+ * bend radius has collapsed to zero. Quantizing once at the boundary removes
+ * that class of output by construction — integers are closed under the sums,
+ * differences, min/max and ±1-scaled steps every route below is built from — so
+ * nothing has to be rounded on the way out and no geometric comparison here
+ * needs a tolerance.
+ *
+ * `Math.round`, so ties go toward positive infinity, with `-0` normalized to `0`
+ * so that no returned coordinate is ever negative zero.
+ */
+const quantize = (value: number): number => {
+  const rounded = Math.round(value);
+  return rounded === 0 ? 0 : rounded; // `-0 === 0`, so this catches `-0`
+};
+
+/**
+ * Quantizes a rect **by its boundaries, never field by field**: the left edge
+ * lands on `round(x)` and the right edge on `round(x + width)`, each within half
+ * a pixel of what was measured. Rounding `x` and `width` independently is a
+ * different and wrong operation — the two errors add, so the right edge can move
+ * by a whole pixel and the obstacle would no longer cover the node it stands
+ * for.
+ *
+ * A rect thinner than a pixel can collapse to zero extent. That is left to
+ * happen rather than guarded: a collapsed rect still blocks, because obstacles
+ * are these rects inflated by `nodeMargin`, and a band of that width around a
+ * rect of no extent still has an interior. Coincident boundaries are likewise
+ * left alone — `sortedUnique` already folds them when the grid is built.
+ */
+const quantizeRect = (rect: RouteNodeRect): RouteNodeRect => {
+  const x = quantize(rect.x);
+  const y = quantize(rect.y);
+  return {
+    id: rect.id,
+    x,
+    y,
+    width: quantize(rect.x + rect.width) - x,
+    height: quantize(rect.y + rect.height) - y,
+  };
+};
+
+/**
+ * Quantizes the two handle positions of a request per component. A handle
+ * position is a point, not an interval, so there is no companion field whose
+ * consistency has to be preserved and `x` and `y` round independently.
+ * Everything else — the ids and the two sides — is not a coordinate and passes
+ * through untouched.
+ */
+const quantizeRequest = (request: RouteRequest): RouteRequest => ({
+  ...request,
+  sourcePoint: {
+    x: quantize(request.sourcePoint.x),
+    y: quantize(request.sourcePoint.y),
+  },
+  targetPoint: {
+    x: quantize(request.targetPoint.x),
+    y: quantize(request.targetPoint.y),
+  },
+});
+
 const dropDuplicates = (points: Point[]): Point[] =>
   points.filter(
     (point, i) =>
@@ -77,8 +144,9 @@ const dropDuplicates = (points: Point[]): Point[] =>
 /**
  * Collapses runs of collinear points into their end points. The first and last
  * points are always kept: for a routed edge they are the `nodeMargin`-pushed
- * bends, which §3.1 ("Endpoints are exact") requires to survive as `points[1]`
- * and the second-to-last point even when the route runs straight through them.
+ * bends, which `contracts/edge-routing.md` ("Endpoints are exact on the
+ * quantized points") requires to survive as `points[1]` and the second-to-last
+ * point even when the route runs straight through them.
  */
 const dropCollinearInterior = (points: Point[]): Point[] => {
   if (points.length <= 2) return points;
@@ -583,27 +651,38 @@ const fallbackPoints = (
 };
 
 /**
- * Self-loops are synthesized, not routed (§3.1 "Self-loops"): always on the
- * node's right side, out of the bottom edge at 75 % of the width, around a lane
- * `selfLoopGap` clear of the node, and back into the top edge at the same offset.
+ * Self-loops are synthesized, not routed (`contracts/edge-routing.md`,
+ * "Self-loops"): always on the node's right side, out of the bottom edge at 75 %
+ * of the width, around a lane `selfLoopGap` clear of the node, and back into the
+ * top edge at the same offset. The rect and both clearances are already
+ * quantized, so the only fractional value the six points can contain is the
+ * 75 %-of-width stub offset — three quarters of an integer width is fractional
+ * unless that width is a multiple of 4 — and it is rounded here, where it is
+ * formed. This is the one rounding that happens behind the input boundary.
+ *
+ * Consecutive duplicates are collapsed, the same way searched and fallback
+ * routes are: a clearance that quantizes to `0` makes two of the six points
+ * coincide, and a coincident pair shares both coordinates instead of exactly
+ * one, which would break orthogonality. A self-loop therefore returns at most
+ * six points.
  */
 const selfLoopPoints = (
   rect: RouteNodeRect,
   nodeMargin: number,
   selfLoopGap: number,
 ): Point[] => {
-  const x = rect.x + rect.width * 0.75;
+  const x = quantize(rect.x + rect.width * 0.75);
   const lane = rect.x + rect.width + selfLoopGap;
   const below = rect.y + rect.height + nodeMargin;
   const above = rect.y - nodeMargin;
-  return [
+  return dropDuplicates([
     { x, y: rect.y + rect.height },
     { x, y: below },
     { x: lane, y: below },
     { x: lane, y: above },
     { x, y: above },
     { x, y: rect.y },
-  ];
+  ]);
 };
 
 /**
@@ -613,6 +692,12 @@ const selfLoopPoints = (
  *
  * Keyed by `RouteRequest.id`; a request naming a node absent from `nodes` gets
  * no entry at all (§3.1 "Missing nodes").
+ *
+ * Every coordinate in the input is quantized here, before the obstacle set is
+ * built and before any search runs, so every returned coordinate is an integer
+ * (`contracts/edge-routing.md`, "Integer coordinates"). A routed polyline's
+ * endpoints are exact on the quantized request points, not on the fractional
+ * ones a caller passed.
  *
  * Every returned polyline — searched, self-loop and fallback alike — is
  * orthogonal, has at least 2 points, and contains **no immediate reversal**: at
@@ -627,15 +712,25 @@ export const routeEdges = (
   requests: RouteRequest[],
   options: EdgeRouterOptions = {},
 ): Map<string, Point[]> => {
-  const nodeMargin = options.nodeMargin ?? DEFAULT_NODE_MARGIN;
+  // The quantization boundary: nothing below this point sees a coordinate the
+  // caller passed, only its lattice-snapped image. `nodeMargin` and
+  // `selfLoopGap` are distances that end up added to coordinates, so they are
+  // quantized with everything else — that is what makes the integer guarantee
+  // unconditional rather than a promise kept only for callers that happen to
+  // pass integers. `bendPenalty` is a term in the cost function, compared
+  // against path lengths and never added to a position, so it is left alone and
+  // a fractional one stays meaningful (which is why `COST_EPSILON` is still
+  // needed above).
+  const nodeMargin = quantize(options.nodeMargin ?? DEFAULT_NODE_MARGIN);
   const bendPenalty = options.bendPenalty ?? DEFAULT_BEND_PENALTY;
-  const selfLoopGap = options.selfLoopGap ?? DEFAULT_SELF_LOOP_GAP;
+  const selfLoopGap = quantize(options.selfLoopGap ?? DEFAULT_SELF_LOOP_GAP);
+  const quantizedRequests = requests.map(quantizeRequest);
 
   // Duplicate ids are invalid input; the documented rule is that the last one
   // wins. Deduping before the obstacle index is built matters: otherwise a
   // superseded earlier rect keeps blocking segments even though nothing is
   // routed against it.
-  const rectById = new Map(nodes.map((node) => [node.id, node]));
+  const rectById = new Map(nodes.map((node) => [node.id, quantizeRect(node)]));
   const inflated: InflatedRect[] = [...rectById.values()].map((node) => ({
     id: node.id,
     minX: node.x - nodeMargin,
@@ -652,7 +747,7 @@ export const routeEdges = (
   };
 
   const routes = new Map<string, Point[]>();
-  for (const request of requests) {
+  for (const request of quantizedRequests) {
     const sourceRect = rectById.get(request.source);
     const targetRect = rectById.get(request.target);
     if (sourceRect === undefined || targetRect === undefined) {

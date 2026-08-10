@@ -122,6 +122,21 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   `measured.width` / `measured.height`) and the live handle positions. Because those track
   the current DOM, an edge follows its node while the node is dragged, and follows a size
   change caused by a content-only edit (§2), with no re-layout involved.
+- **Endpoints are node-boundary anchors, not handle-box anchors.** The coordinate _along_ a
+  side comes from the handle, so per-operand ports (the Use-Def view) keep their own
+  offsets; the coordinate _across_ it comes from the node's measured rect — `rect.y` for a
+  `top` handle, `rect.y + rect.height` for a `bottom` one, and correspondingly for `left` /
+  `right`. The reason is that a handle is positioned from the node's **padding** box, so its
+  measured bounds sit inside the rect the router uses as the obstacle — 1 px in, the width
+  of the node border (`NODE_BORDER_WIDTH`, §5). Anchoring on the handle box makes the drawn
+  attachment point and the router's clearance geometry two independently derived numbers: the
+  `nodeMargin`-pushed point then lands 1 px inside the node's own inflated boundary, and
+  the search has to step that pixel before it can turn, leaving a pair of bends whose
+  corner radius has collapsed to half a pixel at every departure and arrival. Projecting
+  onto the rect edge makes the pushed point coincide with the inflated boundary by
+  construction, whatever the handle's CSS does, and the edge touches the node's visible
+  border exactly. `useEdgeRoutes` therefore deliberately does **not** mirror React Flow's
+  own `getHandlePosition`, which is where the inset was inherited from.
 - **One pass per graph:** `src/hooks/useEdgeRoutes.ts` reads React Flow's store, calls
   `routeEdges` once per pass, and publishes the resulting `Map<edgeId, Point[]>` through a
   React context; `RoutedEdge` looks up its own entry by edge id and never calls the router

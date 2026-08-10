@@ -226,7 +226,14 @@ or fractional values of it are ordinary input.
   (2) number of bends, (3) the point sequence compared lexicographically by `(x, y)` — a
   shorter sequence that is a prefix of a longer one sorts first. The chosen shape is
   therefore a documented property of the router, not an implementation accident, and this
-  is what the determinism guarantee above rests on.
+  is what the determinism guarantee above rests on. **"Equally cheap" means equal to within
+  a small tolerance, not bit-equal.** `bendPenalty` is deliberately left unquantized (see
+  the options table), so a total cost is a float sum of integer run lengths and fractional
+  bend prices, and two candidates that cost the same in exact arithmetic can still land on
+  totals differing in their last bits — the search reaches them through different sequences
+  of additions. Ranking those by key (1) would decide the shape by accumulated rounding
+  error, which is the implementation accident this order exists to rule out; the tolerance
+  is what lets keys (2) and (3) decide instead.
 - **No immediate reversals.** Binding on every returned polyline — searched, self-loop and
   fallback alike: no interior vertex has its arriving and leaving segments running along
   the same axis in opposite directions. This is the precise, checkable form of "never a

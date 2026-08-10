@@ -134,6 +134,9 @@ function registerSemantics(semantics: ohm.Semantics) {
     NodeLabel_curly(_open: any, text: any, _close: any) {
       return { text: text.sourceString, shape: "curly" };
     },
+    comment(_marker: any, _text: any) {
+      return null;
+    },
     // Default fallbacks
     _iter(...children: any[]) {
       return children.map((c) => c.toAST());

@@ -120,11 +120,12 @@ graph TD
 
 Supported: `graph`/`flowchart` headers with `TB|TD|BT|RL|LR` directions; nodes with square
 `[..]`, round `(..)`, and curly `{..}` labels; `-->` / `---` links with optional `|label|` or
-`--label-->` labels; newline or `;` separated statements.
+`--label-->` labels; newline or `;` separated statements; `%%` comment lines, which are
+ignored.
 
 **Limitations to know about:**
 
-- Subgraphs, styling, multi-link chains (`A --> B --> C`), other node shapes, and `%%`
-  comment lines are not supported (comments currently cause a parse error).
+- Subgraphs, styling, multi-link chains (`A --> B --> C`), and other node shapes are not
+  supported.
 - Edge labels are displayed with their pipe delimiters (`|yes|`), matching how they are
   written.

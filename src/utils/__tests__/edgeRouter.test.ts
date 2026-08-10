@@ -272,6 +272,35 @@ function polylineLength(points: Point[]): number {
 }
 
 /**
+ * Number of vertices where the polyline changes axis — the `turns` of the
+ * contract's cost function `length + bendPenalty * turns`, and its second
+ * tie-break key.
+ */
+function bendCount(points: Point[]): number {
+  let bends = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const arrivesHorizontally = points[i - 1].y === points[i].y;
+    const leavesHorizontally = points[i].y === points[i + 1].y;
+    if (arrivesHorizontally !== leavesHorizontally) bends++;
+  }
+  return bends;
+}
+
+/**
+ * The contract's third tie-break key restated as a predicate over returned
+ * points: point sequences compared lexicographically by `(x, y)`, with a
+ * shorter sequence that is a prefix of a longer one sorting first.
+ */
+function comparePointSequences(a: Point[], b: Point[]): number {
+  const shared = Math.min(a.length, b.length);
+  for (let i = 0; i < shared; i++) {
+    if (a[i].x !== b[i].x) return a[i].x < b[i].x ? -1 : 1;
+    if (a[i].y !== b[i].y) return a[i].y < b[i].y ? -1 : 1;
+  }
+  return a.length - b.length;
+}
+
+/**
  * A deterministic stream of fractions in [0, 1) with three decimals, used by
  * the fractional sweeps below. A plain LCG rather than `Math.random` so that a
  * failure is reproducible and the suite cannot pass or fail by luck.
@@ -463,22 +492,22 @@ describe("routeEdges — tie-breaking (contract: 'A fixed tie-break total order'
   // the other's above 20 (reflection x -> 40 - x around the axis of
   // symmetry) — so the smaller-x (left) candidate must sort first and win,
   // regardless of exactly which grid line the router picks for the detour.
-  it("breaks a symmetric tie toward the lexicographically smaller (left) detour", () => {
-    const nodes: RouteNodeRect[] = [
-      { id: "S", x: 0, y: 0, width: 40, height: 40 },
-      { id: "OBS", x: 0, y: 120, width: 40, height: 40 },
-      { id: "T", x: 0, y: 240, width: 40, height: 40 },
-    ];
-    const request: RouteRequest = {
-      id: "e-S-T",
-      source: "S",
-      target: "T",
-      sourcePoint: { x: 20, y: 40 },
-      targetPoint: { x: 20, y: 240 },
-      sourceSide: "bottom",
-      targetSide: "top",
-    };
+  const nodes: RouteNodeRect[] = [
+    { id: "S", x: 0, y: 0, width: 40, height: 40 },
+    { id: "OBS", x: 0, y: 120, width: 40, height: 40 },
+    { id: "T", x: 0, y: 240, width: 40, height: 40 },
+  ];
+  const request: RouteRequest = {
+    id: "e-S-T",
+    source: "S",
+    target: "T",
+    sourcePoint: { x: 20, y: 40 },
+    targetPoint: { x: 20, y: 240 },
+    sourceSide: "bottom",
+    targetSide: "top",
+  };
 
+  it("breaks a symmetric tie toward the lexicographically smaller (left) detour", () => {
     const points = routeEdges(nodes, [request]).get(request.id)!;
 
     // A real route must exist (there's room to detour on both sides).
@@ -487,6 +516,57 @@ describe("routeEdges — tie-breaking (contract: 'A fixed tie-break total order'
     const diverging = points.find((p) => p.x !== 20);
     expect(diverging).toBeDefined();
     expect(diverging!.x).toBeLessThan(20);
+  });
+
+  // The same corridor, routed with a *fractional* `bendPenalty` — and that is
+  // the whole point of this fixture rather than a decoration on the one above.
+  // `bendPenalty` is a cost and never a coordinate, so it is the one input the
+  // router deliberately leaves unquantized, which makes a total cost a float
+  // sum of integer run lengths and fractional bend prices. One third has no
+  // exact binary representation, so two candidates that are equal in exact
+  // arithmetic accumulate to totals that differ in their last bits — the search
+  // reaches them through different sequences of additions. The test above uses
+  // the default integer penalty, where the two totals come out bit-identical
+  // and the comparator's tolerance is never exercised; here it is the only
+  // thing standing between the documented order and a shape picked by rounding
+  // error. Drop the tolerance and the right-hand candidate below wins instead.
+  it("breaks a tie between costs that are equal only in exact arithmetic", () => {
+    const points = routeEdges(nodes, [request], { bendPenalty: 1 / 3 }).get(
+      request.id,
+    )!;
+
+    // The competing candidate: it crosses to the far side of the obstacle
+    // 56 px lower down and detours right, so the run alongside the obstacle is
+    // 56 px shorter and the total comes out the same.
+    const rightDetour: Point[] = [
+      { x: 20, y: 40 },
+      { x: 20, y: 52 },
+      { x: 20, y: 108 },
+      { x: 52, y: 108 },
+      { x: 52, y: 172 },
+      { x: 20, y: 172 },
+      { x: 20, y: 228 },
+      { x: 20, y: 240 },
+    ];
+
+    // Keys (1) and (2) cannot separate the two: equal length and equal bend
+    // count make `length + bendPenalty * turns` equal for *any* penalty, so
+    // this is a tie in exact arithmetic whatever the router is configured with.
+    expect(polylineLength(points)).toBe(polylineLength(rightDetour));
+    expect(bendCount(points)).toBe(bendCount(rightDetour));
+
+    // Key (3) therefore decides, and it picks the lexicographically smaller
+    // sequence — the left detour, which turns off the shared x = 20 run first.
+    expect(comparePointSequences(points, rightDetour)).toBeLessThan(0);
+    expect(points).toEqual([
+      { x: 20, y: 40 },
+      { x: 20, y: 52 },
+      { x: -12, y: 52 },
+      { x: -12, y: 172 },
+      { x: 20, y: 172 },
+      { x: 20, y: 228 },
+      { x: 20, y: 240 },
+    ]);
   });
 });
 

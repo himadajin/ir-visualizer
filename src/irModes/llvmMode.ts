@@ -1,4 +1,3 @@
-import { parseLLVM, parseLLVMUseDef } from "../parser/llvm";
 import { codeGraphEdgeBuilder } from "../utils/layout";
 import LLVMBasicBlockNode from "../components/Graph/LLVM/LLVMBasicBlockNode";
 import LLVMFunctionHeaderNode from "../components/Graph/LLVM/LLVMFunctionHeaderNode";
@@ -48,8 +47,12 @@ define i32 @func(i32 %0, i32 %1, i1  %2) {
 // is a single const because views[0] must share the top-level parse's identity.
 // `LLVMParseResult` already IS an `IRParseResult`, so the module's recoverable
 // diagnostics (specs/llvm-ir.md §3.4) reach the status footer with no mapping.
-const parseCfg = async (code: string) => parseLLVM(code);
-const parseUseDef = async (code: string) => parseLLVMUseDef(code);
+// The `import()` is the mode's lazy boundary: the parser is fetched on the
+// first parse, not on page load (contracts/bundle-budget.md).
+const parseCfg = async (code: string) =>
+  (await import("../parser/llvm")).parseLLVM(code);
+const parseUseDef = async (code: string) =>
+  (await import("../parser/llvm")).parseLLVMUseDef(code);
 
 export const llvmMode = {
   key: "llvm-ir" as const,

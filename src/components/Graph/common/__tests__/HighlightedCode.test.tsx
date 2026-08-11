@@ -9,8 +9,9 @@ import HighlightedCode from "../HighlightedCode";
 const SHIKI_PRE_HTML =
   '<pre class="shiki github-light" style="background-color:#fff;color:#24292e" tabindex="0"><code><span class="line">ret i32 0</span></code></pre>';
 
-vi.mock("shiki", () => ({
-  createHighlighter: vi.fn().mockResolvedValue({
+vi.mock("../../../../utils/highlighter", () => ({
+  HIGHLIGHT_THEME: "github-light",
+  getHighlighter: vi.fn().mockResolvedValue({
     codeToHtml: () => SHIKI_PRE_HTML,
   }),
 }));

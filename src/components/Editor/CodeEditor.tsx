@@ -2,8 +2,9 @@ import React from "react";
 import Editor from "@monaco-editor/react";
 
 import { shikiToMonaco } from "@shikijs/monaco";
-import { createHighlighter } from "shiki";
 import type { Monaco } from "@monaco-editor/react";
+import { EDITOR_LANGUAGE_IDS } from "../../irModes/editorLanguages";
+import { HIGHLIGHT_THEME, getHighlighter } from "../../utils/highlighter";
 
 interface CodeEditorProps {
   code: string;
@@ -11,28 +12,18 @@ interface CodeEditorProps {
   onChange: (value: string | undefined) => void;
 }
 
-let highlighterPromise: ReturnType<typeof createHighlighter> | null = null;
-
-const ensureHighlighter = () => {
-  if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({
-      themes: ["github-light"],
-      langs: ["mermaid", "llvm"],
-    });
-  }
-  return highlighterPromise;
-};
-
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   code,
   language = "markdown",
   onChange,
 }) => {
+  // The languages come from the registry's one declaration, so adding an IR
+  // never means editing this file (contracts/ir-mode-registry.md).
   const handleBeforeMount = async (monaco: Monaco) => {
-    monaco.languages.register({ id: "mermaid" });
-    monaco.languages.register({ id: "llvm" });
-    const highlighter = await ensureHighlighter();
-    shikiToMonaco(highlighter, monaco);
+    for (const id of EDITOR_LANGUAGE_IDS) {
+      monaco.languages.register({ id });
+    }
+    shikiToMonaco(await getHighlighter(), monaco);
   };
 
   return (
@@ -42,7 +33,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       language={language}
       value={code}
       onChange={onChange}
-      theme="github-light"
+      theme={HIGHLIGHT_THEME}
       beforeMount={handleBeforeMount}
       options={{
         minimap: { enabled: false },

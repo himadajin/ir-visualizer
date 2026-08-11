@@ -1,4 +1,3 @@
-import { parseSelectionDAGToGraphData } from "../parser/selectionDAG";
 import { selectionDAGEdgeBuilder } from "../utils/layout";
 import SelectionDAGNode from "../components/Graph/SelectionDAG/SelectionDAGNode";
 import type { IRModeDefinition } from "./types";
@@ -23,12 +22,15 @@ SelectionDAG has 22 nodes:
 `;
 
 // parseSelectionDAGToGraphData is synchronous; the registry contract is async.
-// See llvmMode.ts for why the adapter lives here and not in the parser layer.
+// See llvmMode.ts for why the adapter lives here and not in the parser layer,
+// and why it `import()`s the parser instead of importing it at the top.
 // The parser's per-line tolerance (registry contract, "Known behavior
 // difference") is exactly what diagnostics are for, but it does not track which
 // lines it skipped, so this result carries none yet.
 const parse = async (code: string) => ({
-  graph: parseSelectionDAGToGraphData(code),
+  graph: (await import("../parser/selectionDAG")).parseSelectionDAGToGraphData(
+    code,
+  ),
 });
 
 export const selectionDAGMode = {

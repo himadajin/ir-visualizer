@@ -13,7 +13,7 @@ Each IR mode is a single object implementing `IRModeDefinition` (`src/irModes/ty
 interface IRModeDefinition {
   key: string; // e.g. "llvm-ir", "mermaid", "selectionDAG" — stable, used as the panel <Select> value
   label: string; // editor-panel display label, e.g. "LLVM-IR"
-  editorLanguage: string; // Monaco language id registered in CodeEditor
+  editorLanguage: EditorLanguageId; // one of the declared editor languages — see below
   defaultCode: string; // code shown when the mode is selected
   parse: (code: string) => Promise<IRParseResult>; // text -> graph + diagnostics, rejects with Error on invalid input
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
@@ -38,8 +38,8 @@ The rules:
   failure shape.
 - **The parser layer stays synchronous where the IR allows it.** `src/parser/**` exports the
   natural shape for its grammar; a mode whose parser is synchronous adapts it in its registry
-  entry (`const parseCfg = async (code: string) => parseLLVM(code)`) rather than making the
-  parser lie about being async.
+  entry (`const parseCfg = async (code) => (await import("../parser/llvm")).parseLLVM(code)`)
+  rather than making the parser lie about being async.
 - **Stale results are discarded, not applied.** `useIRWorkspace` parses in a debounced effect;
   when the code, mode, or view changes while a parse is in flight, the effect's cleanup marks
   that parse cancelled and neither its graph, its diagnostics nor its error reaches state. A
@@ -49,6 +49,28 @@ The rules:
 - **`parse` is not cancellable.** It takes no `AbortSignal` — the caller drops the result. No
   current parser can be interrupted mid-run, and adding a signal nothing honors would be
   indirection without a payer.
+- **A mode's parser lives behind a lazy boundary.** The adapter `import()`s its parser module
+  rather than importing it at the top of the registry entry, so a visitor fetches only the
+  parser of the mode they selected. The registry entry itself stays eager — key, label,
+  editor language, default code, node components and edge behavior are all needed before any
+  parse happens. This is what makes the asynchrony pay for itself rather than merely wrapping
+  a synchronous call, and it is a budgeted invariant: see `contracts/bundle-budget.md`.
+
+## Editor language
+
+`editorLanguage` names a TextMate grammar rather than an arbitrary string. The grammars the
+app can highlight are declared once, in `src/irModes/editorLanguages.ts`, as a map from
+Monaco language id to a dynamic import of that grammar; `EditorLanguageId` is the key type of
+that map, so a mode cannot name a language whose grammar is not shipped.
+
+Everything downstream is derived from that one declaration: `src/utils/highlighter.ts` builds
+the single app-wide Shiki highlighter from it, and `CodeEditor` registers exactly those ids
+with Monaco. Neither file mentions an IR. Two modes may share a language — SelectionDAG uses
+`llvm` — and the grammar is loaded once.
+
+The same highlighter renders code inside graph nodes (`HighlightedCode`). There is one
+instance, not one per call site. `text` needs no entry: Shiki treats `text`/`plaintext` as
+having no grammar.
 
 ## Recoverable diagnostics
 
@@ -207,17 +229,24 @@ implementation land with #88; the router-side guarantee it feeds lands with #86.
   than branching by string.
 - `GraphViewer` — merges `nodeTypes` from every entry in `IR_MODE_LIST` (plus the
   mode-agnostic fallback `codeNode`) instead of importing each mode's node components directly.
+- `CodeEditor` / `src/utils/highlighter.ts` — consume `src/irModes/editorLanguages.ts` (see
+  "Editor language"), never `IR_MODE_LIST`, so neither is coupled to how many IRs exist.
 
 ## Adding a 4th IR mode
 
 1. Add the parser/AST/graphBuilder files for the new IR under `src/parser`, `src/ast`,
    `src/graphBuilder`.
 2. Add the mode's node component(s) under `src/components/Graph/<NewMode>/`.
-3. Write `src/irModes/newMode.ts` implementing `IRModeDefinition`. Reuse `codeGraphEdgeBuilder`
-   unless the new IR needs custom edge semantics like SelectionDAG. Declare `bundleOf` only
-   if the IR has same-value fan-out (see Bundles); omitting it means no two of its edges may
-   overlap, which is the right answer for a control-flow graph.
-4. Add the new entry to `IR_MODES`/`IR_MODE_LIST` in `src/irModes/index.ts`.
+3. If the IR needs an editor language the app does not ship yet, add it to
+   `src/irModes/editorLanguages.ts`. Reusing an existing one (as SelectionDAG reuses `llvm`)
+   needs no change there.
+4. Write `src/irModes/newMode.ts` implementing `IRModeDefinition`. Have `parse` `import()` the
+   parser rather than importing it at the top of the file (see "Parsing is asynchronous").
+   Reuse `codeGraphEdgeBuilder` unless the new IR needs custom edge semantics like
+   SelectionDAG. Declare `bundleOf` only if the IR has same-value fan-out (see Bundles);
+   omitting it means no two of its edges may overlap, which is the right answer for a
+   control-flow graph.
+5. Add the new entry to `IR_MODES`/`IR_MODE_LIST` in `src/irModes/index.ts`.
 
 No other file should need to change. If it does, that's a signal the registry contract has a gap.
 

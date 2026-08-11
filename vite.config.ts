@@ -6,6 +6,13 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "/ir-visualizer/",
+  build: {
+    // Per-chunk size is the wrong axis for this app: the warning does not
+    // distinguish a chunk fetched on first paint from a lazy one, and elkjs
+    // ships as a single 1.4 MB file that no chunking strategy can split.
+    // `npm run check:bundle` is the gate instead — contracts/bundle-budget.md.
+    chunkSizeWarningLimit: Infinity,
+  },
   server: {
     // Honor an externally assigned port (e.g. a preview harness's PORT env)
     // instead of always claiming 5173.

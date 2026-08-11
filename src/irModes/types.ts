@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { NodeProps } from "@xyflow/react";
 import type { GraphData } from "../types/graph";
 import type { IREdgeBuilder } from "../utils/layout";
+import type { EditorLanguageId } from "./editorLanguages";
 
 /**
  * One recoverable problem found while parsing: the parser produced a graph but
@@ -36,8 +37,8 @@ export interface IRModeDefinition {
   key: string;
   /** Toolbar display label, e.g. "LLVM-IR". */
   label: string;
-  /** Monaco language id (registered in CodeEditor's beforeMount). */
-  editorLanguage: string;
+  /** Which shipped grammar highlights this mode's code — see editorLanguages.ts. */
+  editorLanguage: EditorLanguageId;
   /** Code shown in the editor when this mode is selected. */
   defaultCode: string;
   /** Text -> graph + diagnostics. Rejects with an Error on invalid input (see

@@ -27,7 +27,8 @@ flowchart TD
   (`contracts/ir-mode-registry.md`, "Parsing is asynchronous"): a parse whose code/mode/view
   changed while it was in flight is discarded, so a slow parse can never overwrite a newer one.
   Diagnostics take the same path as the error string — parse result to status footer — and
-  never enter the layout stage.
+  never enter the layout stage. The parser module is `import()`ed on first parse, so only the
+  selected mode's parser is ever fetched (`contracts/bundle-budget.md`).
 - `useGraphData` decides between a full (async) ELK re-layout (topology changed) and a
   position-preserving content update (same topology). See `specs/graph-view.md`.
 - Layout converts `GraphData` to React Flow nodes/edges, estimating node dimensions from
@@ -53,7 +54,7 @@ flowchart TD
 | Hooks               | `src/hooks`                | `useIRWorkspace` (mode/code/parse/error/diagnostics), `useGraphData` (graph state), `useEdgeRoutes` (one routing pass per graph, published via context), `usePaneResize`            | yes         |
 | App shell           | `src/components/AppShell`  | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer)                                                                                       | yes         |
 | Graph rendering     | `src/components/Graph`     | React Flow node/edge components (+ colocated `*.stories.tsx`)                                                                                                                       | yes         |
-| Editor              | `src/components/Editor`    | Monaco editor with Shiki highlighting for `llvm`/`mermaid`                                                                                                                          | yes         |
+| Editor              | `src/components/Editor`    | Monaco editor; highlighting comes from the one shared Shiki instance (`src/utils/highlighter.ts`) over the grammars declared in `src/irModes/editorLanguages.ts`                    | yes         |
 
 The shell is **canvas-first**: `App.tsx` composes two layers — `CanvasShell`, which makes
 `GraphViewer` the full-viewport root, and `EditorPanel`, a floating card (a DOM sibling of the
@@ -72,6 +73,8 @@ UI-free pipeline to its React components.
 - `contracts/graph-data.md` — the `GraphData` shape and the `nodeType`↔`astData` union.
 - `contracts/edge-routing.md` — the frozen `routeEdges` boundary and the guarantees callers
   may rely on.
+- `contracts/bundle-budget.md` — the two size numbers the build is held to, and the two
+  import rules that keep it under them.
 - `specs/llvm-ir.md`, `specs/mermaid.md`, `specs/selectiondag.md` — accepted input syntax and
   graph conversion rules per IR.
 - `specs/llvm-use-def-view.md` — the LLVM-IR mode's second view (SSA dataflow projection).
@@ -84,4 +87,6 @@ UI-free pipeline to its React components.
   `environment: "node"` by default, `// @vitest-environment jsdom` per file where DOM is needed).
 - E2E: Playwright smoke suite (`e2e/smoke.spec.ts`) — boots the real app for all three modes.
 - Storybook (`.storybook/`, stories colocated with node components) — visual catalog only.
-- CI (`.github/workflows/ci.yml`): lint → format:check → test → build → build-storybook → E2E.
+- CI (`.github/workflows/ci.yml`): lint → format:check → test → build → bundle budget →
+  build-storybook → E2E. The budget step is `npm run check:bundle`
+  (`contracts/bundle-budget.md`); it reads the `dist/` the build step just produced.

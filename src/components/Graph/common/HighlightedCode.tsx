@@ -1,17 +1,5 @@
 import { useEffect, useState } from "react";
-import { createHighlighter, type Highlighter } from "shiki";
-
-let highlighterPromise: Promise<Highlighter> | null = null;
-
-const getHighlighter = () => {
-  if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({
-      themes: ["github-light"],
-      langs: ["text", "javascript", "typescript", "llvm"],
-    });
-  }
-  return highlighterPromise;
-};
+import { HIGHLIGHT_THEME, getHighlighter } from "../../../utils/highlighter";
 
 interface HighlightedCodeProps {
   code: string;
@@ -34,7 +22,7 @@ const HighlightedCode = ({
         const highlighter = await getHighlighter();
         let highlighted = highlighter.codeToHtml(code, {
           lang: language,
-          theme: "github-light",
+          theme: HIGHLIGHT_THEME,
         });
 
         // Shiki's <pre> carries the user-agent default block margin (12px

@@ -8,6 +8,12 @@ Hanan grid, the A\* search, the fallback ladder) is an implementation detail beh
 boundary and is not reproduced here — see `src/utils/edgeRouter.ts` and its inline
 documentation for how the guarantees below are achieved.
 
+One part of the algorithm is _not_ an implementation detail, because a guarantee is stated
+against it: each edge is searched on a grid built from its own **region** rather than from
+the whole graph, and that is what makes the Locality guarantee below expressible. The region
+is defined under "Per-edge regions"; how the grid over it is searched remains behind the
+boundary.
+
 ## The frozen boundary
 
 The router implementation and its test suite are written against this boundary. It is
@@ -51,12 +57,31 @@ export interface EdgeRouterOptions {
   selfLoopGap?: number; // default 24
 }
 
+export interface RouteRegion {
+  minX: number;
+  minY: number; // bounds inclusive — see Per-edge regions
+  maxX: number;
+  maxY: number;
+}
+
 // src/utils/edgeRouter.ts
 export const routeEdges: (
   nodes: RouteNodeRect[],
   requests: RouteRequest[],
   options?: EdgeRouterOptions,
 ) => Map<string, Point[]>; // keyed by RouteRequest.id, >= 2 points, orthogonal
+
+// Locality made usable by a caller — see Per-edge regions, Narrowing a pass.
+export const ROUTE_REGION_MARGIN: number; // 192
+export const routeRegionOf: (
+  request: RouteRequest,
+  options?: EdgeRouterOptions,
+) => RouteRegion;
+
+// The input-quantization step (Input quantization), so a caller can ask whether
+// its input changed in the terms the router will actually see. Idempotent.
+export const quantizeRect: (rect: RouteNodeRect) => RouteNodeRect;
+export const quantizeRequest: (request: RouteRequest) => RouteRequest;
 ```
 
 `routeEdges` is a **pure function**: nothing here depends on React Flow or ELK, and no
@@ -174,6 +199,61 @@ half-open interval `[-0.5, 0.5)` that rounds to it. `bendPenalty` is floored now
 needs no floor: it is a cost, not a clearance, and zero or fractional values of it are
 ordinary input.
 
+## Per-edge regions
+
+A routed request is searched on a grid built from **its own region**, never from the whole
+graph. The region of a request is the axis-aligned bounding box of the four points that
+define it — the quantized `sourcePoint` and `targetPoint`, and the two `nodeMargin`-pushed
+points derived from them — inflated by `ROUTE_REGION_MARGIN` (**192 px**) on every side. The
+margin is a module constant (`src/utils/edgeRouter.ts`), not an option: no caller has a reason
+to vary it, and a search parameter that changes the picture is not something a call site
+should be able to disagree about.
+
+192 is measured, not chosen for roundness. Replaying both default LLVM-IR examples through
+the router at a range of margins (2026-08-11; the app's own ELK layout, node sizes and port
+offsets), the whole-graph retry below fires for one edge in each example at 48 px, for one
+edge in the CFG at 96 px, and **for no edge at all from 128 px up**; every margin in 48–384 px
+produced byte-identical routes to a graph-wide search, and full-pass timings across that range
+differed by less than the run-to-run noise. 192 is therefore the smallest tested value with
+real headroom over the threshold where the examples stop needing the retry — the region wants
+to be no larger than it has to be, since its size is exactly how much of the graph an edge is
+coupled to.
+
+Two rules together make the region the whole of what a search can see.
+
+- **Only intersecting rects take part.** A rect contributes candidate grid lines, and blocks,
+  only when its _inflated_ rect — the rect grown by `nodeMargin`, the same shape the obstacle
+  test uses — intersects the region. Every other rect is absent from that edge's search
+  entirely, rather than present but unreachable.
+- **Candidate lines are clipped to the region.** Of an intersecting rect's four inflated
+  boundaries, only those that fall inside the region become grid lines. Every grid vertex
+  therefore lies inside the region, so every segment does too. Without the clip, a rect
+  straddling the region boundary would extend the grid past it, and a route could then run
+  through a rect that was excluded for not reaching the region — the locality guarantee would
+  be bought at the price of edges crossing nodes.
+
+The two request points and their pushed points are always grid lines of their own, as they
+were before, and they lie inside the region by construction.
+
+The route a search returns is the cheapest one **on that grid**, under the tie-break order
+below. It is not promised to be the cheapest orthogonal path in the plane — it was not before
+either, since the grid has only ever held rect boundaries — and one consequence of the region
+is worth stating plainly: a detour that would have to leave the region to be found is not
+found, and the request falls to the retry below.
+
+**A request whose region offers no path is retried once, on the whole graph.** The ladder is
+exactly two rungs — the region, then every rect — and the second one exists so that this
+change cannot make an edge less routable than it was: any request that had a path before still
+has the same one available. Only a request that fails on _both_ rungs reaches the no-path
+fallback, which is what makes "no path" mean geometrically unroutable input. A request routed
+on the second rung is a function of every rect in the graph, and the Locality guarantee below
+is not claimed for it; the router does not report which rung it used, so a caller that needs to
+know must reproduce the region test itself.
+
+Self-loops and the fallback shape need no region: a self-loop is synthesized from its own
+node's rect (see Self-loops) and the fallback from the request alone (it does no obstacle
+avoidance at all), so both are already functions of strictly less than the region's rects.
+
 ## Guarantees callers may rely on
 
 - **Orthogonality.** Every returned polyline is axis-aligned: consecutive points always
@@ -223,6 +303,17 @@ ordinary input.
 - **Determinism.** Identical input rects and requests always produce byte-identical
   points, with no dependence on the iteration order of either the `nodes` array or the
   `requests` array — reordering either changes no individual route.
+- **Locality.** A route found on its own region (see Per-edge regions) is a function of the
+  rects intersecting that region and of its own request — of nothing else in the input. Adding,
+  removing, moving or resizing any other rect leaves that polyline byte-identical, so an edge
+  changes only when something near it changed. This is the guarantee that makes the router
+  _stable_ as well as deterministic: determinism says the same input gives the same output,
+  which a search over a graph-wide grid satisfies while still letting an unrelated node's
+  one-pixel move flip a route through the tie-break. Locality is what rules that out, and it
+  is a property of the pure function, not of a cache — no route is ever kept because it was
+  the previous answer. It is claimed for searched routes on the first rung, for self-loops and
+  for fallbacks; it is **not** claimed for a route that fell through to the whole-graph retry,
+  which is by definition a function of every rect.
 - **A fixed tie-break total order.** When multiple candidate paths are equally cheap, the
   router picks among them by, in order: (1) total cost (`length + bendPenalty * turns`),
   (2) number of bends, (3) the point sequence compared lexicographically by `(x, y)` — a
@@ -369,7 +460,38 @@ from a per-edge component. There is exactly **one routing pass per graph**: it r
 handle positions), builds the `RouteNodeRect[]` / `RouteRequest[]` inputs, and calls
 `routeEdges` once per pass. The resulting `Map<string, Point[]>` is published through a
 React context; `RoutedEdge` looks up its own entry by edge id and never calls the router
-itself. During a drag the hook narrows `requests` to the edges incident to the dragged
-node (still passing the **complete** `nodes` array, since a partial route must still avoid
-every obstacle) and runs a full pass once the drag stops — see `specs/graph-view.md` §4 for
-the frame-budget measurement behind that split.
+itself. **There is one routing path**, during a drag as much as at rest — no incident-only
+mode, and no catch-up pass when a drag stops.
+
+### Narrowing a pass
+
+A caller that holds the previous pass's input and output may route a **subset** of the
+requests and reuse the rest. Locality is what makes that a pure optimization rather than a
+second answer: an edge whose region nothing near has changed would be re-routed to the
+polyline the caller already holds, so computing it and keeping it are indistinguishable.
+`routeRegionOf(request)` exports the region rule so the caller asks the router where an edge
+looks rather than reimplementing the box.
+
+The subset must be a superset of what can actually change, which takes three clauses — the
+third is the one that is easy to miss:
+
+1. a request that is **new, or whose own record changed** (either point, either side, either
+   endpoint id) — its region moved with it;
+2. a request whose region a changed rect reaches **in either its old or its new position** —
+   the space a node vacates matters as much as the space it takes, and an edge that was
+   detouring around it must be allowed to straighten;
+3. a request whose **previous polyline has a point outside its own region** — that is the
+   observable signature of the whole-graph retry above, and Locality is explicitly not
+   claimed for those routes, so they are re-routed unconditionally.
+
+A narrowed pass still passes the **complete** `nodes` array: a route must avoid every
+obstacle whether or not that obstacle moved.
+
+This is not a licence to keep a stale route. What the old drag-time split did — route only
+the edges incident to the dragged node, then a full pass on drop — is not an instance of this
+rule: the edges it left out were routing around a rect the dragged node had already vacated,
+which is clause 2, and the "full pass on drag stop" was the moment they all caught up at once.
+`src/hooks/useEdgeRoutes.ts` implements the rule, and
+`src/hooks/__tests__/useEdgeRoutes.test.ts` pins the only property that matters: a narrowed
+pass equals the full pass entry for entry. See `specs/graph-view.md` §4 for the frame budget
+that makes the narrowing worth having.

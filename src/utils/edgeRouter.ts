@@ -2,6 +2,7 @@ import type {
   EdgeRouterOptions,
   Point,
   RouteNodeRect,
+  RouteRegion,
   RouteRequest,
   RouteSide,
 } from "../types/edgeRouting";
@@ -9,11 +10,17 @@ import type {
 /**
  * Self-contained orthogonal edge router (`contracts/edge-routing.md`,
  * `specs/graph-view.md` §4). Every input coordinate is snapped to an integer
- * lattice at the entry of `routeEdges`; node rects are the only obstacles; a
- * sparse Hanan grid over the inflated rects is searched per edge with A*, and
- * the result is a rounded-corner-ready polyline. A routed edge begins and ends
- * exactly at its quantized handle positions; a self-loop is synthesized from its
- * node's rect alone and is exempt from that rule.
+ * lattice at the entry of `routeEdges`; node rects are the only obstacles; each
+ * edge is searched with A* over a sparse Hanan grid built from the rects near
+ * **it** — its region — and the result is a rounded-corner-ready polyline. A
+ * routed edge begins and ends exactly at its quantized handle positions; a
+ * self-loop is synthesized from its node's rect alone and is exempt from that
+ * rule.
+ *
+ * The region is why this router is stable and not merely deterministic: a route
+ * is a function of the rects near it, so an unrelated node moving cannot flip it
+ * through a tie-break on a shared grid. That is a guarantee of the module, not
+ * an optimization — see "Per-edge regions" and "Locality" in the contract.
  */
 
 /** Clearance kept around every node rect, px. */
@@ -22,6 +29,23 @@ export const DEFAULT_NODE_MARGIN = 12;
 export const DEFAULT_BEND_PENALTY = 30;
 /** Distance from a node's right edge to its self-loop lane, px. */
 export const DEFAULT_SELF_LOOP_GAP = 24;
+
+/**
+ * How far beyond its own endpoints an edge's search may look, px
+ * (`contracts/edge-routing.md`, "Per-edge regions"). A request is searched on a
+ * grid built from the rects intersecting its region — the bounding box of its
+ * two request points and their two pushed points, inflated by this — which is
+ * what the Locality guarantee is stated against: move a rect this region does
+ * not reach and the route cannot change, because that rect was never in the
+ * search.
+ *
+ * It is a constant rather than an `EdgeRouterOptions` field on purpose. No
+ * caller has a reason to vary it, and it is not a preference: it trades how far
+ * a detour may be looked for against how much of the graph an edge is coupled
+ * to, and both sides of that trade are properties of this router, not of a call
+ * site.
+ */
+export const ROUTE_REGION_MARGIN = 192;
 
 /**
  * Room a synthesized shape keeps where the clearance it is given leaves none
@@ -124,8 +148,15 @@ const quantize = (value: number): number => {
  * are these rects inflated by `nodeMargin`, and a band of that width around a
  * rect of no extent still has an interior. Coincident boundaries are likewise
  * left alone — `sortedUnique` already folds them when the grid is built.
+ *
+ * Exported because a caller that wants to know whether its input has really
+ * changed has to ask in the router's terms: two measurements a fraction of a
+ * pixel apart are the same input here, and rounding the four fields
+ * independently is not the same question — it can call `x = 10.0, w = 20.4` and
+ * `x = 10.4, w = 20.4` equal, where this makes them 20 px and 21 px wide.
+ * Re-passing an already-quantized rect to `routeEdges` is the identity.
  */
-const quantizeRect = (rect: RouteNodeRect): RouteNodeRect => {
+export const quantizeRect = (rect: RouteNodeRect): RouteNodeRect => {
   const x = quantize(rect.x);
   const y = quantize(rect.y);
   return {
@@ -142,9 +173,9 @@ const quantizeRect = (rect: RouteNodeRect): RouteNodeRect => {
  * position is a point, not an interval, so there is no companion field whose
  * consistency has to be preserved and `x` and `y` round independently.
  * Everything else — the ids and the two sides — is not a coordinate and passes
- * through untouched.
+ * through untouched. Exported for the same reason as `quantizeRect` above.
  */
-const quantizeRequest = (request: RouteRequest): RouteRequest => ({
+export const quantizeRequest = (request: RouteRequest): RouteRequest => ({
   ...request,
   sourcePoint: {
     x: quantize(request.sourcePoint.x),
@@ -275,18 +306,108 @@ interface Label {
   points: Point[] | null;
 }
 
-interface RouterContext {
-  nodeMargin: number;
-  bendPenalty: number;
+/** "Is this point strictly inside an obstacle the route must respect?" */
+type IsBlocked = (
+  x: number,
+  y: number,
+  exemptA: string | null,
+  exemptB: string | null,
+) => boolean;
+
+/**
+ * Everything one search may see: the candidate grid lines and the obstacles.
+ * There are two of these per pass — one built per edge from its own region, and
+ * the graph-wide one kept for the retry rung (`contracts/edge-routing.md`,
+ * "Per-edge regions"). Confining a search to a scope is what makes the Locality
+ * guarantee true by construction rather than by argument: a rect outside the
+ * scope is not reachable-but-unchosen, it is absent.
+ */
+interface SearchScope {
   gridXs: number[];
   gridYs: number[];
-  isBlocked: (
-    x: number,
-    y: number,
-    exemptA: string | null,
-    exemptB: string | null,
-  ) => boolean;
+  isBlocked: IsBlocked;
 }
+
+/**
+ * The region of a request: the bounding box of the four points that define it —
+ * the two quantized request points and the two `nodeMargin`-pushed points — with
+ * `ROUTE_REGION_MARGIN` added on every side.
+ */
+const regionOf = (points: Point[]): RouteRegion => {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+  return {
+    minX: minX - ROUTE_REGION_MARGIN,
+    minY: minY - ROUTE_REGION_MARGIN,
+    maxX: maxX + ROUTE_REGION_MARGIN,
+    maxY: maxY + ROUTE_REGION_MARGIN,
+  };
+};
+
+/**
+ * Overlap test used to select the rects of a region, deliberately **non-strict**
+ * — a rect touching the region along a boundary is taken in. Blocking is a
+ * strict-interior test, so such a rect can block nothing inside the region and
+ * taking it in changes no route; the conservative direction is the safe one to
+ * be wrong in, and it keeps this test independent of the blocking one.
+ */
+const intersectsRegion = (rect: InflatedRect, region: RouteRegion): boolean =>
+  rect.minX <= region.maxX &&
+  rect.maxX >= region.minX &&
+  rect.minY <= region.maxY &&
+  rect.maxY >= region.minY;
+
+/**
+ * The scope of one request: the rects whose inflated form reaches its region,
+ * and of their boundaries only those falling **inside** the region.
+ *
+ * The clip is what confines the search to the region, and it is load-bearing
+ * rather than tidy. A rect straddling the region boundary contributes a far
+ * boundary outside it; keeping that line would let the grid — and a route on
+ * it — run past the region and into a rect that was excluded for not reaching
+ * the region, so an edge could cross a node that was never given a chance to
+ * block it. With the clip every grid vertex lies inside the region, so every
+ * segment does too.
+ *
+ * That last fact is also why the obstacle test does not have to be rebuilt per
+ * region: a rect containing a point inside the region necessarily intersects
+ * the region, so asking the graph-wide index about a point in here can only
+ * ever be answered by a rect this region selected. The shared index is
+ * therefore the same function as a region-local one would be, at the cost of
+ * building it once per pass instead of once per edge.
+ */
+const scopeOfRegion = (
+  inflated: InflatedRect[],
+  region: RouteRegion,
+  isBlocked: IsBlocked,
+): SearchScope => {
+  const gridXs: number[] = [];
+  const gridYs: number[] = [];
+  for (const rect of inflated) {
+    if (!intersectsRegion(rect, region)) continue;
+    if (rect.minX >= region.minX && rect.minX <= region.maxX) {
+      gridXs.push(rect.minX);
+    }
+    if (rect.maxX >= region.minX && rect.maxX <= region.maxX) {
+      gridXs.push(rect.maxX);
+    }
+    if (rect.minY >= region.minY && rect.minY <= region.maxY) {
+      gridYs.push(rect.minY);
+    }
+    if (rect.maxY >= region.minY && rect.maxY <= region.maxY) {
+      gridYs.push(rect.maxY);
+    }
+  }
+  return { gridXs, gridYs, isBlocked };
+};
 
 /**
  * Binary heap over the tie-break total order (`contracts/edge-routing.md`,
@@ -364,25 +485,30 @@ const remainingTurnsBound = (
  * Cheapest grid path from the pushed source point to the pushed target point,
  * or `null` when the grid offers none. Returns `[S, ...bends, T]`; the exact
  * handle positions are added by the caller.
+ *
+ * "The grid" is the given scope's — this edge's region, or the whole graph on
+ * the retry rung. The search below cannot tell the two apart, which is the
+ * point: locality is a property of what the scope contains, not of the search.
  */
 const routeOnGrid = (
   request: RouteRequest,
   start: Point,
   end: Point,
-  context: RouterContext,
+  scope: SearchScope,
+  bendPenalty: number,
 ): Point[] | null => {
-  // Candidate lines: every inflated rect edge, plus this edge's endpoints. The
-  // pushed points are included as well so that they are always grid vertices,
-  // even for a handle that does not sit on its node's boundary.
+  // Candidate lines: every inflated rect edge in scope, plus this edge's
+  // endpoints. The pushed points are included as well so that they are always
+  // grid vertices, even for a handle that does not sit on its node's boundary.
   const xs = sortedUnique([
-    ...context.gridXs,
+    ...scope.gridXs,
     request.sourcePoint.x,
     request.targetPoint.x,
     start.x,
     end.x,
   ]);
   const ys = sortedUnique([
-    ...context.gridYs,
+    ...scope.gridYs,
     request.sourcePoint.y,
     request.targetPoint.y,
     start.y,
@@ -399,7 +525,6 @@ const routeOnGrid = (
 
   const width = xs.length;
   const height = ys.length;
-  const { bendPenalty } = context;
   // The route leaves along the source handle's outward normal and arrives along
   // the target handle's inward normal, so turns are counted over the whole
   // returned polyline, stubs included.
@@ -511,7 +636,7 @@ const routeOnGrid = (
       const nextAtStart = nextXi === startXi && nextYi === startYi;
       const nextAtEnd = nextXi === endXi && nextYi === endYi;
       if (
-        context.isBlocked(
+        scope.isBlocked(
           (x + nextX) / 2,
           (y + nextY) / 2,
           labelAtStart || nextAtStart ? request.source : null,
@@ -738,6 +863,9 @@ const selfLoopPoints = (
  * Routes every request against the live node rects. Pure: the same rects and
  * requests always produce byte-identical polylines, and no route depends on the
  * order of either input array (`contracts/edge-routing.md`, "Determinism").
+ * Stronger, and the reason regions exist: a route found on its region depends
+ * only on the rects that region reaches, so moving anything else leaves it
+ * byte-identical (`contracts/edge-routing.md`, "Locality").
  *
  * Keyed by `RouteRequest.id`; a request naming a node absent from `nodes` gets
  * no entry at all (`contracts/edge-routing.md`, "Missing nodes").
@@ -789,9 +917,12 @@ export const routeEdges = (
     maxX: node.x + node.width + nodeMargin,
     maxY: node.y + node.height + nodeMargin,
   }));
-  const context: RouterContext = {
-    nodeMargin,
-    bendPenalty,
+  // The retry rung: every rect, unclipped, which is what the search saw for
+  // every edge before regions existed. Its obstacle index is built once per
+  // pass rather than once per edge — the cost that used to buy a graph-wide
+  // search for everyone now only has to be worth it for the requests that
+  // actually fall through.
+  const globalScope: SearchScope = {
     gridXs: inflated.flatMap((rect) => [rect.minX, rect.maxX]),
     gridYs: inflated.flatMap((rect) => [rect.minY, rect.maxY]),
     isBlocked: buildObstacleIndex(inflated),
@@ -826,7 +957,27 @@ export const routeEdges = (
       request.targetSide,
       nodeMargin,
     );
-    const grid = routeOnGrid(request, start, end, context);
+    // Two rungs, in this order (`contracts/edge-routing.md`, "Per-edge
+    // regions"): this edge's own region, then the whole graph. The second is
+    // what keeps the region from making an edge less routable than it was —
+    // whatever had a path before still has one — so only input with no
+    // orthogonal path at all reaches the fallback below.
+    const region = regionOf([
+      request.sourcePoint,
+      request.targetPoint,
+      start,
+      end,
+    ]);
+    // (Identical to `routeRegionOf(request)` below, which is that rule made
+    // available to callers; both go through `regionOf`.)
+    const grid =
+      routeOnGrid(
+        request,
+        start,
+        end,
+        scopeOfRegion(inflated, region, globalScope.isBlocked),
+        bendPenalty,
+      ) ?? routeOnGrid(request, start, end, globalScope, bendPenalty);
     const points = dropDuplicates(
       grid !== null
         ? [
@@ -849,4 +1000,35 @@ export const routeEdges = (
     );
   }
   return routes;
+};
+
+/**
+ * The region one request is searched in (`contracts/edge-routing.md`, "Per-edge
+ * regions"), on the quantized request — the same box `routeEdges` builds, from
+ * the same `regionOf`.
+ *
+ * Exported so that a caller holding the previous pass's input and output can
+ * work out which routes a change *cannot* have altered, and skip them. That is
+ * a pure optimization and only because of Locality: a route found on its region
+ * is a function of the rects reaching this box, so if none of them moved,
+ * re-routing would return the polyline the caller already has.
+ *
+ * Two conditions the caller owes, both stated in the contract under Locality:
+ * a request whose own record changed is always affected (its region moved with
+ * it), and a **previous route with a point outside this box** must always be
+ * re-routed — leaving the region is exactly the signature of the whole-graph
+ * retry, and Locality is not claimed for those.
+ */
+export const routeRegionOf = (
+  request: RouteRequest,
+  options: EdgeRouterOptions = {},
+): RouteRegion => {
+  const nodeMargin = quantize(options.nodeMargin ?? DEFAULT_NODE_MARGIN);
+  const quantized = quantizeRequest(request);
+  return regionOf([
+    quantized.sourcePoint,
+    quantized.targetPoint,
+    pushOutward(quantized.sourcePoint, quantized.sourceSide, nodeMargin),
+    pushOutward(quantized.targetPoint, quantized.targetSide, nodeMargin),
+  ]);
 };

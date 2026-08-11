@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { routeEdges } from "../edgeRouter";
+import { ROUTE_REGION_MARGIN, routeEdges } from "../edgeRouter";
 import type {
   Point,
   RouteNodeRect,
@@ -2898,6 +2898,172 @@ describe("routeEdges — quantization: determinism on fractional input (contract
     expect(at106[0]).toEqual({ x: 40, y: 11 });
     expect(at104).toEqual(at102);
     expect(at106).not.toEqual(at104);
+  });
+});
+
+describe("routeEdges — locality (contract: 'Locality', 'Per-edge regions')", () => {
+  // The guarantee under test: a route found on its own region is a function of
+  // the rects that region reaches and of its own request — of nothing else in
+  // the input. It is what makes the router *stable* and not merely
+  // deterministic, so these are the tests that would catch a search quietly
+  // going back to a graph-wide grid: determinism alone cannot, since a
+  // graph-wide search is perfectly deterministic while still letting an
+  // unrelated node's one-pixel move flip a route through the tie-break.
+  //
+  // Distances are stated in terms of `ROUTE_REGION_MARGIN` rather than as
+  // literals, so retuning the constant re-aims these fixtures instead of
+  // breaking them.
+
+  /** The region of `simpleTwoNodeCase`'s request, per the contract's definition. */
+  const SIMPLE_REGION = {
+    minX: 40 - ROUTE_REGION_MARGIN,
+    maxX: 200 + ROUTE_REGION_MARGIN,
+    minY: 20 - ROUTE_REGION_MARGIN,
+    maxY: 20 + ROUTE_REGION_MARGIN,
+  };
+
+  /**
+   * A 40×40 rect at `(x, y)`, asserted to be clear of `SIMPLE_REGION` — the
+   * assertion is inside the helper so that a fixture cannot silently stop
+   * testing what it claims to by drifting into the region.
+   */
+  function bystander(id: string, x: number, y: number): RouteNodeRect {
+    const inflatedMinX = x - 12;
+    const inflatedMinY = y - 12;
+    expect(
+      inflatedMinX > SIMPLE_REGION.maxX || inflatedMinY > SIMPLE_REGION.maxY,
+    ).toBe(true);
+    return { id, x, y, width: 40, height: 40 };
+  }
+
+  it("leaves a route byte-identical wherever a rect outside its region sits", () => {
+    const { nodes, request } = simpleTwoNodeCase();
+    const alone = routeEdges(nodes, [request]).get(request.id);
+
+    for (const [x, y] of [
+      [500, 500],
+      [900, 500],
+      [500, 1_200],
+      [2_000, 2_000],
+      [-3_000, 900],
+    ]) {
+      const withBystander = routeEdges(
+        [...nodes, bystander("BY", x, y)],
+        [request],
+      ).get(request.id);
+      expect(withBystander).toEqual(alone);
+    }
+  });
+
+  it("leaves a route byte-identical when a rect outside its region is resized or removed", () => {
+    const { nodes, request } = simpleTwoNodeCase();
+    const far = bystander("BY", 800, 800);
+    const alone = routeEdges(nodes, [request]).get(request.id);
+
+    expect(routeEdges([...nodes, far], [request]).get(request.id)).toEqual(
+      alone,
+    );
+    expect(
+      routeEdges(
+        [...nodes, { ...far, width: 400, height: 400 }],
+        [request],
+      ).get(request.id),
+    ).toEqual(alone);
+  });
+
+  it("still routes around a rect inside the region — the guarantee is not vacuity", () => {
+    // The companion every locality test needs: if the router ignored rects
+    // wholesale, every assertion above would pass. This one fails unless the
+    // rects a region *does* reach are still obstacles.
+    const { nodes, request } = simpleTwoNodeCase();
+    const alone = routeEdges(nodes, [request]).get(request.id)!;
+    const obstacle: RouteNodeRect = {
+      id: "OBS",
+      x: 100,
+      y: 0,
+      width: 40,
+      height: 40,
+    };
+
+    const detoured = routeEdges([...nodes, obstacle], [request]).get(
+      request.id,
+    )!;
+
+    expect(detoured).not.toEqual(alone);
+    expect(anyMiddleSegmentCrossesRectInterior(detoured, obstacle)).toBe(false);
+  });
+
+  it("keeps a first-rung route inside its own region", () => {
+    // Every grid vertex of a region search lies inside the region — the clip
+    // described in "Per-edge regions", which is what makes the rects the region
+    // selected provably the only ones that can block. A route that left the
+    // region could run through a rect that was excluded for not reaching it.
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 0, width: 40, height: 40 },
+      { id: "B", x: 400, y: 0, width: 40, height: 40 },
+      // Straddles the region boundary: its top is far outside, its bottom edge
+      // sits inside, and it stands squarely on the straight line A → B.
+      { id: "TALL", x: 200, y: -3_000, width: 40, height: 3_030 },
+    ];
+    const request: RouteRequest = {
+      id: "e-A-B",
+      source: "A",
+      target: "B",
+      sourcePoint: { x: 40, y: 20 },
+      targetPoint: { x: 400, y: 20 },
+      sourceSide: "right",
+      targetSide: "left",
+    };
+    const region = {
+      minX: 40 - ROUTE_REGION_MARGIN,
+      maxX: 400 + ROUTE_REGION_MARGIN,
+      minY: 20 - ROUTE_REGION_MARGIN,
+      maxY: 20 + ROUTE_REGION_MARGIN,
+    };
+
+    const points = routeEdges(nodes, [request]).get(request.id)!;
+
+    expect(isFallbackShape(points, request)).toBe(false);
+    expect(anyMiddleSegmentCrossesRectInterior(points, nodes[2])).toBe(false);
+    for (const point of points) {
+      expect(point.x).toBeGreaterThanOrEqual(region.minX);
+      expect(point.x).toBeLessThanOrEqual(region.maxX);
+      expect(point.y).toBeGreaterThanOrEqual(region.minY);
+      expect(point.y).toBeLessThanOrEqual(region.maxY);
+    }
+  });
+
+  it("retries on the whole graph when the region offers no path at all", () => {
+    // The second rung. The wall spans the region on both sides, so no path
+    // exists on the region grid; the way around it is a detour thousands of
+    // pixels long, which only the graph-wide grid holds. What the rung buys is
+    // that regions cannot make an edge less routable than it was: this must
+    // come back as a searched route, not as the no-path fallback.
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 0, width: 40, height: 40 },
+      { id: "B", x: 400, y: 0, width: 40, height: 40 },
+      { id: "WALL", x: 200, y: -3_000, width: 40, height: 6_000 },
+    ];
+    const request: RouteRequest = {
+      id: "e-A-B",
+      source: "A",
+      target: "B",
+      sourcePoint: { x: 40, y: 20 },
+      targetPoint: { x: 400, y: 20 },
+      sourceSide: "right",
+      targetSide: "left",
+    };
+
+    const points = routeEdges(nodes, [request]).get(request.id)!;
+
+    expect(isFallbackShape(points, request)).toBe(false);
+    expect(isOrthogonalPolyline(points)).toBe(true);
+    expect(anyMiddleSegmentCrossesRectInterior(points, nodes[2])).toBe(false);
+    // It left the region — which is the point of the rung, and why Locality is
+    // explicitly not claimed for a route that needed it.
+    expect(points.some((point) => point.y > 20 + ROUTE_REGION_MARGIN)).toBe(
+      true,
+    );
   });
 });
 

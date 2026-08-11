@@ -6,6 +6,14 @@ import type {
   LLVMModule,
   LLVMTerminator,
 } from "../ast/llvmAST";
+import {
+  canonicalName,
+  edgeId,
+  functionId,
+  udArgumentId,
+  udExternalId,
+  udLineId,
+} from "./llvmIds";
 
 /**
  * Use-Def view builder (docs/internal/specs/llvm-use-def-view.md): SSA
@@ -21,25 +29,10 @@ import type {
  * — never participate in SSA dataflow and contribute nothing here.
  */
 
-/** Matches llvmGraphBuilder's uniqueId so both views namespace the same way. */
-const uniqueId = (prefix: string, name: string) =>
-  `${prefix}_${name.replace(/[@%"]/g, "")}`;
-
 /** One line already emitted as a node, queued for the edge pass. */
 interface EmittedLine {
   nodeId: string;
   line: LLVMInstruction | LLVMTerminator;
-}
-
-/**
- * The sigil-free, unquoted form of a raw local name as the tokenizer would
- * canonicalize it, so parameter names compare equal to `uses` entries
- * (`%"odd name"` → `odd name`).
- */
-function localName(raw: string): string {
-  const withoutSigil = raw.startsWith("%") ? raw.slice(1) : raw;
-  const quoted = /^"(.*)"$/.exec(withoutSigil);
-  return quoted === null ? withoutSigil : quoted[1];
 }
 
 /**
@@ -86,7 +79,7 @@ function buildFunctionGraph(
   nodes: GraphNode[],
   edges: GraphEdge[],
 ): void {
-  const funcPrefix = uniqueId("func", func.name);
+  const funcPrefix = functionId(func.name);
   /** value name -> id of the node that defines it (argument or instruction) */
   const defSource = new Map<string, string>();
   /** instruction node ids — these expose a "def" source port (spec §3). */
@@ -98,8 +91,10 @@ function buildFunctionGraph(
   // against, so a body reading an implicit `%0` resolves as external.
   func.params.forEach((param) => {
     if (param.name === null) return;
-    const name = localName(param.name);
-    const argId = `${funcPrefix}_udarg_${name}`;
+    // The canonical form is what `uses` entries carry, so a parameter written
+    // `%"odd name"` compares equal to the body's reads of it.
+    const name = canonicalName(param.name);
+    const argId = udArgumentId(funcPrefix, name);
     nodes.push({
       id: argId,
       label: param.type === "" ? `%${name}` : `%${name}: ${param.type}`,
@@ -132,7 +127,7 @@ function buildFunctionGraph(
     let index = 0;
     lines.forEach(({ line, term }) => {
       if (!participates(line)) return;
-      const nodeId = `${funcPrefix}_ud_${block.id}_i${String(index)}`;
+      const nodeId = udLineId(funcPrefix, block.id, index);
       index++;
       const def = line.defs?.[0] ?? null;
       nodes.push({
@@ -165,7 +160,7 @@ function buildFunctionGraph(
     if (known !== undefined) return known;
     let externalId = externals.get(name);
     if (externalId === undefined) {
-      externalId = `${funcPrefix}_udext_${name}`;
+      externalId = udExternalId(funcPrefix, name);
       externals.set(name, externalId);
       nodes.push({
         id: externalId,
@@ -190,7 +185,7 @@ function buildFunctionGraph(
       // label rather than producing several colliding edges.
       const fromBlocks = incoming?.get(name);
       const edge: GraphEdge = {
-        id: `e-${sourceId}-${nodeId}-${name}`,
+        id: edgeId(sourceId, nodeId, name),
         source: sourceId,
         target: nodeId,
         type: "arrow",

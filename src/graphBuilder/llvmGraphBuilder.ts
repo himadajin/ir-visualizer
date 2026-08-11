@@ -1,5 +1,16 @@
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
 import type { LLVMModule, LLVMBasicBlock } from "../ast/llvmAST";
+import {
+  attributeGroupId,
+  basicBlockId,
+  declarationId,
+  edgeId,
+  functionExitId,
+  functionHeaderId,
+  functionId,
+  globalVariableId,
+  metadataId,
+} from "./llvmIds";
 
 /**
  * Build the label text from a BasicBlock's instructions and terminator.
@@ -18,15 +29,11 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
-  // Helper to generate unique IDs if necessary
-  const uniqueId = (prefix: string, name: string) =>
-    `${prefix}_${name.replace(/[@%"]/g, "")}`;
-
   // 1. Process Global Variables
   if (module.globalVariables) {
     module.globalVariables.forEach((gVar) => {
       nodes.push({
-        id: uniqueId("global", gVar.name),
+        id: globalVariableId(gVar.name),
         label: gVar.originalText,
         type: "square",
         language: "llvm",
@@ -40,7 +47,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
   if (module.attributes) {
     module.attributes.forEach((attr) => {
       nodes.push({
-        id: uniqueId("attr", attr.id),
+        id: attributeGroupId(attr.id),
         label: attr.originalText,
         type: "square",
         language: "llvm",
@@ -54,7 +61,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
   if (module.metadata) {
     module.metadata.forEach((meta) => {
       nodes.push({
-        id: uniqueId("meta", meta.id),
+        id: metadataId(meta.id),
         label: meta.originalText,
         type: "square",
         language: "llvm",
@@ -66,9 +73,9 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
 
   // 4. Process Declarations
   if (module.declarations) {
-    module.declarations.forEach((decl) => {
+    module.declarations.forEach((decl, index) => {
       nodes.push({
-        id: uniqueId("decl", decl.name),
+        id: declarationId(index),
         label: decl.definition,
         type: "square",
         language: "llvm",
@@ -80,11 +87,10 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
 
   // 5. Process Functions
   module.functions.forEach((func) => {
-    // Namespace function blocks to avoid collisions if multiple functions use same labels (e.g. "entry")
-    // Although LLVM IR usually has implicit or explicit numbering that prevents simple clashes,
-    // separate functions definitely have separate scopes.
-    const funcPrefix = uniqueId("func", func.name);
-    const headerId = `${funcPrefix}_header`;
+    // Every id below hangs off the function's own namespace (§4.1), so blocks
+    // and values may reuse labels such as `entry` across functions.
+    const funcPrefix = functionId(func.name);
+    const headerId = functionHeaderId(funcPrefix);
 
     // Entry Node
     nodes.push({
@@ -102,12 +108,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
     const blocks = func.blocks;
 
     blocks.forEach((block) => {
-      // Block IDs need to be scoped to function because 'entry' or numbered blocks '%1' repeat across functions.
-      // Using a composite ID: funcName_blockName
-      const rawBlockId = block.id;
-      // block.id comes from Label rule (ident) or 'entry'.
-      // If it's a numeric label from source (like "4:"), ohm might capture "4".
-      const blockId = `${funcPrefix}_block_${rawBlockId}`;
+      const blockId = basicBlockId(funcPrefix, block.id);
 
       nodes.push({
         id: blockId,
@@ -129,18 +130,21 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
         // opcode-based switch would read fields such a node does not have.
         if ("condition" in terminator && terminator.condition !== undefined) {
           // Conditional branch: true / false labeled edges.
-          const trueId = `${funcPrefix}_block_${terminator.trueTarget ?? ""}`;
-          const falseId = `${funcPrefix}_block_${terminator.falseTarget ?? ""}`;
+          const trueId = basicBlockId(funcPrefix, terminator.trueTarget ?? "");
+          const falseId = basicBlockId(
+            funcPrefix,
+            terminator.falseTarget ?? "",
+          );
 
           edges.push({
-            id: `e-${blockId}-${trueId}-true`,
+            id: edgeId(blockId, trueId, "true"),
             source: blockId,
             target: trueId,
             label: "true",
             type: "arrow",
           });
           edges.push({
-            id: `e-${blockId}-${falseId}-false`,
+            id: edgeId(blockId, falseId, "false"),
             source: blockId,
             target: falseId,
             label: "false",
@@ -151,9 +155,9 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
           terminator.destination !== undefined
         ) {
           // Unconditional branch: one unlabeled edge.
-          const targetId = `${funcPrefix}_block_${terminator.destination}`;
+          const targetId = basicBlockId(funcPrefix, terminator.destination);
           edges.push({
-            id: `e-${blockId}-${targetId}`,
+            id: edgeId(blockId, targetId),
             source: blockId,
             target: targetId,
             type: "arrow",
@@ -162,7 +166,7 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
           // ret has no positive shape marker; the parser never produces an
           // opaque node with opcode "ret", so the opcode check is exact.
           // One shared exit node per function, created on first ret.
-          const exitId = `${funcPrefix}_exit`;
+          const exitId = functionExitId(funcPrefix);
 
           if (!nodes.find((n) => n.id === exitId)) {
             nodes.push({
@@ -176,16 +180,16 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
           }
 
           edges.push({
-            id: `e-${blockId}-${exitId}`,
+            id: edgeId(blockId, exitId),
             source: blockId,
             target: exitId,
             type: "arrow",
           });
         } else if ("defaultTarget" in terminator) {
           // Structured switch: default edge + one labeled edge per case.
-          const defaultId = `${funcPrefix}_block_${terminator.defaultTarget}`;
+          const defaultId = basicBlockId(funcPrefix, terminator.defaultTarget);
           edges.push({
-            id: `e-${blockId}-${defaultId}-default`,
+            id: edgeId(blockId, defaultId, "default"),
             source: blockId,
             target: defaultId,
             label: "default",
@@ -193,9 +197,9 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
           });
 
           terminator.cases.forEach((c) => {
-            const targetId = `${funcPrefix}_block_${c.target}`;
+            const targetId = basicBlockId(funcPrefix, c.target);
             edges.push({
-              id: `e-${blockId}-${targetId}-case-${c.value}`,
+              id: edgeId(blockId, targetId, "case", c.value),
               source: blockId,
               target: targetId,
               label: c.value,
@@ -204,17 +208,17 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
           });
         } else if ("normalTarget" in terminator) {
           // Structured invoke: `to`- and `unwind`-labeled edges.
-          const toId = `${funcPrefix}_block_${terminator.normalTarget}`;
-          const unwindId = `${funcPrefix}_block_${terminator.unwindTarget}`;
+          const toId = basicBlockId(funcPrefix, terminator.normalTarget);
+          const unwindId = basicBlockId(funcPrefix, terminator.unwindTarget);
           edges.push({
-            id: `e-${blockId}-${toId}-to`,
+            id: edgeId(blockId, toId, "to"),
             source: blockId,
             target: toId,
             label: "to",
             type: "arrow",
           });
           edges.push({
-            id: `e-${blockId}-${unwindId}-unwind`,
+            id: edgeId(blockId, unwindId, "unwind"),
             source: blockId,
             target: unwindId,
             label: "unwind",
@@ -226,9 +230,9 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
           // degraded br/switch/invoke). unreachable / resume / unwind
           // arrive with successors: [] and correctly gain no edge.
           terminator.successors.forEach((successor, index) => {
-            const targetId = `${funcPrefix}_block_${successor}`;
+            const targetId = basicBlockId(funcPrefix, successor);
             edges.push({
-              id: `e-${blockId}-${targetId}-s${String(index)}`,
+              id: edgeId(blockId, targetId, "succ", String(index)),
               source: blockId,
               target: targetId,
               type: "arrow",
@@ -239,9 +243,9 @@ export function convertASTToGraph(module: LLVMModule): GraphData {
     });
 
     if (func.entry) {
-      const entryBlockId = `${funcPrefix}_block_${func.entry.id}`;
+      const entryBlockId = basicBlockId(funcPrefix, func.entry.id);
       edges.push({
-        id: `e-${headerId}-${entryBlockId}`,
+        id: edgeId(headerId, entryBlockId),
         source: headerId,
         target: entryBlockId,
         type: "arrow",

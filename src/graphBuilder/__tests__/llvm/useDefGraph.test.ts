@@ -198,7 +198,7 @@ describe("llvm useDef graphBuilder", () => {
       expect(instructionData(nodes[0]).text).toBe("%a = add i32 1, 2");
       // The skipped `fence` line consumes no index: emitted lines are what
       // `i<n>` counts (spec §2.1).
-      expect(nodes[0].id).toBe("func_foo_ud_entry_i0");
+      expect(nodes[0].id).toBe("func:foo:ud:entry:0");
     });
 
     it("terminators that read or define values get nodes", () => {
@@ -265,7 +265,7 @@ describe("llvm useDef graphBuilder", () => {
       );
 
       const ids = instructionNodes(graph.nodes).map((node) => node.id);
-      expect(ids).toEqual(["func_foo_ud_entry_i0", "func_bar_ud_entry_i0"]);
+      expect(ids).toEqual(["func:foo:ud:entry:0", "func:bar:ud:entry:0"]);
       expectUniqueIds(graph.nodes);
     });
 
@@ -361,8 +361,8 @@ describe("llvm useDef graphBuilder", () => {
       const args = valueNodes(graph.nodes);
       expect(args).toHaveLength(2);
       expect(args.map((node) => node.id)).toEqual([
-        "func_foo_udarg_x",
-        "func_foo_udarg_y",
+        "func:foo:udarg:x",
+        "func:foo:udarg:y",
       ]);
       expect(args[0].astData).toEqual({
         name: "x",
@@ -402,7 +402,7 @@ describe("llvm useDef graphBuilder", () => {
         ),
       ).toHaveLength(0);
       // The implicit `%0` parameter name resolves as external instead.
-      expect(graph.nodes.map((node) => node.id)).toContain("func_foo_udext_0");
+      expect(graph.nodes.map((node) => node.id)).toContain("func:foo:udext:0");
     });
 
     it("external value node for names with no known def", () => {
@@ -427,7 +427,7 @@ describe("llvm useDef graphBuilder", () => {
 
       const externals = valueNodes(graph.nodes);
       expect(externals).toHaveLength(1);
-      expect(externals[0].id).toBe("func_foo_udext_undef");
+      expect(externals[0].id).toBe("func:foo:udext:undef");
       expect(externals[0].astData).toEqual({ name: "undef", kind: "external" });
       // Created once and reused by every unresolved reader.
       expect(
@@ -498,7 +498,7 @@ describe("llvm useDef graphBuilder", () => {
       );
 
       expect(graph.edges[0].id).toBe(
-        "e-func_foo_ud_entry_i0-func_foo_ud_entry_i1-a",
+        "edge:func:foo:ud:entry:0:func:foo:ud:entry:1:a",
       );
     });
 
@@ -534,8 +534,8 @@ describe("llvm useDef graphBuilder", () => {
       );
 
       expect(graph.edges).toHaveLength(1);
-      expect(graph.edges[0].source).toBe("func_foo_udarg_x");
-      expect(graph.edges[0].target).toBe("func_foo_ud_entry_i0");
+      expect(graph.edges[0].source).toBe("func:foo:udarg:x");
+      expect(graph.edges[0].target).toBe("func:foo:ud:entry:0");
       expect(graph.edges[0].label).toBeUndefined();
     });
 
@@ -592,7 +592,7 @@ describe("llvm useDef graphBuilder", () => {
       expect(graph.edges[0].label).toBe("%a (%bb1, %bb2)");
       expect(graph.edges[0].dashed).toBe(true);
       expect(graph.edges[0].id).toBe(
-        "e-func_foo_ud_bb1_i0-func_foo_ud_join_i0-a",
+        "edge:func:foo:ud:bb1:0:func:foo:ud:join:0:a",
       );
     });
 
@@ -676,7 +676,7 @@ describe("llvm useDef graphBuilder", () => {
       // Two functions that are identical in every way the ids are built
       // from — same block label ("entry"), same instruction defs/uses
       // ("a", "b", "c"), same named parameter ("x"), same unresolved name
-      // ("undef") — so only the func_<name> prefix (spec §2) can keep
+      // ("undef") — so only the func:<name> prefix (spec §2) can keep
       // instruction, argument, external, and edge ids from colliding.
       const makeFunction = (name: string): LLVMFunction =>
         func(
@@ -718,21 +718,77 @@ describe("llvm useDef graphBuilder", () => {
       expect(graph.edges).toHaveLength(8);
       expectUniqueIds(graph.edges);
 
-      // Explicit edge-id uniqueness check: the "-a" suffix (edge id embeds
+      // Explicit edge-id uniqueness check: the ":a" suffix (edge id embeds
       // the value name, spec §3) is identical for both functions, so this
-      // is exactly the case that would collide without the func_<name>
+      // is exactly the case that would collide without the func:<name>
       // prefix on the edge's source/target ids.
       const edgeIdsEndingInA = graph.edges
         .map((edge) => edge.id)
-        .filter((id) => id.endsWith("-a"));
+        .filter((id) => id.endsWith(":a"));
       expect(edgeIdsEndingInA).toHaveLength(2);
       expect(new Set(edgeIdsEndingInA).size).toBe(2);
       expect(edgeIdsEndingInA).toEqual(
         expect.arrayContaining([
-          "e-func_foo_ud_entry_i0-func_foo_ud_entry_i1-a",
-          "e-func_bar_ud_entry_i0-func_bar_ud_entry_i1-a",
+          "edge:func:foo:ud:entry:0:func:foo:ud:entry:1:a",
+          "edge:func:bar:ud:entry:0:func:bar:ud:entry:1:a",
         ]),
       );
+    });
+
+    it("a quoted function name containing a sigil does not collide with the stripped name", () => {
+      // Regression, the Use-Def half of the same defect: ids used to be
+      // built by deleting every `@`, `%`, and `"` anywhere in the name, so
+      // `@"a@b"` and `@ab` shared the `func_ab` prefix and every node and
+      // edge of the second function was dropped by React Flow.
+      const makeFunction = (name: string): LLVMFunction =>
+        func(
+          name,
+          [
+            block(
+              "entry",
+              "entry",
+              [
+                line({ text: "%a = add i32 1, 2", defs: ["a"] }),
+                line({ text: "%b = mul i32 %a, %x", defs: ["b"], uses: ["a"] }),
+              ],
+              terminator({ text: "ret i32 %b", opcode: "ret", uses: ["b"] }),
+            ),
+          ],
+          [{ type: "i32", name: "%x" }],
+        );
+
+      const graph = convertASTToUseDefGraph(
+        moduleOf(makeFunction('@"a@b"'), makeFunction("@ab")),
+      );
+
+      expect(instructionNodes(graph.nodes)).toHaveLength(6);
+      expectUniqueIds(graph.nodes);
+      expectUniqueIds(graph.edges);
+    });
+
+    it("a value name containing the separator is escaped, not merged into the id", () => {
+      // Quoted local names can contain `:`; escaping is what keeps the name
+      // from impersonating a fragment boundary (specs/llvm-ir.md §4.1).
+      const graph = convertASTToUseDefGraph(
+        moduleOf(
+          func(
+            "@f",
+            [
+              block(
+                "entry",
+                "entry",
+                [line({ text: '%a = add i32 %"x:y", 1', defs: ["a"] })],
+                terminator({ text: "ret i32 %a", opcode: "ret", uses: ["a"] }),
+              ),
+            ],
+            [{ type: "i32", name: '%"x:y"' }],
+          ),
+        ),
+      );
+
+      expect(valueNodes(graph.nodes).map((node) => node.id)).toEqual([
+        "func:f:udarg:x%3Ay",
+      ]);
     });
   });
 });

@@ -280,10 +280,6 @@ uniform-successor rule instead of crashing.
 
 `parseLLVM(input)` is exactly `convertASTToGraph(parseLLVMToAST(input))`.
 
-ID namespacing: node ids embed the function name (`func_<name>_block_<label>` etc.) so
-multiple functions can reuse block labels (`entry`, numeric labels) without collision; ids
-are unique across the whole graph.
-
 The produced graph always has `direction: "TD"`.
 
 > Pinned by: `src/graphBuilder/__tests__/llvm/edges.test.ts`,
@@ -292,11 +288,72 @@ The produced graph always has `direction: "TD"`.
 > `src/parser/__tests__/llvm/graphData.test.ts`,
 > `src/parser/__tests__/llvm/errors.test.ts`
 
+### 4.1 Node and edge ids
+
+Both LLVM views build ids the same way, from `src/graphBuilder/llvmIds.ts`. An id is a
+`:`-joined list of fragments, where `:` separates and `%` escapes. A fragment carrying free
+text — a name, a block id, a case value — is escaped so it can contain neither character:
+`%` becomes `%25`, `:` becomes `%3A`, and nothing else is rewritten. Fixed tags (`func`,
+`block`, `edge`, …) come from a closed vocabulary and never need escaping. Ids are therefore
+**injective** — two different sources never produce the same id — and decodable back to their
+fragments.
+
+A name is reduced to its **canonical** form before it is escaped: sigil removed, surrounding
+quotes removed, escape sequences kept verbatim. This is the reduction the tokenizer already
+performs for `Token.value` (§1), so block ids and terminator targets arrive canonical and
+only the AST's raw-text names (function, global, metadata, attribute group) are reduced here.
+`@"main"` and `@main` are the same LLVM name and share an id by construction; `@"a@b"` keeps
+its inner `@` and stays distinct from `@ab`. The AST deliberately keeps the raw spelling for
+display, which is why the reduction is restated in the id layer instead of imported from
+`src/parser` (`architecture.md`).
+
+| `nodeType`            | Id                                                |
+| --------------------- | ------------------------------------------------- |
+| `llvm-functionHeader` | `func:<name>:header`                              |
+| `llvm-basicBlock`     | `func:<name>:block:<blockId>`                     |
+| `llvm-exit`           | `func:<name>:exit`                                |
+| `llvm-globalVariable` | `global:<name>`                                   |
+| `llvm-attributeGroup` | `attr:<id>`                                       |
+| `llvm-metadata`       | `meta:<id>`                                       |
+| `llvm-declaration`    | `decl:<index>` — 0-based position in module order |
+
+Declarations are keyed by position because their names are not extracted (§5); every other
+kind is keyed by its canonical name, so the id is stable under edits elsewhere in the module.
+Use-Def node ids follow the same grammar under the same `func:<name>` prefix
+(`specs/llvm-use-def-view.md` §2).
+
+An edge id is the tag `edge`, then its source id, its target id, then the variant fragments
+that distinguish parallel edges between the same pair:
+
+| Edge (§4 rule)         | Variant                   |
+| ---------------------- | ------------------------- |
+| header → entry (1)     | _none_                    |
+| conditional `br` (2)   | `true` / `false`          |
+| unconditional `br` (3) | _none_                    |
+| `ret` → exit (4)       | _none_                    |
+| `switch` (5)           | `default`, `case:<value>` |
+| `invoke` (6)           | `to` / `unwind`           |
+| uniform successors (7) | `succ:<index>`            |
+
+The successor index (rule 7) and the case value (rule 5) are what keep two edges to the same
+target apart; a `switch` whose case value is literally `default` stays distinct from the
+default edge because the tag is separate from the value.
+
+Splicing whole ids into an edge id needs no second escaping level: every id kind is a fixed
+number of fragments once its tags are read (after `func` comes one name fragment, then a tag
+that fixes the rest), so a concatenation of ids reads back unambiguously.
+
+> Pinned by: `src/graphBuilder/__tests__/llvm/invariants.test.ts`,
+> `src/graphBuilder/__tests__/llvm/useDefGraph.test.ts`
+
 ## 5. Known limitations
 
 - **Duplicate explicit labels are not diagnosed.** Two `a:` labels in one function produce
   two blocks with the same id — and thus colliding graph node ids (_observed, untested_).
-  The implicit-numbering collision fallback (§3.3) covers implicit ids only.
+  The implicit-numbering collision fallback (§3.3) covers implicit ids only. This is the one
+  remaining way to get two identical ids: §4.1's serialization is injective, so identical ids
+  can only come from two AST blocks that genuinely share a key
+  ([Issue #111](https://github.com/himadajin/ir-visualizer/issues/111)).
 - `catchswitch`, `catchret`, `cleanupret`, `callbr`, and `indirectbr` are understood only
   through the uniform successor rule: their edges are unlabeled and carry no per-opcode
   semantics (e.g. a `callbr` fallthrough edge is not distinguished from its indirect
@@ -317,4 +374,5 @@ The produced graph always has `direction: "TD"`.
 - `LLVMModule.diagnostics` is recorded but not surfaced in the UI
   ([Issue #64](https://github.com/himadajin/ir-visualizer/issues/64)).
 - Extracting declaration names is still not done (`LLVMDeclaration.name` is always the
-  literal `"declaration"`).
+  literal `"declaration"`), which is why declaration node ids are keyed by position (§4.1)
+  rather than by name.

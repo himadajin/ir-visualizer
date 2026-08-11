@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useGraphData } from "./useGraphData";
 import { IR_MODES, DEFAULT_IR_MODE_KEY, type IRModeKey } from "../irModes";
-import type { IRModeDefinition } from "../irModes/types";
+import type { IRModeDefinition, IRParseDiagnostic } from "../irModes/types";
+
+/** Shared empty list, so a clean parse does not re-render on identity alone. */
+const NO_DIAGNOSTICS: IRParseDiagnostic[] = [];
 
 const PARSE_DEBOUNCE_MS = 750;
 
@@ -9,8 +12,9 @@ const PARSE_DEBOUNCE_MS = 750;
  * Owns the IR-mode/code/parse/error side of the app: which mode is active,
  * which of the mode's views is active (contracts/ir-mode-registry.md
  * "Views"), the editor's current text, the debounced parse-on-change
- * effect, and the resulting graph (via useGraphData). Mode switching and
- * parsing are driven entirely by the IR mode registry (src/irModes).
+ * effect, the resulting graph (via useGraphData), and the parse's recoverable
+ * diagnostics. Mode switching and parsing are driven entirely by the IR mode
+ * registry (src/irModes).
  */
 export function useIRWorkspace() {
   const [modeKey, setModeKey] = useState<IRModeKey>(DEFAULT_IR_MODE_KEY);
@@ -23,6 +27,8 @@ export function useIRWorkspace() {
     mode.views?.find((view) => view.key === viewKey) ?? mode.views?.[0];
   const [code, setCode] = useState(mode.defaultCode);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] =
+    useState<IRParseDiagnostic[]>(NO_DIAGNOSTICS);
 
   const {
     nodes,
@@ -45,16 +51,22 @@ export function useIRWorkspace() {
       void (async () => {
         try {
           const parse = activeView?.parse ?? mode.parse;
-          const graph = await parse(code);
+          const result = await parse(code);
           if (cancelled) return;
-          updateGraph(graph, {
+          updateGraph(result.graph, {
             edgeBuilder: activeView?.edgeBuilder ?? mode.edgeBuilder,
             layoutOptions: activeView?.layoutOptions ?? mode.layoutOptions,
           });
           setError(null);
+          setDiagnostics(result.diagnostics ?? NO_DIAGNOSTICS);
         } catch (err) {
           if (cancelled) return;
           setError(err instanceof Error ? err.message : "Unknown error");
+          // The diagnostics described the text of the last parse that produced
+          // a graph; the editor now holds text that failed, so their line
+          // numbers no longer point at what they describe (specs/graph-view.md
+          // §1).
+          setDiagnostics(NO_DIAGNOSTICS);
         }
       })();
     }, PARSE_DEBOUNCE_MS);
@@ -86,6 +98,7 @@ export function useIRWorkspace() {
     code,
     setCode,
     error,
+    diagnostics,
     nodes,
     edges,
     onNodesChange,

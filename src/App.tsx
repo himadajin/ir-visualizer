@@ -51,6 +51,7 @@ function App() {
     code,
     setCode,
     error,
+    diagnostics,
     nodes,
     edges,
     onNodesChange,
@@ -153,6 +154,7 @@ function App() {
         onCodeChange={handleEditorChange}
         onClear={clearCode}
         error={error}
+        diagnostics={diagnostics}
         nodeCount={nodes.length}
         edgeCount={edges.length}
       />

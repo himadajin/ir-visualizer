@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLLVM, parseLLVMToAST } from "../../llvm";
+import { parseLLVM, parseLLVMToAST, parseLLVMUseDef } from "../../llvm";
 
 describe("llvm parser", () => {
   describe("errors", () => {
@@ -23,7 +23,7 @@ define void @f() {
         "unreachable",
       );
 
-      const graph = parseLLVM(input);
+      const { graph } = parseLLVM(input);
       expect(
         graph.nodes.find((node) => node.nodeType === "llvm-exit"),
       ).toBeUndefined();
@@ -60,7 +60,7 @@ define void @f(i32 %v) {
 d:
   ret void
 }`;
-      const graph = parseLLVM(input);
+      const { graph } = parseLLVM(input);
       const edge = graph.edges.find(
         (e) =>
           e.source.includes("_block_entry") && e.target.includes("_block_d"),
@@ -77,6 +77,33 @@ define void @f() {
       expect(() => parseLLVMToAST(input)).toThrow(
         /Line 4: block 'entry' of function '@f' has no terminator/,
       );
+    });
+
+    it("when a recovery happened, should return the diagnostics beside the graph", () => {
+      // The graph-producing entry point carries §3.4's recoverable diagnostics
+      // through to its caller (contracts/ir-mode-registry.md, "Recoverable
+      // diagnostics"); the mode passes the result to the status footer as-is.
+      const input = `
+define void @f() {
+  br label %missing
+}`;
+      const { graph, diagnostics } = parseLLVM(input);
+
+      expect(graph.nodes.length).toBeGreaterThan(0);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics?.[0].line).toBe(3);
+      expect(diagnostics?.[0].message).toMatch(
+        /terminator targets label '%missing'/,
+      );
+    });
+
+    it("when the parse is clean, should return no diagnostics", () => {
+      const input = `
+define void @f() {
+  ret void
+}`;
+      expect(parseLLVM(input).diagnostics).toBeUndefined();
+      expect(parseLLVMUseDef(input).diagnostics).toBeUndefined();
     });
 
     it("when input contains semicolon comments, should parse them as whitespace", () => {

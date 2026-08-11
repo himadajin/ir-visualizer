@@ -202,9 +202,11 @@ previous block is closed with a synthetic empty terminator (`opcode: ""`, no suc
 so it contributes no CFG edge), a diagnostic is recorded, and the label starts its block
 normally.
 
-`LLVMModule.diagnostics` entries carry a 1-based `line` and a `message`. The editor does not
-surface them yet; that work is tracked by
-[Issue #64](https://github.com/himadajin/ir-visualizer/issues/64).
+`LLVMModule.diagnostics` entries carry a 1-based `line` and a `message`. A message is one
+self-contained sentence with no severity word in it: the mode passes the list straight through
+as `IRParseResult.diagnostics` (`contracts/ir-mode-registry.md`), and the status footer owns
+the `warning:` prefix (`specs/graph-view.md` §6.3). Both views of the mode report the same
+list — they share this front-end and differ only in the graphBuilder.
 
 > Pinned by: `src/parser/__tests__/llvm/errors.test.ts`,
 > `src/parser/llvm/__tests__/module.test.ts`
@@ -278,7 +280,9 @@ The dispatch narrows on the **shape** of the terminator (presence of `condition`
 `switch` still has opcode `"switch"` but no `cases` field and must fall through to the
 uniform-successor rule instead of crashing.
 
-`parseLLVM(input)` is exactly `convertASTToGraph(parseLLVMToAST(input))`.
+`parseLLVM(input).graph` is exactly `convertASTToGraph(parseLLVMToAST(input))`; the entry point
+returns the module's `diagnostics` (§3.4) alongside it, because a caller that wants the graph
+wants to know what the parser recovered from on the way to it.
 
 ID namespacing: node ids embed the function name (`func_<name>_block_<label>` etc.) so
 multiple functions can reuse block labels (`entry`, numeric labels) without collision; ids
@@ -314,7 +318,5 @@ The produced graph always has `direction: "TD"`.
   name with a declared type alias would be excluded too (_observed, untested_ — printer
   output does not produce such collisions).
 - Comments (`;`) are stripped and not preserved anywhere (label hints excepted, §1).
-- `LLVMModule.diagnostics` is recorded but not surfaced in the UI
-  ([Issue #64](https://github.com/himadajin/ir-visualizer/issues/64)).
 - Extracting declaration names is still not done (`LLVMDeclaration.name` is always the
   literal `"declaration"`).

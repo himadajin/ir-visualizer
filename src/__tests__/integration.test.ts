@@ -55,7 +55,7 @@ entry:
   ret i32 %x
 }`;
 
-    const graph = parseLLVM(input);
+    const { graph } = parseLLVM(input);
 
     // Should have header + basic block + exit
     expect(graph.nodes.length).toBeGreaterThanOrEqual(3);
@@ -87,7 +87,7 @@ else:
   ret void
 }`;
 
-    const graph = parseLLVM(input);
+    const { graph } = parseLLVM(input);
 
     // Should have: header, entry block, then block, else block, exit node
     const basicBlocks = graph.nodes.filter(
@@ -112,7 +112,7 @@ define void @foo() {
   ret void
 }`;
 
-    const graph = parseLLVM(input);
+    const { graph } = parseLLVM(input);
 
     const globalNode = graph.nodes.find(
       (n) => n.nodeType === "llvm-globalVariable",
@@ -126,7 +126,7 @@ define void @foo() {
 
 describe("Integration: parseLLVMUseDef (parser + use-def graph builder)", () => {
   it("should produce a flat dataflow graph from the default LLVM example", () => {
-    const graph = parseLLVMUseDef(llvmMode.defaultCode);
+    const { graph } = parseLLVMUseDef(llvmMode.defaultCode);
 
     expect(graph.nodes.length).toBeGreaterThan(0);
     expect(graph.edges.length).toBeGreaterThan(0);
@@ -165,7 +165,7 @@ entry:
   ret i32 %x
 }`;
 
-    const graph = parseLLVMUseDef(input);
+    const { graph } = parseLLVMUseDef(input);
 
     const instructionNodes = graph.nodes.filter(
       (n) => n.nodeType === "llvm-useDefInstruction",

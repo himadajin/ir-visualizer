@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import { CodeEditor } from "../Editor/CodeEditor";
 import { IR_MODE_LIST, type IRModeKey } from "../../irModes";
-import type { IRViewDefinition } from "../../irModes/types";
+import type { IRParseDiagnostic, IRViewDefinition } from "../../irModes/types";
 import { NODE_FONT_FAMILY } from "../Graph/common/nodeTextStyle";
 import {
   PANEL_MARGIN,
@@ -29,6 +29,17 @@ import {
 /** The status footer never grows past roughly eight lines of diagnostics. */
 const FOOTER_LINE_HEIGHT = 18;
 const FOOTER_MAX_LINES = 8;
+
+/**
+ * The footer's left rule carries the worst thing the last parse produced
+ * (`specs/graph-view.md` §6.3): an error outranks warnings, and a clean parse
+ * gets no rule at all.
+ */
+const statusRule = (error: string | null, diagnostics: IRParseDiagnostic[]) => {
+  if (error) return `2px solid ${SHELL_COLORS.error}`;
+  if (diagnostics.length > 0) return `2px solid ${SHELL_COLORS.warn}`;
+  return undefined;
+};
 
 /**
  * The one orchestrated motion of the shell: the panel ⇄ pill morph. Declared
@@ -157,6 +168,8 @@ interface EditorPanelProps {
   onClear: () => void;
   /** Latest parse error, or null after a successful parse. */
   error: string | null;
+  /** Recoverable diagnostics of the latest successful parse; empty otherwise. */
+  diagnostics: IRParseDiagnostic[];
   nodeCount: number;
   edgeCount: number;
 }
@@ -189,6 +202,7 @@ export function EditorPanel({
   onCodeChange,
   onClear,
   error,
+  diagnostics,
   nodeCount,
   edgeCount,
 }: EditorPanelProps) {
@@ -382,7 +396,9 @@ export function EditorPanel({
         aria-live="polite"
         sx={{
           borderTop: `1px solid ${SHELL_HAIRLINE}`,
-          borderLeft: error ? `2px solid ${SHELL_COLORS.error}` : undefined,
+          // Severity precedence, not a blend: a failed parse never carries
+          // diagnostics (spec §1), so the two conditions are exclusive anyway.
+          borderLeft: statusRule(error, diagnostics),
           px: 1,
           py: 0.75,
           fontFamily: NODE_FONT_FAMILY,
@@ -408,6 +424,16 @@ export function EditorPanel({
               ✓
             </Box>{" "}
             {`parsed · ${nodeCount} nodes · ${edgeCount} edges`}
+            {/* One line per diagnostic, in the order the parse returned them;
+                none is dropped — a long list scrolls (spec §6.3). */}
+            {diagnostics.map((diagnostic, index) => (
+              <Box key={index} component="div">
+                <Box component="span" sx={{ color: SHELL_COLORS.warn }}>
+                  warning:
+                </Box>{" "}
+                {`line ${String(diagnostic.line)}: ${diagnostic.message}`}
+              </Box>
+            ))}
           </>
         )}
       </Box>

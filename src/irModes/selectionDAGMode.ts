@@ -24,7 +24,12 @@ SelectionDAG has 22 nodes:
 
 // parseSelectionDAGToGraphData is synchronous; the registry contract is async.
 // See llvmMode.ts for why the adapter lives here and not in the parser layer.
-const parse = async (code: string) => parseSelectionDAGToGraphData(code);
+// The parser's per-line tolerance (registry contract, "Known behavior
+// difference") is exactly what diagnostics are for, but it does not track which
+// lines it skipped, so this result carries none yet.
+const parse = async (code: string) => ({
+  graph: parseSelectionDAGToGraphData(code),
+});
 
 export const selectionDAGMode = {
   key: "selectionDAG" as const,

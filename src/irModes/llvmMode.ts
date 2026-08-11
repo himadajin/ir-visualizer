@@ -46,6 +46,8 @@ define i32 @func(i32 %0, i32 %1, i1  %2) {
 // The LLVM parsers are synchronous; the registry contract is async. Adapt them
 // here rather than making the parser layer lie about being async. Each adapter
 // is a single const because views[0] must share the top-level parse's identity.
+// `LLVMParseResult` already IS an `IRParseResult`, so the module's recoverable
+// diagnostics (specs/llvm-ir.md §3.4) reach the status footer with no mapping.
 const parseCfg = async (code: string) => parseLLVM(code);
 const parseUseDef = async (code: string) => parseLLVMUseDef(code);
 

@@ -20,7 +20,7 @@ function assertMatchesProjection(entry: CorpusEntry): void {
   const input = readFileSync(join(corpusDir, entry.file), "utf8");
 
   const ast = parseLLVMToAST(input);
-  const graph = parseLLVM(input);
+  const { graph } = parseLLVM(input);
 
   const functions = ast.functions.map((func) => ({
     name: func.name,

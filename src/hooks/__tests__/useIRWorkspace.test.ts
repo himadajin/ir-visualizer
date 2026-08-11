@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import type { GraphData } from "../../types/graph";
+import type { IRParseDiagnostic, IRParseResult } from "../../irModes/types";
 
 // The registry contract makes `parse` async and leaves discarding stale results
 // to the caller (contracts/ir-mode-registry.md, "Parsing is asynchronous").
@@ -75,6 +76,11 @@ function graph(id: string): GraphData {
   return { direction: "TD", nodes: [{ id, label: id }], edges: [] };
 }
 
+/** What a mode's `parse` resolves to (contracts/ir-mode-registry.md). */
+function parsed(id: string, diagnostics?: IRParseDiagnostic[]): IRParseResult {
+  return { graph: graph(id), diagnostics };
+}
+
 /** Run the debounce timer out, so the pending parse for the current code starts. */
 async function runDebounce() {
   await act(async () => {
@@ -108,7 +114,7 @@ describe("useIRWorkspace parse effect", () => {
     await runDebounce();
 
     expect(modeA.parse).toHaveBeenCalledWith("code-a");
-    await settle(() => modeA.pending[0].resolve(graph("n1")));
+    await settle(() => modeA.pending[0].resolve(parsed("n1")));
 
     expect(updateGraph).toHaveBeenCalledTimes(1);
     expect(updateGraph.mock.calls[0][0]).toEqual(graph("n1"));
@@ -135,8 +141,8 @@ describe("useIRWorkspace parse effect", () => {
     expect(modeA.pending).toHaveLength(2);
     // The newer parse lands first, then the stale one — the order a slow
     // parser produces and the reason a plain "last write wins" is not enough.
-    await settle(() => modeA.pending[1].resolve(graph("new")));
-    await settle(() => modeA.pending[0].resolve(graph("stale")));
+    await settle(() => modeA.pending[1].resolve(parsed("new")));
+    await settle(() => modeA.pending[0].resolve(parsed("stale")));
 
     expect(updateGraph).toHaveBeenCalledTimes(1);
     expect(updateGraph.mock.calls[0][0]).toEqual(graph("new"));
@@ -150,8 +156,8 @@ describe("useIRWorkspace parse effect", () => {
     await runDebounce();
 
     expect(modeB.parse).toHaveBeenCalledWith("code-b");
-    await settle(() => modeB.pending[0].resolve(graph("from-b")));
-    await settle(() => modeA.pending[0].resolve(graph("from-a")));
+    await settle(() => modeB.pending[0].resolve(parsed("from-b")));
+    await settle(() => modeA.pending[0].resolve(parsed("from-a")));
 
     expect(updateGraph).toHaveBeenCalledTimes(1);
     expect(updateGraph.mock.calls[0][0]).toEqual(graph("from-b"));
@@ -164,9 +170,74 @@ describe("useIRWorkspace parse effect", () => {
     act(() => result.current.setCode("code-a2"));
     await runDebounce();
 
-    await settle(() => modeA.pending[1].resolve(graph("new")));
+    await settle(() => modeA.pending[1].resolve(parsed("new")));
     await settle(() => modeA.pending[0].reject(new Error("stale failure")));
 
     expect(result.current.error).toBeNull();
+  });
+});
+
+// contracts/ir-mode-registry.md, "Recoverable diagnostics" + specs/graph-view.md §1.
+describe("useIRWorkspace diagnostics", () => {
+  const warning: IRParseDiagnostic = { line: 4, message: "recovered" };
+
+  it("publishes the diagnostics of a successful parse, which stays a success", async () => {
+    const { result } = renderHook(() => useIRWorkspace());
+    await runDebounce();
+
+    await settle(() => modeA.pending[0].resolve(parsed("n1", [warning])));
+
+    expect(result.current.diagnostics).toEqual([warning]);
+    expect(result.current.error).toBeNull();
+    expect(updateGraph).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports no diagnostics for a clean parse", async () => {
+    const { result } = renderHook(() => useIRWorkspace());
+    await runDebounce();
+
+    await settle(() => modeA.pending[0].resolve(parsed("n1")));
+
+    expect(result.current.diagnostics).toEqual([]);
+  });
+
+  it("clears the previous diagnostics when the next parse is clean", async () => {
+    const { result } = renderHook(() => useIRWorkspace());
+    await runDebounce();
+    await settle(() => modeA.pending[0].resolve(parsed("n1", [warning])));
+
+    act(() => result.current.setCode("code-a2"));
+    await runDebounce();
+    await settle(() => modeA.pending[1].resolve(parsed("n2")));
+
+    expect(result.current.diagnostics).toEqual([]);
+  });
+
+  it("clears the previous diagnostics when the next parse fails", async () => {
+    // The graph on screen survives a failure, but the diagnostics do not: their
+    // line numbers describe text the editor no longer holds (spec §1).
+    const { result } = renderHook(() => useIRWorkspace());
+    await runDebounce();
+    await settle(() => modeA.pending[0].resolve(parsed("n1", [warning])));
+
+    act(() => result.current.setCode("code-a2"));
+    await runDebounce();
+    await settle(() => modeA.pending[1].reject(new Error("bad syntax")));
+
+    expect(result.current.error).toBe("bad syntax");
+    expect(result.current.diagnostics).toEqual([]);
+  });
+
+  it("does not let a stale parse's diagnostics reach state", async () => {
+    const { result } = renderHook(() => useIRWorkspace());
+    await runDebounce();
+
+    act(() => result.current.setCode("code-a2"));
+    await runDebounce();
+
+    await settle(() => modeA.pending[1].resolve(parsed("new")));
+    await settle(() => modeA.pending[0].resolve(parsed("stale", [warning])));
+
+    expect(result.current.diagnostics).toEqual([]);
   });
 });

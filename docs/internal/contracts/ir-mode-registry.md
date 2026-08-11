@@ -15,7 +15,7 @@ interface IRModeDefinition {
   label: string; // editor-panel display label, e.g. "LLVM-IR"
   editorLanguage: string; // Monaco language id registered in CodeEditor
   defaultCode: string; // code shown when the mode is selected
-  parse: (code: string) => Promise<GraphData>; // text -> graph, rejects with Error on invalid input
+  parse: (code: string) => Promise<IRParseResult>; // text -> graph + diagnostics, rejects with Error on invalid input
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
   layoutOptions?: Record<string, string>; // ELK layout options, e.g. layer spacing
@@ -42,13 +42,53 @@ The rules:
   parser lie about being async.
 - **Stale results are discarded, not applied.** `useIRWorkspace` parses in a debounced effect;
   when the code, mode, or view changes while a parse is in flight, the effect's cleanup marks
-  that parse cancelled and neither its graph nor its error reaches state. A slow parse can
-  therefore never overwrite the result of a newer one. This is the parse-stage counterpart of
-  the layout generation counter in `useGraphData` (`specs/graph-view.md` §2); the two stages
-  guard independently.
+  that parse cancelled and neither its graph, its diagnostics nor its error reaches state. A
+  slow parse can therefore never overwrite the result of a newer one. This is the parse-stage
+  counterpart of the layout generation counter in `useGraphData` (`specs/graph-view.md` §2);
+  the two stages guard independently.
 - **`parse` is not cancellable.** It takes no `AbortSignal` — the caller drops the result. No
   current parser can be interrupted mid-run, and adding a signal nothing honors would be
   indirection without a payer.
+
+## Recoverable diagnostics
+
+Rejecting with an `Error` is how a parser reports that it produced **no graph**. A parser may
+also produce a graph and still have something to say about the input: a line it recovered from
+rather than understood. That is a second, non-fatal outcome, and `parse` carries it in the same
+result rather than in a per-mode side channel:
+
+```ts
+interface IRParseResult {
+  graph: GraphData; // what the layout stage consumes
+  diagnostics?: IRParseDiagnostic[]; // recoverable problems; omitted when there are none
+}
+
+interface IRParseDiagnostic {
+  line: number; // 1-based line in the editor text
+  message: string; // one self-contained sentence, no severity prefix
+}
+```
+
+The rules:
+
+- **A diagnostic never implies failure.** A parse that returns diagnostics succeeded: the graph
+  is applied and the error state clears exactly as for a clean parse. The two outcomes are
+  disjoint — a rejected parse has no diagnostics, because it has no result at all.
+- **The message carries no severity word.** The presentation layer owns that; the footer renders
+  the `warning:` prefix (`specs/graph-view.md` §6.3).
+- **`line` is 1-based and refers to the text that was parsed**, so it stays meaningful next to
+  the editor. A recovery with no source line has no diagnostic to report.
+- **Diagnostics belong to the parse, not to the graph.** They are not part of `GraphData`
+  (`contracts/graph-data.md`): the layout stage never sees them, and a topology signature is
+  unaffected by them.
+- **Views of one mode may disagree.** Diagnostics are whatever the active view's `parse`
+  returned. LLVM-IR's two views share a front-end and therefore report the same set, but nothing
+  in this contract requires that.
+
+Today only the LLVM-IR mode populates the field (`specs/llvm-ir.md` §3.4, from
+`LLVMModule.diagnostics`); Mermaid and SelectionDAG return a bare `{ graph }`. The channel is
+mode-agnostic so that the SelectionDAG case below can start reporting its skipped lines without
+another contract change.
 
 ## Views
 
@@ -61,7 +101,7 @@ same editor language, same default code, same parser front-end, different
 interface IRViewDefinition {
   key: string; // stable, e.g. "cfg", "use-def"
   label: string; // toggle label, e.g. "CFG"
-  parse: (code: string) => Promise<GraphData>; // same reject-on-invalid rule as the mode's parse
+  parse: (code: string) => Promise<IRParseResult>; // same reject-on-invalid rule as the mode's parse
   edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
   layoutOptions?: Record<string, string>; // defaults to the mode's layoutOptions
   bundleOf?: (edge: GraphEdge) => string | undefined; // defaults to the mode's bundleOf
@@ -160,8 +200,8 @@ implementation land with #88; the router-side guarantee it feeds lands with #86.
 
 - `App.tsx` / `useIRWorkspace` — looks up the active mode by key, awaits `mode.parse(code)`
   in the debounced parse effect (discarding the result if it is stale, see "Parsing is
-  asynchronous"), uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the
-  editor.
+  asynchronous"), hands `result.graph` to `useGraphData` and `result.diagnostics` to the status
+  footer, uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the editor.
 - `useGraphData` — takes an `IRLayoutBehavior` into `updateGraph(graph, behavior)` /
   `resetLayout()`, so layout, edge-building and bundling are mode- (or view-) driven rather
   than branching by string.
@@ -190,3 +230,7 @@ of the "`parse` rejects with `Error` on invalid input" rule above — the Select
 of parsing is a line, and a "failure" for one line does not fail the whole `parse` call. LLVM and
 Mermaid parse the entire input as one document and do fail on invalid input. See
 `src/parser/selectionDAG.ts` for the code-level comment.
+
+A skipped line is exactly the "recovered from rather than understood" case that
+`IRParseResult.diagnostics` exists for, so this difference is now reportable rather than
+structurally invisible. The mode does not report it yet.

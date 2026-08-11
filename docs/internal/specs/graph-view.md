@@ -13,8 +13,13 @@ behavior with no covering test.
 - Editing the code (or switching modes or views) schedules a parse of the active mode's
   active view after a **750 ms debounce** (`PARSE_DEBOUNCE_MS` in `useIRWorkspace`);
   intermediate keystrokes cancel the pending parse.
-- On success the graph updates and any error clears. On failure the **previous graph stays**
-  and the error message is shown, untruncated, in the editor panel's status footer (§6).
+- On success the graph updates, any error clears, and the parse's recoverable diagnostics
+  (`contracts/ir-mode-registry.md`, "Recoverable diagnostics") replace the previous ones — an
+  empty set when the parse was clean. On failure the **previous graph stays** and the error
+  message is shown, untruncated, in the editor panel's status footer (§6).
+- A failed parse also **clears the diagnostics**. They are line-anchored statements about the
+  text that produced them; keeping them alongside an error about newer text would point their
+  line numbers at lines that no longer say what they described.
 - Switching modes replaces the editor content with the new mode's `defaultCode` and resets
   the active view to the mode's default view.
 - Switching views (modes with `views`, see `contracts/ir-mode-registry.md`) **keeps the
@@ -302,16 +307,29 @@ that is not the canvas.
 
 ### 6.3 Status footer
 
-One line of monospace text at the bottom of the panel, styled as a compiler diagnostic. It
-is the only place parse status is reported; there is no snackbar over the graph.
+Monospace text at the bottom of the panel, styled as compiler output. It is the only place
+parse status is reported; there is no snackbar over the graph.
 
 - Success: `✓ parsed · N nodes · M edges` — the check glyph in `ok`, the text in `ink-muted`.
 - Failure: `error: <full message>` with a 2 px left rule in `error`. The message is **not
   truncated**; long messages wrap and scroll inside the footer, which caps at roughly 8
   lines. The error clears on the next successful parse (§1).
+- Success with diagnostics: the success line, then **one line per diagnostic**, each
+  `warning: line <N>: <message>` with the `warning:` prefix in `warn` and a 2 px left rule in
+  `warn`. The prefix is the only place severity is written — the parser's message carries no
+  severity word (`contracts/ir-mode-registry.md`). Diagnostics are listed in the order the
+  parse returned them, none is dropped, and the footer's line cap makes a long list scroll
+  rather than truncate.
+- `error` outranks `warn` on the left rule, and the two never appear together: a failed parse
+  has no diagnostics (§1).
 
-> Pinned by: `e2e/smoke.spec.ts` (a parse error reaches the footer). The exact success
-> wording, the line cap, and the absence of truncation are _observed, untested_.
+The `warning:` prefix is deliberately not `error:`, so that "did this input parse?" stays
+answerable by looking for a single word.
+
+> Pinned by: `e2e/smoke.spec.ts` (a parse error reaches the footer),
+> `src/components/AppShell/__tests__/EditorPanel.test.tsx` (the three footer states and the
+> severity precedence). The exact success wording, the line cap, and the absence of
+> truncation are _observed, untested_.
 
 ### 6.4 Canvas control cluster
 
@@ -355,14 +373,15 @@ the canvas, not a node.
 | `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                                                                                                               |
 | `ok`           | `#1A7F37`                                                              | Parse success only — never decorative                                                                                                                        |
 | `error`        | `#CF222E`                                                              | Parse failure only — never decorative                                                                                                                        |
+| `warn`         | `#9A6700`                                                              | Recoverable parse diagnostics only — never decorative                                                                                                        |
 | `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state                                                                                                                                 |
 | `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                                                                                                          |
 | `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent)                                                                                     |
 | elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                                                                                                      |
 
-- There is no `accent` token: `ok` (green) and `error` (red) are the only semantic,
-  non-gray colors in the shell chrome. The muted purple on back edges (§4) is graph
-  grammar, not a shell token.
+- There is no `accent` token: `ok` (green), `warn` (amber) and `error` (red) are the only
+  semantic, non-gray colors in the shell chrome, and all three report parse status. The muted
+  purple on back edges (§4) is graph grammar, not a shell token.
 - **No translucency and no backdrop blur**: every surface is fully opaque.
 - **Typography**: no webfonts. All shell chrome uses the app's system sans-serif stack
   (`system-ui`). Monospace is reserved for the status footer (compiler-output feel) and

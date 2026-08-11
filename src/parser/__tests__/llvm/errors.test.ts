@@ -97,6 +97,36 @@ define void @f() {
       );
     });
 
+    it("when a label is written twice, should keep both blocks in the graph", () => {
+      // Block ids are unique within a function (§3.3), so the second `a:`
+      // gets its own node instead of colliding with the first and being
+      // dropped by React Flow with nothing shown to the user.
+      const input = `
+define i32 @f() {
+entry:
+  br label %a
+a:
+  br label %b
+a:
+  br label %b
+b:
+  ret i32 0
+}`;
+      const { graph, diagnostics } = parseLLVM(input);
+
+      const blockIds = graph.nodes
+        .filter((node) => node.nodeType === "llvm-basicBlock")
+        .map((node) => node.id);
+      expect(blockIds).toHaveLength(4);
+      expect(new Set(blockIds).size).toBe(4);
+      expect(blockIds).toContain("func:f:block:a");
+      expect(blockIds).toContain("func:f:block:implicit_0");
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics?.[0].line).toBe(7);
+      expect(diagnostics?.[0].message).toMatch(/block label 'a:' is already/);
+    });
+
     it("when the parse is clean, should return no diagnostics", () => {
       const input = `
 define void @f() {

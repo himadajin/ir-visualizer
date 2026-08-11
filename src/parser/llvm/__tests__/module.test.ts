@@ -97,7 +97,7 @@ next:
     });
   });
 
-  describe("implicit block numbering (§3.3)", () => {
+  describe("block ids (§3.3)", () => {
     it("when unlabeled entry has no numeric label uses, should keep id 'entry'", () => {
       const module = buildModule(`define i32 @main() {
   %1 = alloca i32
@@ -279,6 +279,49 @@ a:
       expect(module.diagnostics?.[0].message).toMatch(
         /implicit block id '5' is already taken/,
       );
+    });
+
+    it("when an explicit label repeats an id, should rename the block with a diagnostic", () => {
+      const module = buildModule(`define i32 @f() {
+entry:
+  br label %a
+a:
+  br label %b
+a:
+  br label %b
+b:
+  ret i32 0
+}`);
+      const blocks = module.functions[0].blocks;
+      expect(blocks.map((b) => b.id)).toEqual([
+        "entry",
+        "a",
+        "implicit_0",
+        "b",
+      ]);
+      // Only the identity is renamed: the block still displays what the
+      // source wrote, so nothing about the input disappears from the view.
+      expect(blocks[2].label).toBe("a");
+      expect(module.diagnostics).toHaveLength(1);
+      expect(module.diagnostics?.[0].line).toBe(6);
+      expect(module.diagnostics?.[0].message).toMatch(
+        /block label 'a:' is already taken in this function; the block was renamed 'implicit_0'\./,
+      );
+    });
+
+    it("when a duplicated label is a terminator target, should not report it as dangling", () => {
+      const module = buildModule(`define void @f() {
+entry:
+  br label %a
+a:
+  ret void
+a:
+  ret void
+}`);
+      // `%a` still resolves — the first block kept the id — so the rename is
+      // the only diagnostic; no dangling-target report is invented for it.
+      expect(module.diagnostics).toHaveLength(1);
+      expect(module.diagnostics?.[0].message).toMatch(/block label 'a:'/);
     });
 
     it("when a terminator targets a label no block claims, should record a diagnostic, not throw", () => {

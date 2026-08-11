@@ -22,7 +22,7 @@
  *   here to that throw; the reader itself stays pure.
  * - Unrecognized in-body line → opaque instruction, never a throw.
  * - Recoverable oddities → `LLVMModule.diagnostics` (set only when
- *   non-empty): implicit-block-id fallback, terminator targets no block
+ *   non-empty): block-id collision fallback, terminator targets no block
  *   claims, and a label starting a new block while the previous block has
  *   no terminator (see below).
  *
@@ -47,8 +47,8 @@
  *   the source, and `LLVMParam.name` already admits null for the unnamed
  *   LLVM 2.x style params.
  *
- * Implicit block numbering (§3.3) — id priority for a block that starts
- * without a label line:
+ * Block ids (§3.3) — a block started by a label line takes that label as
+ * its id; id priority for a block that starts without a label line:
  * 1. the `N` of an adjacent `; <label>:N` boundary comment (layer 1's
  *    `labelHint`), which also resynchronizes the counter to N+1;
  * 2. the unnamed-value counter. It starts from the parameter list: each
@@ -61,6 +61,15 @@
  *    LLVM's printer numbering for printer-generated input.
  * 3. fallback `implicit_<k>` plus a diagnostic, used when the candidate id
  *    from 1–2 collides with a block id this function already assigned.
+ *
+ * Rule 3 is not specific to implicit blocks: a label line whose id is
+ * already taken (`a:` … `a:`, which real LLVM rejects) is renamed from the
+ * same sequence and gets its own diagnostic. Block ids are therefore unique
+ * within a function, which is what keeps two blocks from collapsing into
+ * one graph node — §4.1's node ids are injective, so a shared block id is
+ * the only way to reach a duplicate node id, and React Flow drops such a
+ * node with no error at all. The renamed block keeps its written label, so
+ * only its identity changes, not what the node displays.
  *
  * The unlabeled entry block keeps the legacy id `entry` when the body never
  * *uses* a numeric label — a use is a `label %N` token pair, a
@@ -366,6 +375,29 @@ function assembleFunction(
     current = null;
   };
 
+  /**
+   * The id a new block may keep (§3.3 rule 3): the candidate itself, or a
+   * fresh `implicit_<k>` plus a diagnostic when this function already
+   * assigned it. `subject` names the candidate the way the source wrote it,
+   * so implicit ids and explicit labels each read naturally.
+   */
+  const claimId = (
+    candidate: string,
+    line: LogicalLine,
+    subject: string,
+  ): string => {
+    if (!usedIds.has(candidate)) return candidate;
+    const fallback = `implicit_${String(fallbackCount)}`;
+    fallbackCount++;
+    diagnostics.push(
+      diag(
+        line.lineNumber,
+        `${subject} is already taken in this function; the block was renamed '${fallback}'.`,
+      ),
+    );
+    return fallback;
+  };
+
   /** Start the block a label-less body line implies (entry or implicit). */
   const openImplicitBlock = (line: LogicalLine): void => {
     let id: string;
@@ -381,18 +413,11 @@ function assembleFunction(
       id = String(counter); // priority 2: the unnamed-value counter
       counter++;
     }
-    if (usedIds.has(id)) {
-      const fallback = `implicit_${String(fallbackCount)}`;
-      fallbackCount++;
-      diagnostics.push(
-        diag(
-          line.lineNumber,
-          `implicit block id '${id}' is already taken in this function; the block was renamed '${fallback}'.`,
-        ),
-      );
-      id = fallback;
-    }
-    current = { id, label: null, instructions: [] };
+    current = {
+      id: claimId(id, line, `implicit block id '${id}'`),
+      label: null,
+      instructions: [],
+    };
   };
 
   /** `%N = ...` results and printed `N:` labels resync the counter (§3.3). */
@@ -415,7 +440,13 @@ function assembleFunction(
           closeBlock(syntheticTerminator());
         }
         observeNumericDefinition(classified.id);
-        current = { id: classified.id, label: classified.id, instructions: [] };
+        // The label stays as written even when the id is renamed (§3.3):
+        // the duplicate is visible in the diagnostics, not in the node.
+        current = {
+          id: claimId(classified.id, line, `block label '${classified.id}:'`),
+          label: classified.id,
+          instructions: [],
+        };
         break;
       }
       case "terminator": {

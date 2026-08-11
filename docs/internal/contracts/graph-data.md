@@ -43,7 +43,7 @@ the obligation:
 
 - **LLVM** (both views) serializes a structured key injectively — `specs/llvm-ir.md` §4.1.
   Distinct keys always produce distinct ids, which reduces uniqueness to the parser keeping
-  its AST keys distinct ([Issue #111](https://github.com/himadajin/ir-visualizer/issues/111)).
+  its AST keys distinct; block ids are unique within a function by `specs/llvm-ir.md` §3.3.
 - **Mermaid** keys nodes by their source id and collects them through a `Map`, so a node
   mentioned several times in the source is one node; edge ids carry their source-order index.
 - **SelectionDAG** uses the printed `tN` node numbers as ids and inherits uniqueness from the

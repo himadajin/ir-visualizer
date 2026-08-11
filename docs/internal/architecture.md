@@ -10,7 +10,7 @@ flowchart TD
   Registry["IR mode registry (src/irModes)<br/>parser / defaultCode / editorLanguage /<br/>nodeTypes / edgeBuilder / layoutOptions"] -.->|"active mode"| Workspace
   Workspace -->|"await mode.parse(code)"| Parser["Mode-specific parser (src/parser)"]
   Parser -->|AST| Builder["graphBuilder (src/graphBuilder)"]
-  Builder -->|GraphData| GraphHook["useGraphData<br/>(topology signature,<br/>position preservation)"]
+  Builder -->|"GraphData (+ diagnostics)"| GraphHook["useGraphData<br/>(topology signature,<br/>position preservation)"]
   GraphHook -->|"getLayoutedElements"| Layout["layout.ts (ELK placement) +<br/>converter.ts (sizing)"]
   Layout -->|"React Flow nodes/edges"| Viewer["GraphViewer (React Flow)<br/>node components from registry"]
   Viewer -->|"live measured rects"| Routes["useEdgeRoutes<br/>(one pass per graph)"]
@@ -22,10 +22,12 @@ flowchart TD
 - Typing in the editor updates `code` state; after a 750 ms debounce, the active mode's
   `parse()` runs. Parse failures are caught and shown in the editor panel's status footer; the
   previous graph stays.
-- `parse()` is parser + graphBuilder composed: text → AST → `GraphData` (plain, React-free).
-  It is **async** (`contracts/ir-mode-registry.md`, "Parsing is asynchronous"): a parse whose
-  code/mode/view changed while it was in flight is discarded, so a slow parse can never
-  overwrite a newer one.
+- `parse()` is parser + graphBuilder composed: text → AST → `IRParseResult` (a `GraphData`
+  plus the parse's recoverable diagnostics — plain, React-free). It is **async**
+  (`contracts/ir-mode-registry.md`, "Parsing is asynchronous"): a parse whose code/mode/view
+  changed while it was in flight is discarded, so a slow parse can never overwrite a newer one.
+  Diagnostics take the same path as the error string — parse result to status footer — and
+  never enter the layout stage.
 - `useGraphData` decides between a full (async) ELK re-layout (topology changed) and a
   position-preserving content update (same topology). See `specs/graph-view.md`.
 - Layout converts `GraphData` to React Flow nodes/edges, estimating node dimensions from
@@ -48,7 +50,7 @@ flowchart TD
 | IR mode registry    | `src/irModes`              | One `IRModeDefinition` per IR — see `contracts/ir-mode-registry.md`                                                                                                                 | import only |
 | Edge-routing types  | `src/types/edgeRouting.ts` | `Point`/`RouteSide`/`RouteNodeRect`/`RouteRequest`/`EdgeRouterOptions` — the frozen router boundary, see `contracts/edge-routing.md`                                                | no          |
 | Layout / conversion | `src/utils`                | ELK node placement (`layout.ts`), live orthogonal edge routing (`edgeRouter.ts`, types in `src/types/edgeRouting.ts`), React Flow node/edge construction, node sizing, font metrics | types only  |
-| Hooks               | `src/hooks`                | `useIRWorkspace` (mode/code/parse/error), `useGraphData` (graph state), `useEdgeRoutes` (one routing pass per graph, published via context), `usePaneResize`                        | yes         |
+| Hooks               | `src/hooks`                | `useIRWorkspace` (mode/code/parse/error/diagnostics), `useGraphData` (graph state), `useEdgeRoutes` (one routing pass per graph, published via context), `usePaneResize`            | yes         |
 | App shell           | `src/components/AppShell`  | `CanvasShell` (full-bleed `GraphViewer` root) + `EditorPanel` (header, Monaco, status footer)                                                                                       | yes         |
 | Graph rendering     | `src/components/Graph`     | React Flow node/edge components (+ colocated `*.stories.tsx`)                                                                                                                       | yes         |
 | Editor              | `src/components/Editor`    | Monaco editor with Shiki highlighting for `llvm`/`mermaid`                                                                                                                          | yes         |

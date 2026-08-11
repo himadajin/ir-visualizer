@@ -32,6 +32,8 @@ export const SHELL_COLORS = {
   ok: "#1A7F37",
   /** Parse failure only — never decorative. */
   error: "#CF222E",
+  /** Recoverable parse diagnostics only — never decorative. */
+  warn: "#9A6700",
 } as const;
 
 /** Floating chrome only; graph nodes stay flat. Kept light on purpose. */

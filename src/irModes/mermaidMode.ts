@@ -13,7 +13,9 @@ const DEFAULT_CODE = `graph TD
 
 // parseMermaid is synchronous today; the registry contract is async. See
 // llvmMode.ts for why the adapter lives here and not in the parser layer.
-const parse = async (code: string) => parseMermaid(code);
+// The Mermaid parser either produces a graph or throws — it has no recoverable
+// middle ground to report, so the result carries no diagnostics.
+const parse = async (code: string) => ({ graph: parseMermaid(code) });
 
 export const mermaidMode = {
   key: "mermaid" as const,

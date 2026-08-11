@@ -35,3 +35,16 @@ export interface EdgeRouterOptions {
   bendPenalty?: number; // default 30
   selfLoopGap?: number; // default 24
 }
+
+/**
+ * The part of the plane one request is searched in — an axis-aligned box, bounds
+ * inclusive (`contracts/edge-routing.md`, "Per-edge regions"). A route found
+ * here is a function of the rects reaching this box and of nothing else, which
+ * is what lets a caller decide that an edge cannot have changed.
+ */
+export interface RouteRegion {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}

@@ -160,9 +160,10 @@ fail the parse. `parseTerminator` is total: it never throws, on any input.
 > `src/parser/__tests__/llvm/errors.test.ts`,
 > `src/parser/__tests__/llvm/corpus.test.ts`
 
-### 3.3 Implicit block numbering
+### 3.3 Block ids
 
-A block that starts without a label line gets its id from, in priority order:
+A block started by a label line takes that label as its id, in the canonical form of §1. A
+block that starts without a label line gets its id from, in priority order:
 
 1. the `N` of an adjacent `; <label>:N` boundary comment (which also resynchronizes the
    counter to N+1);
@@ -181,10 +182,21 @@ incoming-block reference `[ v, %N ]`; numeric instruction results (`%1 = ...`) d
 count. Otherwise the entry takes the counter value (e.g. `0`, or `3` after three unnamed
 parameters).
 
+**Ids are unique within a function.** Rule 3's rename is not specific to implicit blocks: a
+label line whose id is already taken — `a:` … `a:` — is renamed from the same `implicit_<k>`
+sequence and records a diagnostic naming the duplicated label. The renamed block keeps the
+written label in `LLVMBasicBlock.label`, so both blocks still display `a` and only their
+identity differs. Terminators targeting `%a` reach the first block, the one that kept the id.
+Real LLVM rejects a duplicated label outright; the parser degrades visibly instead, because a
+shared id would collapse two blocks into one graph node and silently drop the second along
+with its edges (§4.1's serialization is injective, so a duplicate block id is the only way to
+reach a duplicate node id).
+
 Every terminator target that no block id claims produces a diagnostic — never a throw,
 never a silent dangling edge.
 
 > Pinned by: `src/parser/llvm/__tests__/module.test.ts`,
+> `src/parser/__tests__/llvm/errors.test.ts`,
 > `src/parser/__tests__/llvm/corpus.test.ts`
 
 ### 3.4 Error policy
@@ -194,7 +206,7 @@ never a silent dangling edge.
 | Unrecognized line inside a function body                                                                                                      | Kept as an opaque `LLVMGenericInstruction` (opcode = first token); never a throw                  |
 | Unrecognized non-blank line at top level                                                                                                      | Throw — garbage input still shows a parse error                                                   |
 | Structural error (no terminator before `}`, `}` without `define`, unclosed function at EOF, `define` without `{`, empty body, unbalanced `[`) | Throw, with a message naming the 1-based source line and the problem in plain words (`Line N: …`) |
-| Recoverable oddity (implicit-id fallback, dangling terminator target, label after an unterminated block)                                      | Recorded in `LLVMModule.diagnostics` (present only when non-empty), not thrown                    |
+| Recoverable oddity (block-id collision fallback, dangling terminator target, label after an unterminated block)                               | Recorded in `LLVMModule.diagnostics` (present only when non-empty), not thrown                    |
 
 **Label-after-unterminated-block recovery:** when a label line arrives while the previous
 block has no terminator, the parser does not throw and does not absorb the label. The
@@ -352,12 +364,6 @@ that fixes the rest), so a concatenation of ids reads back unambiguously.
 
 ## 5. Known limitations
 
-- **Duplicate explicit labels are not diagnosed.** Two `a:` labels in one function produce
-  two blocks with the same id — and thus colliding graph node ids (_observed, untested_).
-  The implicit-numbering collision fallback (§3.3) covers implicit ids only. This is the one
-  remaining way to get two identical ids: §4.1's serialization is injective, so identical ids
-  can only come from two AST blocks that genuinely share a key
-  ([Issue #111](https://github.com/himadajin/ir-visualizer/issues/111)).
 - `catchswitch`, `catchret`, `cleanupret`, `callbr`, and `indirectbr` are understood only
   through the uniform successor rule: their edges are unlabeled and carry no per-opcode
   semantics (e.g. a `callbr` fallthrough edge is not distinguished from its indirect

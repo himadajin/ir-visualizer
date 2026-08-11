@@ -30,6 +30,25 @@ mode-specific edge type — that is what lets `useGraphData` and `layout.ts` run
 pattern when it is set. The LLVM Use-Def view sets it on phi incoming-value edges
 (`specs/llvm-use-def-view.md` §3.1).
 
+## Id uniqueness
+
+**Ids are unique within a `GraphData`**: no two nodes share an `id`, and no two edges share
+one (nodes and edges are separate namespaces). This is an obligation on every graphBuilder,
+not a property converter/layout can restore — React Flow drops a duplicate id silently, so a
+violation surfaces as a node or edge that is simply missing, with no error anywhere.
+
+Ids are **opaque** downstream: converter, layout, and the edge router compare and index them
+but never parse them, so each mode is free to choose its own id grammar. How each mode meets
+the obligation:
+
+- **LLVM** (both views) serializes a structured key injectively — `specs/llvm-ir.md` §4.1.
+  Distinct keys always produce distinct ids, which reduces uniqueness to the parser keeping
+  its AST keys distinct ([Issue #111](https://github.com/himadajin/ir-visualizer/issues/111)).
+- **Mermaid** keys nodes by their source id and collects them through a `Map`, so a node
+  mentioned several times in the source is one node; edge ids carry their source-order index.
+- **SelectionDAG** uses the printed `tN` node numbers as ids and inherits uniqueness from the
+  input's numbering; edge ids carry the operand index.
+
 ## GraphNode.astData
 
 `astData` is a discriminated union keyed on `nodeType`, one variant per concrete node renderer:

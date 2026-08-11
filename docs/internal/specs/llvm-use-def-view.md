@@ -27,17 +27,13 @@ targets, debug records — produce **no nodes**.
 
 ## 2. Nodes
 
-All ids are namespaced by function, using the same `func_<name>` prefixing
-convention as the CFG builder, so identical block labels or value names across
-functions cannot collide. Quoted identifiers are an exception: `uniqueId` strips every
-`@`, `%`, and `"` character anywhere in the name, so a quoted name whose _contents_
-include those characters can still collide with an unrelated name after stripping
-(e.g. `@"a@b"` and `@ab` both prefix to `func_ab`) — an encoding gap shared with the CFG
-builder (`llvmGraphBuilder.ts`) (_observed, untested_).
+Ids follow the shared grammar of `specs/llvm-ir.md` §4.1 and sit under the same
+`func:<name>` prefix as the CFG builder's, so identical block labels or value names
+across functions cannot collide, and the two views namespace identically.
 
 ### 2.1 Instruction nodes
 
-`nodeType: "llvm-useDefInstruction"`, id `<funcPrefix>_ud_<blockId>_i<n>` where
+`nodeType: "llvm-useDefInstruction"`, id `func:<name>:ud:<blockId>:<n>` where
 `n` is the 0-based index of the line among the lines its block actually emits,
 in program order.
 
@@ -67,13 +63,13 @@ line, `originalText === ""`, no `defs`/`uses`) never produce a node.
 `nodeType: "llvm-useDefValue"`, `astData: { name, kind, paramType? }`:
 
 - `kind: "argument"` — one per **named** function parameter, id
-  `<funcPrefix>_udarg_<name>`, emitted whether or not the parameter is used;
+  `func:<name>:udarg:<value name>`, emitted whether or not the parameter is used;
   `paramType` is the parameter's raw type text. Unnamed parameters get no node
   (the parser leaves `name: null`); a body referring to an implicit `%0`-style
   parameter name resolves as `external` instead.
 - `kind: "external"` — created **lazily** for a `uses` entry whose name has no
   known def in the function (degraded parses, undefined names, implicit
-  parameter names), id `<funcPrefix>_udext_<name>`. Use extraction is heuristic
+  parameter names), id `func:<name>:udext:<value name>`. Use extraction is heuristic
   (§3.5), so edge construction must be total rather than throwing on an
   unresolved name.
 
@@ -83,7 +79,7 @@ For every emitted node `N` and every name `v` in `N.uses`, one edge from the
 node that defines `v` — the instruction node whose `def` is `v`, else the
 argument value node for `v`, else a lazily created external value node — to `N`.
 
-- `id`: `e-<sourceId>-<targetId>-<v>`.
+- `id`: `edge:<sourceId>:<targetId>:<v>` (`specs/llvm-ir.md` §4.1).
 - `targetHandle`: `"u-<v>"` — the edge lands on the target card's per-operand
   port for `v` (§4). Sources use the defining node's single source handle.
 - **No label.** The defined name is already visible in the source node's text.

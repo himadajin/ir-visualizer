@@ -9,7 +9,8 @@
 
 /**
  * A [source, target, label?] edge triple using the graphBuilder's node id
- * scheme (`func_<name>_header`, `func_<name>_block_<id>`, `func_<name>_exit`).
+ * scheme (`specs/llvm-ir.md` §4.1: `func:<name>:header`,
+ * `func:<name>:block:<id>`, `func:<name>:exit`).
  * Compared order-independently, but as the complete edge set: no missing or
  * extra edges are allowed.
  */
@@ -51,8 +52,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
-        ["func_main_header", "func_main_block_entry"],
-        ["func_main_block_entry", "func_main_exit"],
+        ["func:main:header", "func:main:block:entry"],
+        ["func:main:block:entry", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["ret"] },
     },
@@ -63,8 +64,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
-        ["func_main_header", "func_main_block_entry"],
-        ["func_main_block_entry", "func_main_exit"],
+        ["func:main:header", "func:main:block:entry"],
+        ["func:main:block:entry", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["ret"] },
       moduleCounts: { globals: 1, declarations: 1 },
@@ -76,8 +77,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
-        ["func_main_header", "func_main_block_entry"],
-        ["func_main_block_entry", "func_main_exit"],
+        ["func:main:header", "func:main:block:entry"],
+        ["func:main:block:entry", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["ret"] },
       moduleCounts: { globals: 1 },
@@ -89,7 +90,7 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       // unreachable has no successors and no exit edge (spec section 3.2).
-      edges: [["func_f_header", "func_f_block_entry"]],
+      edges: [["func:f:header", "func:f:block:entry"]],
       terminatorOpcodes: { "@f": ["unreachable"] },
     },
   },
@@ -99,8 +100,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -111,11 +112,11 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "b"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_a", "true"],
-        ["func_f_block_entry", "func_f_block_b", "false"],
-        ["func_f_block_a", "func_f_exit"],
-        ["func_f_block_b", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:a", "true"],
+        ["func:f:block:entry", "func:f:block:b", "false"],
+        ["func:f:block:a", "func:f:exit"],
+        ["func:f:block:b", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["br", "ret", "ret"] },
     },
@@ -126,8 +127,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
       moduleCounts: { globals: 1 },
@@ -139,9 +140,9 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "loop"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_loop"],
-        ["func_f_block_loop", "func_f_block_loop"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:loop"],
+        ["func:f:block:loop", "func:f:block:loop"],
       ],
       terminatorOpcodes: { "@f": ["br", "br"] },
       moduleCounts: { metadata: 1 },
@@ -153,11 +154,11 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "b"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_a", "true"],
-        ["func_f_block_entry", "func_f_block_b", "false"],
-        ["func_f_block_a", "func_f_exit"],
-        ["func_f_block_b", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:a", "true"],
+        ["func:f:block:entry", "func:f:block:b", "false"],
+        ["func:f:block:a", "func:f:exit"],
+        ["func:f:block:b", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["br", "ret", "ret"] },
       moduleCounts: { metadata: 1 },
@@ -169,8 +170,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -181,8 +182,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -193,8 +194,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -205,11 +206,11 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "d"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_d", "default"],
-        ["func_f_block_entry", "func_f_block_a", "-1"],
-        ["func_f_block_a", "func_f_exit"],
-        ["func_f_block_d", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:d", "default"],
+        ["func:f:block:entry", "func:f:block:a", "-1"],
+        ["func:f:block:a", "func:f:exit"],
+        ["func:f:block:d", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["switch", "ret", "ret"] },
     },
@@ -222,10 +223,10 @@ export const corpusEntries: CorpusEntry[] = [
       // invoke: `to` edge labeled "to", `unwind` edge labeled "unwind";
       // resume has no successors and no exit edge (spec section 3.2).
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_cont", "to"],
-        ["func_f_block_entry", "func_f_block_lpad", "unwind"],
-        ["func_f_block_cont", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:cont", "to"],
+        ["func:f:block:entry", "func:f:block:lpad", "unwind"],
+        ["func:f:block:cont", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["invoke", "ret", "resume"] },
       moduleCounts: { declarations: 2 },
@@ -237,12 +238,12 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "b", "m"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_a", "true"],
-        ["func_f_block_entry", "func_f_block_b", "false"],
-        ["func_f_block_a", "func_f_block_m"],
-        ["func_f_block_b", "func_f_block_m"],
-        ["func_f_block_m", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:a", "true"],
+        ["func:f:block:entry", "func:f:block:b", "false"],
+        ["func:f:block:a", "func:f:block:m"],
+        ["func:f:block:b", "func:f:block:m"],
+        ["func:f:block:m", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["br", "br", "br", "ret"] },
     },
@@ -253,8 +254,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
-        ["func_main_header", "func_main_block_entry"],
-        ["func_main_block_entry", "func_main_exit"],
+        ["func:main:header", "func:main:block:entry"],
+        ["func:main:block:entry", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["ret"] },
       moduleCounts: { globals: 1 },
@@ -266,8 +267,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -278,8 +279,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -290,8 +291,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -304,11 +305,11 @@ export const corpusEntries: CorpusEntry[] = [
       // callbr: fallthrough `to` edge and indirect-target edges, all
       // unlabeled (spec section 3.2).
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_cont"],
-        ["func_f_block_entry", "func_f_block_alt"],
-        ["func_f_block_cont", "func_f_exit"],
-        ["func_f_block_alt", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:cont"],
+        ["func:f:block:entry", "func:f:block:alt"],
+        ["func:f:block:cont", "func:f:exit"],
+        ["func:f:block:alt", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["callbr", "ret", "ret"] },
     },
@@ -322,8 +323,8 @@ export const corpusEntries: CorpusEntry[] = [
       // instruction results, not labels.
       functions: [{ name: "@main", blockIds: ["entry"] }],
       edges: [
-        ["func_main_header", "func_main_block_entry"],
-        ["func_main_block_entry", "func_main_exit"],
+        ["func:main:header", "func:main:block:entry"],
+        ["func:main:block:entry", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["ret"] },
     },
@@ -334,8 +335,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
       moduleCounts: { declarations: 1 },
@@ -347,8 +348,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -359,8 +360,8 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["ret"] },
     },
@@ -371,11 +372,11 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@f", blockIds: ["entry", "a", "b"] }],
       edges: [
-        ["func_f_header", "func_f_block_entry"],
-        ["func_f_block_entry", "func_f_block_a", "true"],
-        ["func_f_block_entry", "func_f_block_b", "false"],
-        ["func_f_block_a", "func_f_exit"],
-        ["func_f_block_b", "func_f_exit"],
+        ["func:f:header", "func:f:block:entry"],
+        ["func:f:block:entry", "func:f:block:a", "true"],
+        ["func:f:block:entry", "func:f:block:b", "false"],
+        ["func:f:block:a", "func:f:exit"],
+        ["func:f:block:b", "func:f:exit"],
       ],
       terminatorOpcodes: { "@f": ["br", "ret", "ret"] },
     },
@@ -388,10 +389,10 @@ export const corpusEntries: CorpusEntry[] = [
       // unwind (like resume) has no successors and no exit edge (spec
       // section 3.2).
       edges: [
-        ["func_main_header", "func_main_block_entry"],
-        ["func_main_block_entry", "func_main_block_ok", "to"],
-        ["func_main_block_entry", "func_main_block_err", "unwind"],
-        ["func_main_block_ok", "func_main_exit"],
+        ["func:main:header", "func:main:block:entry"],
+        ["func:main:block:entry", "func:main:block:ok", "to"],
+        ["func:main:block:entry", "func:main:block:err", "unwind"],
+        ["func:main:block:ok", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["invoke", "ret", "unwind"] },
       moduleCounts: { globals: 1, declarations: 1 },
@@ -406,11 +407,11 @@ export const corpusEntries: CorpusEntry[] = [
       // from the ; <label>:N boundary hints (spec section 3.3).
       functions: [{ name: "@loop", blockIds: ["0", "1", "6"] }],
       edges: [
-        ["func_loop_header", "func_loop_block_0"],
-        ["func_loop_block_0", "func_loop_block_1"],
-        ["func_loop_block_1", "func_loop_block_1", "true"],
-        ["func_loop_block_1", "func_loop_block_6", "false"],
-        ["func_loop_block_6", "func_loop_exit"],
+        ["func:loop:header", "func:loop:block:0"],
+        ["func:loop:block:0", "func:loop:block:1"],
+        ["func:loop:block:1", "func:loop:block:1", "true"],
+        ["func:loop:block:1", "func:loop:block:6", "false"],
+        ["func:loop:block:6", "func:loop:exit"],
       ],
       terminatorOpcodes: { "@loop": ["br", "br", "ret"] },
       moduleCounts: { globals: 1, metadata: 1 },
@@ -422,12 +423,12 @@ export const corpusEntries: CorpusEntry[] = [
     expected: {
       functions: [{ name: "@main", blockIds: ["0", "5", "8", "9"] }],
       edges: [
-        ["func_main_header", "func_main_block_0"],
-        ["func_main_block_0", "func_main_block_5", "true"],
-        ["func_main_block_0", "func_main_block_8", "false"],
-        ["func_main_block_5", "func_main_block_9"],
-        ["func_main_block_8", "func_main_block_9"],
-        ["func_main_block_9", "func_main_exit"],
+        ["func:main:header", "func:main:block:0"],
+        ["func:main:block:0", "func:main:block:5", "true"],
+        ["func:main:block:0", "func:main:block:8", "false"],
+        ["func:main:block:5", "func:main:block:9"],
+        ["func:main:block:8", "func:main:block:9"],
+        ["func:main:block:9", "func:main:exit"],
       ],
       terminatorOpcodes: { "@main": ["br", "br", "br", "ret"] },
       moduleCounts: { metadata: 4, attributes: 1 },
@@ -441,12 +442,12 @@ export const corpusEntries: CorpusEntry[] = [
         { name: "@run", blockIds: ["entry", "cont1", "cont2", "lpad"] },
       ],
       edges: [
-        ["func_run_header", "func_run_block_entry"],
-        ["func_run_block_entry", "func_run_block_cont1", "to"],
-        ["func_run_block_entry", "func_run_block_lpad", "unwind"],
-        ["func_run_block_cont1", "func_run_block_cont2", "to"],
-        ["func_run_block_cont1", "func_run_block_lpad", "unwind"],
-        ["func_run_block_cont2", "func_run_exit"],
+        ["func:run:header", "func:run:block:entry"],
+        ["func:run:block:entry", "func:run:block:cont1", "to"],
+        ["func:run:block:entry", "func:run:block:lpad", "unwind"],
+        ["func:run:block:cont1", "func:run:block:cont2", "to"],
+        ["func:run:block:cont1", "func:run:block:lpad", "unwind"],
+        ["func:run:block:cont2", "func:run:exit"],
       ],
       terminatorOpcodes: { "@run": ["invoke", "invoke", "ret", "resume"] },
       moduleCounts: { declarations: 2 },
@@ -463,18 +464,18 @@ export const corpusEntries: CorpusEntry[] = [
         },
       ],
       edges: [
-        ["func_classify_header", "func_classify_block_entry"],
-        ["func_classify_block_entry", "func_classify_block_other", "default"],
-        ["func_classify_block_entry", "func_classify_block_neg", "-1"],
-        ["func_classify_block_entry", "func_classify_block_zero", "0"],
-        ["func_classify_block_entry", "func_classify_block_one", "1"],
-        ["func_classify_block_entry", "func_classify_block_big", "4294967296"],
-        ["func_classify_block_neg", "func_classify_block_merge"],
-        ["func_classify_block_zero", "func_classify_block_merge"],
-        ["func_classify_block_one", "func_classify_block_merge"],
-        ["func_classify_block_big", "func_classify_block_merge"],
-        ["func_classify_block_other", "func_classify_block_merge"],
-        ["func_classify_block_merge", "func_classify_exit"],
+        ["func:classify:header", "func:classify:block:entry"],
+        ["func:classify:block:entry", "func:classify:block:other", "default"],
+        ["func:classify:block:entry", "func:classify:block:neg", "-1"],
+        ["func:classify:block:entry", "func:classify:block:zero", "0"],
+        ["func:classify:block:entry", "func:classify:block:one", "1"],
+        ["func:classify:block:entry", "func:classify:block:big", "4294967296"],
+        ["func:classify:block:neg", "func:classify:block:merge"],
+        ["func:classify:block:zero", "func:classify:block:merge"],
+        ["func:classify:block:one", "func:classify:block:merge"],
+        ["func:classify:block:big", "func:classify:block:merge"],
+        ["func:classify:block:other", "func:classify:block:merge"],
+        ["func:classify:block:merge", "func:classify:exit"],
       ],
       terminatorOpcodes: {
         "@classify": ["switch", "br", "br", "br", "br", "br", "ret"],
@@ -491,12 +492,12 @@ export const corpusEntries: CorpusEntry[] = [
         { name: "@sumlanes", blockIds: ["entry"] },
       ],
       edges: [
-        ["func_pack_header", "func_pack_block_entry"],
-        ["func_pack_block_entry", "func_pack_exit"],
-        ["func_second_header", "func_second_block_entry"],
-        ["func_second_block_entry", "func_second_exit"],
-        ["func_sumlanes_header", "func_sumlanes_block_entry"],
-        ["func_sumlanes_block_entry", "func_sumlanes_exit"],
+        ["func:pack:header", "func:pack:block:entry"],
+        ["func:pack:block:entry", "func:pack:exit"],
+        ["func:second:header", "func:second:block:entry"],
+        ["func:second:block:entry", "func:second:exit"],
+        ["func:sumlanes:header", "func:sumlanes:block:entry"],
+        ["func:sumlanes:block:entry", "func:sumlanes:exit"],
       ],
       terminatorOpcodes: {
         "@pack": ["ret"],

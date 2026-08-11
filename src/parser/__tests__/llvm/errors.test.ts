@@ -63,7 +63,7 @@ d:
       const { graph } = parseLLVM(input);
       const edge = graph.edges.find(
         (e) =>
-          e.source.includes("_block_entry") && e.target.includes("_block_d"),
+          e.source.includes(":block:entry") && e.target.includes(":block:d"),
       );
       expect(edge).toBeDefined();
       expect(edge?.label).toBeUndefined();

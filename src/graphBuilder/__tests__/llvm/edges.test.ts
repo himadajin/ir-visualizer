@@ -117,7 +117,7 @@ describe("llvm graphBuilder", () => {
       const entryId = graph.nodes.find(
         (node) =>
           node.nodeType === "llvm-basicBlock" &&
-          node.id.includes("_block_entry"),
+          node.id.includes(":block:entry"),
       )?.id;
       expect(entryId).toBeDefined();
 
@@ -158,7 +158,7 @@ describe("llvm graphBuilder", () => {
       const entryId = graph.nodes.find(
         (node) =>
           node.nodeType === "llvm-basicBlock" &&
-          node.id.includes("_block_entry"),
+          node.id.includes(":block:entry"),
       )?.id;
       expect(entryId).toBeDefined();
 
@@ -194,7 +194,7 @@ describe("llvm graphBuilder", () => {
       const entryId = graph.nodes.find(
         (node) =>
           node.nodeType === "llvm-basicBlock" &&
-          node.id.includes("_block_entry"),
+          node.id.includes(":block:entry"),
       )?.id;
       expect(entryId).toBeDefined();
 
@@ -258,13 +258,13 @@ describe("llvm graphBuilder", () => {
       const entryId = graph.nodes.find(
         (node) =>
           node.nodeType === "llvm-basicBlock" &&
-          node.id.includes("_block_entry"),
+          node.id.includes(":block:entry"),
       )?.id;
       expect(entryId).toBeDefined();
 
       const edges = edgesFrom(graph.edges, entryId!);
       expect(edges).toHaveLength(1);
-      expect(edges[0].target).toContain("_block_d");
+      expect(edges[0].target).toContain(":block:d");
       expect(edges[0].label).toBeUndefined();
     });
 

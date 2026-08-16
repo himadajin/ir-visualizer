@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { getLayoutedElements, sizesCoverGraph, toElkSize } from "../layout";
+import {
+  getLayoutedElements,
+  sizesCoverGraph,
+  toElkSize,
+  mermaidGraphEdgeBuilder,
+} from "../layout";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
-import { BACK_EDGE_COLOR } from "../converter";
+import { BACK_EDGE_COLOR, EDGE_MARKER } from "../converter";
 
 const BOX = { width: 120, height: 40 };
 const sizesOf = (graph: GraphData) =>
@@ -375,5 +380,100 @@ describe("getLayoutedElements — nested nodes", () => {
       edges: [],
     };
     await expect(layout(graph)).rejects.toThrow(/cycle/);
+  });
+
+  it("recolors a mermaid circle back-edge without replacing the marker kind", async () => {
+    const graph: GraphData = {
+      nodes: [{ id: "A", label: "A", language: "mermaid" }],
+      edges: [
+        {
+          id: "e1",
+          source: "A",
+          target: "A",
+          stroke: "normal",
+          arrowhead: "arrow_circle",
+        },
+      ],
+    };
+
+    const { edges } = await layout(graph, {
+      edgeBuilder: mermaidGraphEdgeBuilder,
+    });
+    expect((edges[0].data as RoutedEdgeData).isBackEdge).toBe(true);
+    expect(edges[0].style?.stroke).toBe(BACK_EDGE_COLOR);
+    expect(edges[0].markerEnd).toBe(EDGE_MARKER.circleBack);
+  });
+
+  it("recolors a mermaid open back-edge without adding an arrow", async () => {
+    const graph: GraphData = {
+      nodes: [{ id: "A", label: "A", language: "mermaid" }],
+      edges: [
+        {
+          id: "e1",
+          source: "A",
+          target: "A",
+          stroke: "normal",
+          arrowhead: "arrow_open",
+        },
+      ],
+    };
+
+    const { edges } = await layout(graph, {
+      edgeBuilder: mermaidGraphEdgeBuilder,
+    });
+    expect((edges[0].data as RoutedEdgeData).isBackEdge).toBe(true);
+    expect(edges[0].style?.stroke).toBe(BACK_EDGE_COLOR);
+    expect(edges[0].markerEnd).toBeUndefined();
+    expect(edges[0].markerStart).toBeUndefined();
+  });
+
+  it("recolors both markers on a bidirectional mermaid back-edge", async () => {
+    const graph: GraphData = {
+      nodes: [{ id: "A", label: "A", language: "mermaid" }],
+      edges: [
+        {
+          id: "e1",
+          source: "A",
+          target: "A",
+          stroke: "normal",
+          arrowhead: "double_arrow_point",
+        },
+      ],
+    };
+
+    const { edges } = await layout(graph, {
+      edgeBuilder: mermaidGraphEdgeBuilder,
+    });
+    expect((edges[0].data as RoutedEdgeData).isBackEdge).toBe(true);
+    expect(edges[0].markerStart).toEqual({
+      type: "arrowclosed",
+      color: BACK_EDGE_COLOR,
+    });
+    expect(edges[0].markerEnd).toEqual({
+      type: "arrowclosed",
+      color: BACK_EDGE_COLOR,
+    });
+  });
+
+  it("does not paint an invisible mermaid back-edge", async () => {
+    const graph: GraphData = {
+      nodes: [{ id: "A", label: "A", language: "mermaid" }],
+      edges: [
+        {
+          id: "e1",
+          source: "A",
+          target: "A",
+          stroke: "invisible",
+          arrowhead: "arrow_point",
+        },
+      ],
+    };
+
+    const { edges } = await layout(graph, {
+      edgeBuilder: mermaidGraphEdgeBuilder,
+    });
+    expect((edges[0].data as RoutedEdgeData).isBackEdge).toBe(true);
+    expect(edges[0].hidden).toBe(true);
+    expect(edges[0].style?.stroke).not.toBe(BACK_EDGE_COLOR);
   });
 });

@@ -129,6 +129,8 @@ the header. `style` / `classDef` / `class` / `linkStyle` are accepted and ignore
 - This app is an IR viewer, not a mermaid renderer. Node shapes map onto six
   families (process, decision, terminal, data/IO, storage, subroutine) inside
   this app's node design language; unmapped and future shapes use the process
-  box. Edge stroke/arrowhead variants parse but currently all look like the
-  standard routed edge. Per-subgraph direction is not applied to layout.
+  box. Edge stroke (solid, dotted, thick, invisible) and arrowhead (arrow, none,
+  circle, cross, bidirectional) variants are distinguished in this app's edge
+  look, not copied from mermaid's renderer. Invisible links still affect layout
+  ranking but are not drawn. Per-subgraph direction is not applied to layout.
 - Click handlers, tooltips, and hyperlinks are ignored.

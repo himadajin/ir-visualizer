@@ -251,9 +251,14 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   (parent-relative ELK positions are summed up the parent chain). The flag is **structural**
   — decided once from ELK's placement geometry and never re-derived from live rects — so
   colors do not flicker while a node is dragged; only geometry is live. Back edges render
-  in the loop accent color (muted purple `#8250df`, matching arrowhead) — "colored + upward
-  = loop-carried". This accent is graph grammar, not shell chrome (§6.6 has no accent
-  token).
+  in the loop accent color (muted purple `#8250df`) — "colored + upward = loop-carried".
+  The accent **recolors** the stroke and whatever markers the edge already has; it does
+  not replace an open, circle, or cross marker with a closed arrow. An edge that is not
+  painted (Mermaid `invisible`) does not take the accent. This accent is graph grammar,
+  not shell chrome (§6.6 has no accent token).
+- **Hidden routed edges:** a routed edge with `hidden: true` is omitted from the routing
+  pass and is not drawn. Mermaid invisible links use this (`specs/mermaid.md` §5); they
+  remain in `GraphData` so ELK ranking still sees them.
 - **Known limitations,** both accepted since the alternatives are a stale route or a second
   geometry generator: the no-path fallback does no obstacle avoidance
   (`contracts/edge-routing.md`), so dragging one node onto or nearly onto another can make
@@ -272,9 +277,11 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
 > Pinned by: `src/utils/__tests__/edgeRouter.test.ts` (the contract's guarantees),
 > `src/components/Graph/__tests__/roundedPath.test.ts` (the bend radius and its derivation
 > from the node margin), `src/utils/__tests__/layout.test.ts` (back-edge / self-loop
-> flagging, no geometry stored on edges), `src/hooks/__tests__/useGraphData.test.ts`
+> flagging, no geometry stored on edges, accent recolors markers without replacing
+> their kind), `src/hooks/__tests__/useGraphData.test.ts`
 > (back-edge flag inherited on content-only updates),
-> `src/utils/__tests__/converter.test.ts` (dashed chain/glue, markerStart/markerEnd).
+> `src/utils/__tests__/converter.test.ts` (dashed chain/glue, markerStart/markerEnd,
+> Mermaid stroke/arrowhead mapping).
 >
 > Also pinned by: `src/hooks/__tests__/useEdgeRoutes.test.ts` (a narrowed pass equals the
 > full pass, including when a node stops obstructing an edge, when a far node reshapes a

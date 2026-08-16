@@ -58,5 +58,28 @@ describe("mermaid graphBuilder", () => {
 
       expect(graph.edges[0].label).toBe("Yes");
     });
+
+    it("when stroke and arrowhead are set, should copy them onto GraphEdge", () => {
+      const graph = convertASTToGraph(
+        ast({
+          direction: "TD",
+          nodes: [
+            { id: "A", label: "A" },
+            { id: "B", label: "B" },
+          ],
+          edges: [
+            {
+              sourceId: "A",
+              targetId: "B",
+              stroke: "dotted",
+              arrowhead: "arrow_circle",
+            },
+          ],
+        }),
+      );
+
+      expect(graph.edges[0].stroke).toBe("dotted");
+      expect(graph.edges[0].arrowhead).toBe("arrow_circle");
+    });
   });
 });

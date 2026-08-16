@@ -40,5 +40,11 @@ describe("mermaid parser", () => {
       expect(ast.edges[0].stroke).toBe("dotted");
       expect(ast.edges[1].stroke).toBe("thick");
     });
+
+    it("when an invisible link is used, should record invisible stroke", async () => {
+      const ast = await parseMermaidToAST(`graph TD\nA ~~~ B`);
+
+      expect(ast.edges[0].stroke).toBe("invisible");
+    });
   });
 });

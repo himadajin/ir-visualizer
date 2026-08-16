@@ -1,6 +1,7 @@
 import { BaseEdge, type Edge, type EdgeProps } from "@xyflow/react";
 import { useEdgeRoute } from "../../hooks/useEdgeRoutes";
 import { roundedPath } from "./roundedPath";
+import EdgeMarkerDefs from "./EdgeMarkerDefs";
 
 /**
  * Data the layout attaches to every routed edge (specs/graph-view.md §4).
@@ -64,15 +65,18 @@ const RoutedEdge = ({
   const labelPoint = midpoint(points);
 
   return (
-    <BaseEdge
-      path={roundedPath(points)}
-      label={label}
-      labelX={labelPoint.x}
-      labelY={labelPoint.y}
-      markerStart={markerStart}
-      markerEnd={markerEnd}
-      style={style}
-    />
+    <>
+      <EdgeMarkerDefs />
+      <BaseEdge
+        path={roundedPath(points)}
+        label={label}
+        labelX={labelPoint.x}
+        labelY={labelPoint.y}
+        markerStart={markerStart}
+        markerEnd={markerEnd}
+        style={style}
+      />
+    </>
   );
 };
 

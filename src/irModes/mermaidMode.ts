@@ -1,4 +1,4 @@
-import { codeGraphEdgeBuilder } from "../utils/layout";
+import { mermaidGraphEdgeBuilder } from "../utils/layout";
 import MermaidNode from "../components/Graph/Mermaid/MermaidNode";
 import type { IRModeDefinition } from "./types";
 
@@ -28,5 +28,5 @@ export const mermaidMode = {
   nodeTypes: {
     mermaidNode: MermaidNode,
   },
-  edgeBuilder: codeGraphEdgeBuilder,
+  edgeBuilder: mermaidGraphEdgeBuilder,
 } satisfies IRModeDefinition;

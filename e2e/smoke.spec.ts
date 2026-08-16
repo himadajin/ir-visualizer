@@ -70,6 +70,21 @@ test.describe("IR Visualizer smoke tests", () => {
     await expect(page.locator(".react-flow")).toContainText("ret i32");
   });
 
+  test("loads the IR Visualizer favicon", async ({ page }) => {
+    await page.goto("/");
+
+    const favicon = page.locator('link[rel="icon"]');
+    await expect(favicon).toHaveAttribute("type", "image/svg+xml");
+    const href = await favicon.getAttribute("href");
+    expect(href).toMatch(/favicon\.svg$/);
+
+    const response = await page.request.get(
+      new URL(href ?? "", page.url()).toString(),
+    );
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toContain("image/svg+xml");
+  });
+
   test("switching to Mermaid renders the Mermaid default graph", async ({
     page,
   }) => {

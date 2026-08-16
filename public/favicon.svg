@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <style>
+    g { stroke: #000000; }
+    @media (prefers-color-scheme: dark) {
+      g { stroke: #ffffff; }
+    }
+  </style>
+  <g transform="translate(20 30)" fill="none" stroke-width="12"
+     stroke-linecap="round" stroke-linejoin="round">
+    <!-- 左のノード(IR入力) -->
+    <rect x="0" y="50" width="40" height="40" rx="6"/>
+    <!-- 中央の円(変換) -->
+    <circle cx="84" cy="70" r="20"/>
+    <!-- 右上のノード -->
+    <rect x="120" y="0" width="40" height="40" rx="6"/>
+    <!-- 右下のノード -->
+    <rect x="120" y="100" width="40" height="40" rx="6"/>
+    <!-- 左ノード → 円 -->
+    <path d="M 40 70 L 64 70"/>
+    <!-- 円 → 右上ノード -->
+    <path d="M 98.14 55.86 L 99.07 47.93 Q 100 40 108.94 35.53 L 120 30"/>
+    <!-- 円 → 右下ノード -->
+    <path d="M 98.14 84.14 L 99.07 92.07 Q 100 100 108.94 104.47 L 120 110"/>
+  </g>
+</svg>

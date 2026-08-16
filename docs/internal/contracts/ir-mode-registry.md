@@ -228,7 +228,8 @@ implementation land with #88; the router-side guarantee it feeds lands with #86.
   `applyLayout(sizes)`, so layout, edge-building and bundling are mode- (or view-) driven rather
   than branching by string.
 - `GraphViewer` — merges `nodeTypes` from every entry in `IR_MODE_LIST` (plus the
-  mode-agnostic fallback `codeNode`) instead of importing each mode's node components directly.
+  mode-agnostic `codeNode` fallback and the generic `graphGroup` container) instead of
+  importing each mode's node components directly.
 - `CodeEditor` / `src/utils/highlighter.ts` — consume `src/irModes/editorLanguages.ts` (see
   "Editor language"), never `IR_MODE_LIST`, so neither is coupled to how many IRs exist.
 

@@ -83,6 +83,7 @@ describe("createReactFlowNode", () => {
       "llvmFunctionHeader",
     );
     expect(nodeTypeToReactFlowType("llvm-exit")).toBe("llvmExit");
+    expect(nodeTypeToReactFlowType("graph-group")).toBe("graphGroup");
   });
 
   it("should default to codeNode when nodeType is not set", () => {
@@ -106,6 +107,36 @@ describe("createReactFlowNode", () => {
       { hidden: true },
     );
     expect(rfNode.style?.visibility).toBe("hidden");
+  });
+
+  it("maps graph-group to graphGroup and marks it as a non-obstacle", () => {
+    const rfNode = createReactFlowNode(
+      { id: "g", label: "G", nodeType: "graph-group", astData: {} },
+      { x: 0, y: 0 },
+    );
+    expect(rfNode.type).toBe("graphGroup");
+    expect(rfNode.data.obstacle).toBe(false);
+  });
+
+  it("sets parentId and extent when a parent is supplied", () => {
+    const rfNode = createReactFlowNode(
+      { id: "a", label: "A", parentId: "g" },
+      { x: 8, y: 12 },
+      { parentId: "g" },
+    );
+    expect(rfNode.parentId).toBe("g");
+    expect(rfNode.extent).toBe("parent");
+    expect(rfNode.position).toEqual({ x: 8, y: 12 });
+  });
+
+  it("uses an explicit size for a laid-out container", () => {
+    const rfNode = createReactFlowNode(
+      { id: "g", label: "G", nodeType: "graph-group", astData: {} },
+      { x: 0, y: 0 },
+      { width: 200, height: 150 },
+    );
+    expect(rfNode.style?.width).toBe(200);
+    expect(rfNode.style?.height).toBe(150);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ROUTE_REGION_MARGIN, routeEdges } from "../edgeRouter";
+import { ROUTE_REGION_MARGIN, quantizeRect, routeEdges } from "../edgeRouter";
 import type {
   Point,
   RouteNodeRect,
@@ -413,6 +413,86 @@ describe("routeEdges — obstacle avoidance (nodes are the only obstacles)", () 
     // space above and below the obstacle to route through.
     expect(points.length).toBeGreaterThanOrEqual(2);
     expect(anySegmentCrossesRectInterior(points, obstacle)).toBe(false);
+  });
+
+  it("does not treat a rect with obstacle: false as a wall", () => {
+    const frame: RouteNodeRect = {
+      id: "G",
+      x: 80,
+      y: -40,
+      width: 80,
+      height: 120,
+      obstacle: false,
+    };
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 0, width: 40, height: 40 },
+      frame,
+      { id: "B", x: 200, y: 0, width: 40, height: 40 },
+    ];
+    const request: RouteRequest = {
+      id: "e-A-B",
+      source: "A",
+      target: "B",
+      sourcePoint: { x: 40, y: 20 },
+      targetPoint: { x: 200, y: 20 },
+      sourceSide: "right",
+      targetSide: "left",
+    };
+    const throughFrame = routeEdges(nodes, [request]).get(request.id)!;
+    const withoutFrame = routeEdges(
+      nodes.filter((node) => node.id !== "G"),
+      [request],
+    ).get(request.id)!;
+
+    expect(throughFrame).toEqual(withoutFrame);
+  });
+
+  it("still draws an edge whose endpoint is a non-obstacle rect", () => {
+    const frame: RouteNodeRect = {
+      id: "G",
+      x: 100,
+      y: 0,
+      width: 80,
+      height: 80,
+      obstacle: false,
+    };
+    const nodes: RouteNodeRect[] = [
+      { id: "A", x: 0, y: 20, width: 40, height: 40 },
+      frame,
+    ];
+    const request: RouteRequest = {
+      id: "e-A-G",
+      source: "A",
+      target: "G",
+      sourcePoint: { x: 40, y: 40 },
+      targetPoint: { x: 100, y: 40 },
+      sourceSide: "right",
+      targetSide: "left",
+    };
+    const points = routeEdges(nodes, [request]).get(request.id)!;
+    expect(points[0]).toEqual(request.sourcePoint);
+    expect(points[points.length - 1]).toEqual(request.targetPoint);
+  });
+});
+
+describe("quantizeRect — obstacle flag (contract: 'obstacle is copied through unchanged')", () => {
+  it("preserves obstacle: false", () => {
+    expect(
+      quantizeRect({
+        id: "G",
+        x: 10.4,
+        y: 20.6,
+        width: 30,
+        height: 40,
+        obstacle: false,
+      }).obstacle,
+    ).toBe(false);
+  });
+
+  it("omits obstacle when it is not false", () => {
+    expect(
+      quantizeRect({ id: "A", x: 0, y: 0, width: 40, height: 40 }).obstacle,
+    ).toBeUndefined();
   });
 });
 

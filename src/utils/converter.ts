@@ -14,26 +14,40 @@ export const nodeTypeToReactFlowType = (nodeType?: string): string => {
 export const createReactFlowNode = (
   node: GraphNode,
   position: { x: number; y: number },
-  options?: { hidden?: boolean },
+  options?: {
+    hidden?: boolean;
+    parentId?: string;
+    width?: number;
+    height?: number;
+  },
 ): Node => {
+  const isGroup = node.nodeType === "graph-group";
+  const sized =
+    options?.width !== undefined && options?.height !== undefined
+      ? { width: options.width, height: options.height }
+      : { width: "fit-content", height: "fit-content" };
   return {
     id: node.id,
     position,
+    ...(options?.parentId !== undefined
+      ? { parentId: options.parentId, extent: "parent" as const }
+      : {}),
     data: {
       label: node.label,
       shape: node.type,
       language: node.language,
       blockLabel: node.blockLabel,
       astData: node.astData,
+      ...(isGroup ? { obstacle: false } : {}),
     },
     type: nodeTypeToReactFlowType(node.nodeType),
     // fit-content: the node sizes itself; ELK is fed the measured box
     // afterwards (specs/graph-view.md §5). React Flow's default 150×40 must
-    // not win. `hidden` is CSS visibility so the measure pass stays in the
-    // layout (display:none would not measure).
+    // not win. Containers after layout take the ELK box instead. `hidden` is
+    // CSS visibility so the measure pass stays in the layout (display:none
+    // would not measure).
     style: {
-      width: "fit-content",
-      height: "fit-content",
+      ...sized,
       ...(options?.hidden === true ? { visibility: "hidden" } : {}),
     },
   };

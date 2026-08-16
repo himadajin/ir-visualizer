@@ -15,7 +15,7 @@ _observed, untested_ describe current behavior with no covering test.
 
 SSA dataflow, per function: one node per instruction line that participates in
 dataflow, one edge per (defining line → reading line) relationship. The graph is
-**flat** — no container nodes and no `parentId` (`contracts/graph-data.md`) — so ELK's
+**flat** — this view never sets `parentId` (`contracts/graph-data.md`) — so ELK's
 layered layout ranks instruction nodes directly by their use-def edges and vertical
 position means dataflow depth. Basic-block membership is carried on the instruction node
 itself as a colored badge (§2), not by geometry.
@@ -111,7 +111,8 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
 
 - `GraphData.direction` is `"TD"`, and **no node carries `parentId`** — the view
   deliberately produces a flat graph so that the layered layout's ranking is the
-  dataflow order (§1).
+  dataflow order (§1). The graph-layer contract allows containers; this producer
+  does not emit them.
 - The view supplies its own `layoutOptions` (_observed, untested_) and reuses
   the standard `codeGraphEdgeBuilder`: edge geometry comes from the live
   orthogonal router (`specs/graph-view.md` §4), not from ELK, and a loop-carried

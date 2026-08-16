@@ -333,4 +333,91 @@ describe("useGraphData", () => {
       ),
     ).toBe(true);
   });
+
+  it("does not set parentId while measuring a nested graph", async () => {
+    const { result } = renderHook(() => useGraphData());
+    const graph: GraphData = {
+      direction: "TD",
+      nodes: [
+        { id: "g", label: "G", nodeType: "graph-group", astData: {} },
+        { id: "n1", label: "A", parentId: "g" },
+      ],
+      edges: [],
+    };
+
+    act(() => {
+      result.current.updateGraph(graph, llvmMode);
+    });
+    await waitForNodeCount(result, 2);
+
+    expect(result.current.layoutPending).toBe(true);
+    expect(
+      result.current.nodes.every((node) => node.parentId === undefined),
+    ).toBe(true);
+
+    await act(async () => {
+      await result.current.applyLayout(sizesOf(graph));
+    });
+
+    expect(result.current.nodes.find((n) => n.id === "n1")?.parentId).toBe("g");
+  });
+
+  it("re-runs layout when parent membership changes", async () => {
+    const { result } = renderHook(() => useGraphData());
+    const nested: GraphData = {
+      direction: "TD",
+      nodes: [
+        { id: "g", label: "G", nodeType: "graph-group", astData: {} },
+        { id: "n1", label: "A", parentId: "g" },
+        { id: "n2", label: "B" },
+      ],
+      edges: [],
+    };
+    await layoutGraph(result, nested, llvmMode);
+    expect(result.current.nodes.find((n) => n.id === "n1")?.parentId).toBe("g");
+
+    const flat: GraphData = {
+      direction: "TD",
+      nodes: [
+        { id: "g", label: "G", nodeType: "graph-group", astData: {} },
+        { id: "n1", label: "A" },
+        { id: "n2", label: "B" },
+      ],
+      edges: [],
+    };
+    act(() => {
+      result.current.updateGraph(flat, llvmMode);
+    });
+    await waitForNodeCount(result, 3);
+    expect(result.current.layoutPending).toBe(true);
+    expect(result.current.edges).toHaveLength(0);
+  });
+
+  it("preserves parentId on a content-only update", async () => {
+    const { result } = renderHook(() => useGraphData());
+    const graph = (label: string): GraphData => ({
+      direction: "TD",
+      nodes: [
+        { id: "g", label: "G", nodeType: "graph-group", astData: {} },
+        { id: "n1", label, parentId: "g" },
+      ],
+      edges: [],
+    });
+    await layoutGraph(result, graph("A"), llvmMode);
+    const parentAfterFirst = result.current.nodes.find(
+      (n) => n.id === "n1",
+    )?.parentId;
+
+    act(() => {
+      result.current.updateGraph(graph("A changed"), llvmMode);
+    });
+
+    expect(result.current.layoutPending).toBe(false);
+    expect(result.current.nodes.find((n) => n.id === "n1")?.parentId).toBe(
+      parentAfterFirst,
+    );
+    expect(result.current.nodes.find((n) => n.id === "n1")?.data.label).toBe(
+      "A changed",
+    );
+  });
 });

@@ -6,7 +6,8 @@ import type {
   LayoutOptions as ElkLayoutOptions,
 } from "elkjs/lib/elk-api";
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
-import type { GraphData, GraphEdge } from "../types/graph";
+import type { GraphData, GraphEdge, GraphNode } from "../types/graph";
+import { isContainerNode } from "../types/graph";
 import type { RoutedEdgeData } from "../components/Graph/RoutedEdge";
 import { getUseDefPorts } from "../components/Graph/LLVM/UseDef/useDefPorts";
 import {
@@ -21,6 +22,7 @@ import {
   EDGE_NODE_SPACING,
   NODE_NODE_BETWEEN_LAYERS,
   NODE_NODE_SPACING,
+  CONTAINER_PADDING,
 } from "./spacing";
 
 /**
@@ -77,6 +79,7 @@ const getElk = (): Promise<ELK> => {
 const DEFAULT_ELK_OPTIONS: ElkLayoutOptions = {
   "elk.algorithm": "layered",
   "elk.edgeRouting": "ORTHOGONAL",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
   "elk.layered.spacing.nodeNodeBetweenLayers": String(NODE_NODE_BETWEEN_LAYERS),
   "elk.spacing.nodeNode": String(NODE_NODE_SPACING),
   "elk.spacing.edgeNode": String(EDGE_NODE_SPACING),
@@ -119,12 +122,66 @@ export const sizesCoverGraph = (
 const elkPortId = (nodeId: string, handleId: string) =>
   `${nodeId}::${handleId}`;
 
+interface Hierarchy {
+  childrenOf: Map<string, GraphNode[]>;
+  roots: GraphNode[];
+}
+
+/** Parent exists, is a container, and `parentId` does not cycle. */
+const assertHierarchy = (graph: GraphData): Hierarchy => {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const childrenOf = new Map<string, GraphNode[]>();
+  const roots: GraphNode[] = [];
+
+  for (const node of graph.nodes) {
+    if (node.parentId === undefined) {
+      roots.push(node);
+      continue;
+    }
+    const parent = byId.get(node.parentId);
+    if (parent === undefined) {
+      throw new Error(
+        `getLayoutedElements: parentId ${node.parentId} is missing for node ${node.id}`,
+      );
+    }
+    if (!isContainerNode(parent)) {
+      throw new Error(
+        `getLayoutedElements: parent ${parent.id} of ${node.id} is not a container`,
+      );
+    }
+    const siblings = childrenOf.get(parent.id);
+    if (siblings === undefined) childrenOf.set(parent.id, [node]);
+    else siblings.push(node);
+  }
+
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const walk = (id: string): void => {
+    if (visited.has(id)) return;
+    if (visiting.has(id)) {
+      throw new Error(`getLayoutedElements: parentId cycle at node ${id}`);
+    }
+    visiting.add(id);
+    const parentId = byId.get(id)?.parentId;
+    if (parentId !== undefined) walk(parentId);
+    visiting.delete(id);
+    visited.add(id);
+  };
+  for (const node of graph.nodes) walk(node.id);
+
+  return { childrenOf, roots };
+};
+
+const collectPortIds = (elkNode: ElkNode, into: Set<string>): void => {
+  for (const port of elkNode.ports ?? []) into.add(port.id);
+  for (const child of elkNode.children ?? []) collectPortIds(child, into);
+};
+
 const buildElkNode = (
-  graph: GraphData,
-  nodeIndex: number,
+  node: GraphNode,
   sizes: NodeSizeMap,
+  childrenOf: Map<string, GraphNode[]>,
 ): ElkNode => {
-  const node = graph.nodes[nodeIndex];
   const size = sizes.get(node.id);
   if (size === undefined) {
     throw new Error(`getLayoutedElements: missing size for node ${node.id}`);
@@ -145,7 +202,63 @@ const buildElkNode = (
       elkNode.layoutOptions = { "elk.portConstraints": "FIXED_POS" };
     }
   }
+
+  const children = childrenOf.get(node.id) ?? [];
+  if (children.length > 0) {
+    elkNode.children = children.map((child) =>
+      buildElkNode(child, sizes, childrenOf),
+    );
+    elkNode.layoutOptions = {
+      ...elkNode.layoutOptions,
+      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+      "elk.nodeSize.constraints": "MINIMUM_SIZE",
+      "elk.padding": `[top=${String(height)},left=${String(CONTAINER_PADDING)},bottom=${String(CONTAINER_PADDING)},right=${String(CONTAINER_PADDING)}]`,
+    };
+  }
   return elkNode;
+};
+
+interface PlacedBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  parentId?: string;
+}
+
+const flattenElk = (
+  elkNode: ElkNode,
+  parentId: string | undefined,
+  into: Map<string, PlacedBox>,
+): void => {
+  for (const child of elkNode.children ?? []) {
+    into.set(child.id, {
+      x: child.x ?? 0,
+      y: child.y ?? 0,
+      width: child.width ?? 0,
+      height: child.height ?? 0,
+      parentId,
+    });
+    flattenElk(child, child.id, into);
+  }
+};
+
+const absoluteBox = (
+  id: string,
+  layoutById: Map<string, PlacedBox>,
+): { x: number; y: number; width: number; height: number } => {
+  const self = layoutById.get(id);
+  let x = 0;
+  let y = 0;
+  let current: string | undefined = id;
+  while (current !== undefined) {
+    const box = layoutById.get(current);
+    if (box === undefined) break;
+    x += box.x;
+    y += box.y;
+    current = box.parentId;
+  }
+  return { x, y, width: self?.width ?? 0, height: self?.height ?? 0 };
 };
 
 const buildElkEdge = (
@@ -221,11 +334,13 @@ export const getLayoutedElements = async (
 ): Promise<{ nodes: Node[]; edges: Edge[] }> => {
   const { edgeBuilder = codeGraphEdgeBuilder } = options;
   const direction = options.direction || graph.direction || "TD";
+  const hierarchy = assertHierarchy(graph);
 
-  const elkChildren = graph.nodes.map((_, i) => buildElkNode(graph, i, sizes));
-  const portIds = new Set(
-    elkChildren.flatMap((child) => (child.ports ?? []).map((p) => p.id)),
+  const elkChildren = hierarchy.roots.map((node) =>
+    buildElkNode(node, sizes, hierarchy.childrenOf),
   );
+  const portIds = new Set<string>();
+  for (const child of elkChildren) collectPortIds(child, portIds);
 
   const elk = await getElk();
   const layouted = await elk.layout({
@@ -239,28 +354,34 @@ export const getLayoutedElements = async (
     edges: graph.edges.map((edge, i) => buildElkEdge(edge, i, portIds)),
   });
 
-  const layoutById = new Map(
-    (layouted.children ?? []).map((child) => [child.id, child]),
-  );
+  const layoutById = new Map<string, PlacedBox>();
+  flattenElk(layouted, undefined, layoutById);
 
   const nodes: Node[] = graph.nodes.map((node) => {
     const layout = layoutById.get(node.id);
-    return createReactFlowNode(node, { x: layout?.x ?? 0, y: layout?.y ?? 0 });
+    const isGroup = isContainerNode(node);
+    return createReactFlowNode(
+      node,
+      { x: layout?.x ?? 0, y: layout?.y ?? 0 },
+      {
+        parentId: node.parentId,
+        ...(isGroup && layout !== undefined
+          ? { width: layout.width, height: layout.height }
+          : {}),
+      },
+    );
   });
 
   const edges: Edge[] = graph.edges.map((edge) => {
     const rfEdge = edgeBuilder.buildReactFlowEdge(edge);
     if (rfEdge.type !== "routed") return rfEdge;
 
-    const source = layoutById.get(edge.source);
-    const target = layoutById.get(edge.target);
+    const source = absoluteBox(edge.source, layoutById);
+    const target = absoluteBox(edge.target, layoutById);
     // Back edge: a self-loop, or the target sits entirely above the source
-    // in the final geometry (specs/graph-view.md §4).
+    // in absolute flow coordinates (specs/graph-view.md §4).
     const isBackEdge =
-      edge.source === edge.target ||
-      (source?.y !== undefined &&
-        target?.y !== undefined &&
-        target.y + (target.height ?? 0) <= source.y);
+      edge.source === edge.target || target.y + target.height <= source.y;
 
     return applyRoutedData(rfEdge, {
       ...(rfEdge.data as RoutedEdgeData | undefined),

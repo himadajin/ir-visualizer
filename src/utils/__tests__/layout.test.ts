@@ -261,3 +261,119 @@ describe("getLayoutedElements", () => {
     ).toBe(false);
   });
 });
+
+describe("getLayoutedElements — nested nodes", () => {
+  const group = (id: string, label: string): GraphData["nodes"][number] => ({
+    id,
+    label,
+    nodeType: "graph-group",
+    astData: {},
+  });
+
+  it("places children inside the parent with parentId and extent", async () => {
+    const graph: GraphData = {
+      nodes: [
+        group("g", "G"),
+        { id: "A", label: "A", parentId: "g" },
+        { id: "B", label: "B", parentId: "g" },
+      ],
+      edges: [{ id: "e1", source: "A", target: "B" }],
+    };
+
+    const { nodes } = await layout(graph);
+    const g = nodes.find((n) => n.id === "g")!;
+    const a = nodes.find((n) => n.id === "A")!;
+    const b = nodes.find((n) => n.id === "B")!;
+
+    expect(g.parentId).toBeUndefined();
+    expect(a.parentId).toBe("g");
+    expect(b.parentId).toBe("g");
+    expect(a.extent).toBe("parent");
+    expect(b.extent).toBe("parent");
+    expect(typeof g.style?.width).toBe("number");
+    expect(typeof g.style?.height).toBe("number");
+    const width = g.style?.width as number;
+    const height = g.style?.height as number;
+    expect(a.position.x).toBeGreaterThanOrEqual(0);
+    expect(a.position.y).toBeGreaterThanOrEqual(0);
+    expect(a.position.x + BOX.width).toBeLessThanOrEqual(width);
+    expect(a.position.y + BOX.height).toBeLessThanOrEqual(height);
+    expect(b.position.x + BOX.width).toBeLessThanOrEqual(width);
+    expect(b.position.y + BOX.height).toBeLessThanOrEqual(height);
+  });
+
+  it("nests a container inside a container", async () => {
+    const graph: GraphData = {
+      nodes: [
+        group("outer", "outer"),
+        { ...group("inner", "inner"), parentId: "outer" },
+        { id: "A", label: "A", parentId: "inner" },
+      ],
+      edges: [],
+    };
+
+    const { nodes } = await layout(graph);
+    expect(nodes.find((n) => n.id === "inner")?.parentId).toBe("outer");
+    expect(nodes.find((n) => n.id === "A")?.parentId).toBe("inner");
+  });
+
+  it("keeps an empty container as a sized node", async () => {
+    const graph: GraphData = {
+      nodes: [group("g", "empty")],
+      edges: [],
+    };
+
+    const { nodes } = await layout(graph);
+    const g = nodes.find((n) => n.id === "g")!;
+    expect(g.parentId).toBeUndefined();
+    expect(g.style?.width).toBe(BOX.width);
+    expect(g.style?.height).toBe(BOX.height);
+  });
+
+  it("routes an edge whose target is a container", async () => {
+    const graph: GraphData = {
+      nodes: [
+        group("g", "G"),
+        { id: "A", label: "A", parentId: "g" },
+        { id: "B", label: "B" },
+      ],
+      edges: [{ id: "e1", source: "B", target: "g" }],
+    };
+
+    const { edges } = await layout(graph);
+    expect(edges).toHaveLength(1);
+    expect(edges[0].source).toBe("B");
+    expect(edges[0].target).toBe("g");
+    expect(edges[0].type).toBe("routed");
+  });
+
+  it("rejects a parentId that names a missing node", async () => {
+    const graph: GraphData = {
+      nodes: [{ id: "A", label: "A", parentId: "missing" }],
+      edges: [],
+    };
+    await expect(layout(graph)).rejects.toThrow(/parentId missing/);
+  });
+
+  it("rejects a parent that is not a container", async () => {
+    const graph: GraphData = {
+      nodes: [
+        { id: "A", label: "A" },
+        { id: "B", label: "B", parentId: "A" },
+      ],
+      edges: [],
+    };
+    await expect(layout(graph)).rejects.toThrow(/not a container/);
+  });
+
+  it("rejects a parentId cycle", async () => {
+    const graph: GraphData = {
+      nodes: [
+        { ...group("g1", "g1"), parentId: "g2" },
+        { ...group("g2", "g2"), parentId: "g1" },
+      ],
+      edges: [],
+    };
+    await expect(layout(graph)).rejects.toThrow(/cycle/);
+  });
+});

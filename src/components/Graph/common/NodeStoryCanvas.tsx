@@ -9,6 +9,8 @@ interface NodeStoryCanvasProps {
   component: ComponentType<NodeProps>;
   width?: number;
   height?: number;
+  /** Extra fields on `Node.data` (e.g. a group node's `label`). */
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -22,13 +24,14 @@ export function NodeStoryCanvas({
   component,
   width = 420,
   height = 240,
+  data,
 }: NodeStoryCanvasProps) {
   const nodes = [
     {
       id: "preview",
       type: nodeType,
       position: { x: 0, y: 0 },
-      data: { astData },
+      data: { astData, ...data },
     },
   ];
 

@@ -54,6 +54,15 @@ the obligation:
 `astData` is a discriminated union keyed on `nodeType`, one variant per concrete node renderer:
 
 ```ts
+interface GraphNodeBase {
+  id: string;
+  label: string;
+  type?: string;
+  language?: string;
+  blockLabel?: string;
+  parentId?: string; // container this node sits in — see Hierarchy
+}
+
 type GraphNode = GraphNodeBase &
   (
     | { nodeType: "llvm-basicBlock"; astData: LLVMBasicBlock }
@@ -67,20 +76,36 @@ type GraphNode = GraphNodeBase &
     | { nodeType: "llvm-useDefValue"; astData: LLVMUseDefValueData }
     | { nodeType: "mermaid-node"; astData: MermaidASTNode }
     | { nodeType: "selectionDAG-node"; astData: SelectionDAGNode }
+    | { nodeType: "graph-group"; astData: Record<string, never> } // generic container
     | { nodeType?: undefined; astData?: undefined } // codeNode fallback, no specialized renderer
   );
 ```
 
-`GraphNodeBase` holds the fields every node has regardless of mode: `id`, `label`, `type?`,
-`language?`, `blockLabel?`. There is **no container/parent field**: every graph this contract
-describes is flat. The LLVM Use-Def view deliberately uses a flat graph so layered layout ranks
-instructions by dataflow; compound nodes were rejected because estimated container sizes drifted
-from rendered sizes and React Flow parent clamping caused child overlap.
+`GraphNodeBase` holds the fields every node has regardless of mode. `parentId` is optional:
+omitted means a root. There is one node list — containers are nodes, not a second structure.
+Edges stay a flat `GraphEdge[]`; `source` and `target` may name a leaf or a container.
 
 The `llvm-useDef*` astData shapes (`LLVMUseDefInstructionData`, `LLVMUseDefValueData`) are
 view-data shapes living in `src/ast/llvmAST.ts` next to `LLVMFunctionHeaderData`: not AST
 nodes of their own, just the typed payload a renderer expects. Conversion rules:
 `specs/llvm-use-def-view.md`.
+
+## Hierarchy
+
+A node is a **leaf** (opaque box) or a **container** (`nodeType: "graph-group"`). Children
+point at their parent with `parentId`. The tree may nest. An empty container is a valid
+node: it has no children and still occupies a measured chrome box.
+
+This is a graphBuilder obligation, like id uniqueness — layout will not repair a broken
+tree. A `parentId` that is set must name a node in the same `GraphData`, that node must
+be a container, and following `parentId` must not cycle.
+
+LLVM (both views) and SelectionDAG never set `parentId`. The Use-Def view is flat so
+layered layout ranks instructions by dataflow (`specs/llvm-use-def-view.md`); that is a
+producer choice, not a restriction of this contract. The generic container renderer is
+graph-layer (`graphGroup`, next to `codeNode`) so a mode can emit a group without adding
+a renderer. Nested graphs are pinned with synthetic `GraphData` until a mode produces
+them (`specs/graph-view.md` §3, §5).
 
 ## Boundaries this contract does not type
 

@@ -32,9 +32,11 @@ behavior with no covering test.
 
 `useGraphData.updateGraph(graph, behavior)` (where `behavior` is the active view's
 `edgeBuilder`/`layoutOptions` — see `contracts/ir-mode-registry.md`) computes a **topology
-signature**: `direction | sorted node ids | sorted source-target pairs`.
+signature**: `direction | sorted node ids | sorted source-target pairs | sorted
+id:parentId pairs`.
 
-- **Signature changed** (first parse, node/edge added or removed, direction changed):
+- **Signature changed** (first parse, node/edge added or removed, direction changed,
+  parent membership changed):
   a **measure-then-layout** pass (§3, §5). Nodes are mounted so React Flow can measure
   them; no positioned graph is committed until ELK has run on those measured sizes.
   A layout that resolves after a newer parse has started is discarded (generation
@@ -69,6 +71,14 @@ DOM. The hook owns the measure pass that produces that map (§5).
   and layout runs on the main thread (graphs are small; no worker).
 - Rank direction: explicit option → `GraphData.direction` → `"TD"`. `TD` maps to ELK
   `elk.direction: DOWN`, `LR` to `RIGHT`.
+- Nested graphs (`contracts/graph-data.md`, Hierarchy) are laid out as ELK compound nodes
+  (`elk.hierarchyHandling: INCLUDE_CHILDREN`). A container's children are nested ElkNodes;
+  an empty container is a leaf as far as ELK is concerned and uses its measured chrome as
+  its size. Container size is an ELK **output**: children plus `CONTAINER_PADDING` on the
+  sides and bottom plus the measured header height as top padding. The measured chrome is
+  a `MINIMUM_SIZE` so a title wider than the children is not clipped. React Flow nodes
+  receive `parentId`, parent-relative coordinates, and `extent: parent` after this pass;
+  container nodes also receive the ELK width/height so the frame matches the packed box.
 - `elk.edgeRouting: ORTHOGONAL` stays set, because ELK consults edge routing when ordering
   nodes within a layer and it therefore improves **placement**. The route points ELK
   produces are **discarded**: they are not stored on the React Flow edges.
@@ -146,7 +156,9 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
 - **Inputs** are React Flow's measured rects (`internals.positionAbsolute`,
   `measured.width` / `measured.height`) and the live handle positions. Because those track
   the current DOM, an edge follows its node while the node is dragged, and follows a size
-  change caused by a content-only edit (§2), with no re-layout involved.
+  change caused by a content-only edit (§2), with no re-layout involved. Container nodes
+  (`graph-group`) are included as rects so they can be endpoints, with `obstacle: false`
+  so their interior is not a wall (`contracts/edge-routing.md`).
 - **Endpoints are node-boundary anchors, not handle-box anchors.** The coordinate _along_ a
   side comes from the handle, so per-operand ports (the Use-Def view) keep their own
   offsets; the coordinate _across_ it comes from the node's measured rect — `rect.y` for a
@@ -235,8 +247,9 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   reason. Clearance and topology are the router's concern; stroke appearance is not.
 
 - **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a self-loop
-  or its target node lies entirely above its source node. The flag is **structural** —
-  decided once from ELK's placement geometry and never re-derived from live rects — so
+  or its target node lies entirely above its source node **in absolute flow coordinates**
+  (parent-relative ELK positions are summed up the parent chain). The flag is **structural**
+  — decided once from ELK's placement geometry and never re-derived from live rects — so
   colors do not flicker while a node is dragged; only geometry is live. Back edges render
   in the loop accent color (muted purple `#8250df`, matching arrowhead) — "colored + upward
   = loop-carried". This accent is graph grammar, not shell chrome (§6.6 has no accent
@@ -284,14 +297,16 @@ measured after the nodes were mounted, quantized to the router's integer lattice
 **Measure pass.** On a full layout (topology change or first parse):
 
 1. `useGraphData` mounts the new nodes at the origin with `visibility: hidden` and **no
-   edges**. The canvas ground (background dots, controls) stays; the graph itself is not
-   shown. Edges are omitted rather than drawn between stacked origin boxes, so the
-   unmeasured-node rule in §4 is not asked to stand in for a placeholder geometry.
+   edges** and **no `parentId`**. Each node is measured independently, including a
+   container as its title chrome alone. The canvas ground (background dots, controls)
+   stays; the graph itself is not shown. Edges are omitted rather than drawn between
+   stacked origin boxes, so the unmeasured-node rule in §4 is not asked to stand in for a
+   placeholder geometry.
 2. React Flow measures each node's DOM box (`measured.width` / `measured.height`).
 3. Once every node has a positive measured size, `GraphViewer` hands that map to
    `applyLayout`. `getLayoutedElements` runs ELK on the quantized sizes and commits
-   positions. Edges appear with that commit. A result whose generation is stale is
-   discarded, as in §2.
+   positions, parent membership, and container sizes. Edges appear with that commit. A
+   result whose generation is stale is discarded, as in §2.
 
 Until step 3 commits, **no positioned graph is shown** — not an estimate-based preview,
 and not a pile of overlapping origin nodes. Reset Layout skips this hide: the graph

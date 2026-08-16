@@ -17,6 +17,8 @@ interface GraphNodeBase {
   type?: string;
   language?: string; // For syntax highlighting
   blockLabel?: string; // Extracted BasicBlock label
+  /** Container this node sits in. Omitted for a root. See graph-data.md Hierarchy. */
+  parentId?: string;
 }
 
 /**
@@ -37,9 +39,18 @@ type GraphNodeAstData =
   | { nodeType: "llvm-useDefValue"; astData: LLVMUseDefValueData }
   | { nodeType: "mermaid-node"; astData: MermaidASTNode }
   | { nodeType: "selectionDAG-node"; astData: SelectionDAGNodeAST }
+  | { nodeType: "graph-group"; astData: Record<string, never> }
   | { nodeType?: undefined; astData?: undefined };
 
 export type GraphNode = GraphNodeBase & GraphNodeAstData;
+
+/** Graph-layer container (`contracts/graph-data.md`, Hierarchy). */
+export const GRAPH_GROUP_NODE_TYPE = "graph-group" as const;
+
+export const isContainerNode = (
+  node: GraphNode,
+): node is GraphNode & { nodeType: "graph-group" } =>
+  node.nodeType === GRAPH_GROUP_NODE_TYPE;
 
 export interface GraphEdge {
   id: string;

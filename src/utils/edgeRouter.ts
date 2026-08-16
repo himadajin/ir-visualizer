@@ -11,12 +11,12 @@ import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
 /**
  * Self-contained orthogonal edge router (`contracts/edge-routing.md`,
  * `specs/graph-view.md` §4). Every input coordinate is snapped to an integer
- * lattice at the entry of `routeEdges`; node rects are the only obstacles; each
- * edge is searched with A* over a sparse Hanan grid built from the rects near
- * **it** — its region — and the result is a rounded-corner-ready polyline. A
- * routed edge begins and ends exactly at its quantized handle positions; a
- * self-loop is synthesized from its node's rect alone and is exempt from that
- * rule.
+ * lattice at the entry of `routeEdges`; rects whose `obstacle` is not `false`
+ * are the only obstacles; each edge is searched with A* over a sparse Hanan
+ * grid built from the rects near **it** — its region — and the result is a
+ * rounded-corner-ready polyline. A routed edge begins and ends exactly at its
+ * quantized handle positions; a self-loop is synthesized from its node's rect
+ * alone and is exempt from that rule.
  *
  * The region is why this router is stable and not merely deterministic: a route
  * is a function of the rects near it, so an unrelated node moving cannot flip it
@@ -166,6 +166,7 @@ export const quantizeRect = (rect: RouteNodeRect): RouteNodeRect => {
     y,
     width: quantize(rect.x + rect.width) - x,
     height: quantize(rect.y + rect.height) - y,
+    ...(rect.obstacle === false ? { obstacle: false } : {}),
   };
 };
 
@@ -911,13 +912,15 @@ export const routeEdges = (
   // superseded earlier rect keeps blocking segments even though nothing is
   // routed against it.
   const rectById = new Map(nodes.map((node) => [node.id, quantizeRect(node)]));
-  const inflated: InflatedRect[] = [...rectById.values()].map((node) => ({
-    id: node.id,
-    minX: node.x - nodeMargin,
-    minY: node.y - nodeMargin,
-    maxX: node.x + node.width + nodeMargin,
-    maxY: node.y + node.height + nodeMargin,
-  }));
+  const inflated: InflatedRect[] = [...rectById.values()]
+    .filter((node) => node.obstacle !== false)
+    .map((node) => ({
+      id: node.id,
+      minX: node.x - nodeMargin,
+      minY: node.y - nodeMargin,
+      maxX: node.x + node.width + nodeMargin,
+      maxY: node.y + node.height + nodeMargin,
+    }));
   // The retry rung: every rect, unclipped, which is what the search saw for
   // every edge before regions existed. Its obstacle index is built once per
   // pass rather than once per edge — the cost that used to buy a graph-wide

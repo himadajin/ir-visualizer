@@ -126,8 +126,9 @@ the header. `style` / `classDef` / `class` / `linkStyle` are accepted and ignore
 
 **Limitations to know about:**
 
-- This app is an IR viewer, not a mermaid renderer. Node shapes the viewer does not yet
-  classify use the default box; `[]`, `()`, and `{}` keep distinct presentations.
-  Edge stroke/arrowhead variants parse but currently all look like the standard routed
-  edge. Per-subgraph direction is not applied to layout.
+- This app is an IR viewer, not a mermaid renderer. Node shapes map onto six
+  families (process, decision, terminal, data/IO, storage, subroutine) inside
+  this app's node design language; unmapped and future shapes use the process
+  box. Edge stroke/arrowhead variants parse but currently all look like the
+  standard routed edge. Per-subgraph direction is not applied to layout.
 - Click handlers, tooltips, and hyperlinks are ignored.

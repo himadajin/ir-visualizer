@@ -111,20 +111,37 @@ back-fill follow FlowDB (a later labeled occurrence fills an unlabeled one).
 
 ## 5. Rendering
 
-The mermaid node renderer distinguishes three presentations, mapped from
-upstream shape names:
+This mode maps upstream shape names onto **semantic families** and gives each
+family a distinct presentation inside the shared node frame
+(`specs/graph-view.md` §5–§6.6). It does not reproduce mermaid geometry
+(diamonds, cylinders, …). Keys are FlowDB `vertex.type` strings as stored on
+`MermaidASTNode.shape`: JISON bracket names (`square`, `lean_right`, …) and
+`@{ shape: ... }` catalog names and aliases (`rect`, `diam`, `lean-r`, …).
+FlowDB does not canonicalize aliases, so both spellings of the same mermaid
+shape are listed.
 
-| Upstream `shape`   | Presentation                          |
-| ------------------ | ------------------------------------- |
-| `square` / omitted | 4px-radius solid border               |
-| `round`            | 20px-radius solid border              |
-| `diamond`          | dashed border                         |
-| any other name     | same as `square` (permanent fallback) |
+| Family     | Presentation                                     |
+| ---------- | ------------------------------------------------ |
+| process    | 2px-radius, 1px solid `#777` (the default frame) |
+| decision   | 2px-radius, 2px dashed `#777`                    |
+| terminal   | 20px-radius (pill), 1px solid `#777`             |
+| data/IO    | 2px-radius, 1px dotted `#777`                    |
+| storage    | 2px-radius, 2px solid `#777`                     |
+| subroutine | 2px-radius, 3px double `#777`                    |
+
+| Family             | Upstream `shape` names                                                                                                                                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| process            | `square`, `rect`, `proc`, `process`, `rectangle`, `squareRect`                                                                                                                                                                                        |
+| decision           | `diamond`, `diam`, `decision`, `question`                                                                                                                                                                                                             |
+| terminal           | `round`, `rounded`, `event`, `roundedRect`, `stadium`, `terminal`, `pill`, `circle`, `circ`, `ellipse`, `sm-circ`, `start`, `small-circle`, `stateStart`, `dbl-circ`, `double-circle`, `doublecircle`, `fr-circ`, `stop`, `framed-circle`, `stateEnd` |
+| data/IO            | `lean_right`, `lean-r`, `lean-right`, `in-out`, `lean_left`, `lean-l`, `lean-left`, `out-in`                                                                                                                                                          |
+| storage            | `cylinder`, `cyl`, `db`, `database`, `datastore`, `data-store`, `h-cyl`, `das`, `horizontal-cylinder`, `lin-cyl`, `disk`, `lined-cylinder`, `bow-rect`, `stored-data`, `bow-tie-rectangle`, `win-pane`, `internal-storage`, `window-pane`             |
+| subroutine         | `subroutine`, `fr-rect`, `subprocess`, `subproc`, `framed-rectangle`                                                                                                                                                                                  |
+| process (fallback) | any other name, including omitted, `hexagon` / `hex`, `doc`, `delay`, `bang`, `cloud`, and future catalog names                                                                                                                                       |
 
 The fallback is spec, not a stopgap: unknown and future shapes always render
-as the default until a later change maps them onto a semantic family. Edge
-stroke/arrowhead variants are carried on the AST and currently all render as
-the standard routed edge.
+as process. Edge stroke/arrowhead variants are carried on the AST and
+currently all render as the standard routed edge.
 
-> Pinned by: `src/components/Graph/Mermaid/MermaidNode.tsx` (stories),
-> `src/parser/__tests__/mermaid/nodes.test.ts`
+> Pinned by: `src/components/Graph/Mermaid/__tests__/shapeFamily.test.ts`,
+> `src/components/Graph/Mermaid/MermaidNode.stories.tsx`

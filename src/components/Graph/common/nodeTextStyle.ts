@@ -17,6 +17,8 @@ export const NODE_PADDING_Y = 6;
 export const NODE_BORDER_WIDTH = 1;
 /** Default corner radius, px. Pill-shaped nodes override it. */
 export const NODE_BORDER_RADIUS = 2;
+/** Corner radius for pill / terminal nodes, px (`specs/mermaid.md` §5). */
+export const NODE_BORDER_RADIUS_PILL = 20;
 
 /**
  * Total height of the full-width block-label header band, px, border-box

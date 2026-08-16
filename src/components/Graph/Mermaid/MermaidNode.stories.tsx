@@ -36,6 +36,12 @@ export const Round: Story = {
 
 export const Curly: Story = {
   args: {
-    astData: { id: "C", label: "Decision?", shape: "curly" },
+    astData: { id: "C", label: "Decision?", shape: "diamond" },
+  },
+};
+
+export const UnknownShapeFallsBackToDefault: Story = {
+  args: {
+    astData: { id: "D", label: "Hexagon", shape: "hexagon" },
   },
 };

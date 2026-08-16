@@ -102,10 +102,10 @@ be a container, and following `parentId` must not cycle.
 
 LLVM (both views) and SelectionDAG never set `parentId`. The Use-Def view is flat so
 layered layout ranks instructions by dataflow (`specs/llvm-use-def-view.md`); that is a
-producer choice, not a restriction of this contract. The generic container renderer is
-graph-layer (`graphGroup`, next to `codeNode`) so a mode can emit a group without adding
-a renderer. Nested graphs are pinned with synthetic `GraphData` until a mode produces
-them (`specs/graph-view.md` §3, §5).
+producer choice, not a restriction of this contract. Mermaid emits `graph-group` nodes
+and `parentId` for flowchart subgraphs (`specs/mermaid.md` §4). The generic container
+renderer is graph-layer (`graphGroup`, next to `codeNode`) so a mode can emit a group
+without adding a renderer.
 
 ## Boundaries this contract does not type
 

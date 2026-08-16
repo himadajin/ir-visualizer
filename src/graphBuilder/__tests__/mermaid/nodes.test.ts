@@ -1,18 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { convertASTToGraph } from "../../mermaidGraphBuilder";
-import type { MermaidASTNode } from "../../../ast/mermaidAST";
+import type { MermaidAST, MermaidASTNode } from "../../../ast/mermaidAST";
+
+const emptyAst = (
+  override: Partial<MermaidAST> &
+    Pick<MermaidAST, "direction" | "nodes" | "edges">,
+): MermaidAST => ({
+  subgraphs: [],
+  ...override,
+});
 
 describe("mermaid graphBuilder", () => {
   describe("nodes", () => {
     it("when nodes are converted, should map base node properties", () => {
-      const graph = convertASTToGraph({
-        direction: "TD",
-        nodes: [
-          { id: "A", label: "Node A" },
-          { id: "B", label: "Node B" },
-        ],
-        edges: [{ sourceId: "A", targetId: "B", edgeType: "arrow" }],
-      });
+      const graph = convertASTToGraph(
+        emptyAst({
+          direction: "TD",
+          nodes: [
+            { id: "A", label: "Node A" },
+            { id: "B", label: "Node B" },
+          ],
+          edges: [
+            {
+              sourceId: "A",
+              targetId: "B",
+              stroke: "normal",
+              arrowhead: "arrow_point",
+            },
+          ],
+        }),
+      );
 
       expect(graph.nodes).toHaveLength(2);
       expect(graph.nodes[0].id).toBe("A");
@@ -22,11 +39,13 @@ describe("mermaid graphBuilder", () => {
     });
 
     it("when node label is empty, should fallback to node id", () => {
-      const graph = convertASTToGraph({
-        direction: "LR",
-        nodes: [{ id: "X", label: "" }],
-        edges: [],
-      });
+      const graph = convertASTToGraph(
+        emptyAst({
+          direction: "LR",
+          nodes: [{ id: "X", label: "" }],
+          edges: [],
+        }),
+      );
 
       expect(graph.nodes[0].label).toBe("X");
     });
@@ -34,7 +53,7 @@ describe("mermaid graphBuilder", () => {
     it.each([
       ["square", "square"],
       ["round", "round"],
-      ["curly", "curly"],
+      ["diamond", "diamond"],
       [undefined, undefined],
     ] as const)(
       "when shape is %s, should set graph node type to %s",
@@ -44,11 +63,13 @@ describe("mermaid graphBuilder", () => {
           label: "N",
           shape,
         };
-        const graph = convertASTToGraph({
-          direction: "TD",
-          nodes: [node],
-          edges: [],
-        });
+        const graph = convertASTToGraph(
+          emptyAst({
+            direction: "TD",
+            nodes: [node],
+            edges: [],
+          }),
+        );
 
         expect(graph.nodes[0].type).toBe(expected);
       },

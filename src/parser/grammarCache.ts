@@ -4,8 +4,7 @@ import * as ohm from "ohm-js";
  * Lazily compiles an Ohm grammar and registers its semantics on first use,
  * caching the result for subsequent calls. If compilation fails, the cache
  * is cleared so a later call retries instead of permanently wedging on a
- * stale failure. Shared by all three parsers (llvm.ts, mermaid.ts,
- * selectionDAG.ts) so they compile their grammar the same way.
+ * stale failure. Used by the SelectionDAG Ohm parser.
  */
 export function createLazyGrammar(
   grammarSource: string,

@@ -8,6 +8,7 @@ describe("mermaid graphBuilder", () => {
         direction: "TD",
         nodes: [{ id: "A", label: "Test", shape: "square" }],
         edges: [],
+        subgraphs: [],
       });
 
       expect(graph.nodes[0].astData).toBeDefined();

@@ -11,6 +11,7 @@ const shapeToBorderRadius = (shape?: string): string => {
   switch (shape) {
     case "round":
       return "20px";
+    case "diamond":
     case "curly":
       return "4px";
     case "square":
@@ -20,7 +21,7 @@ const shapeToBorderRadius = (shape?: string): string => {
 };
 
 const shapeToBorderStyle = (shape?: string): string => {
-  if (shape === "curly") {
+  if (shape === "diamond" || shape === "curly") {
     return "2px dashed #777";
   }
   return "1px solid #777";

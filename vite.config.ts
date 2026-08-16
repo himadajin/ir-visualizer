@@ -2,9 +2,44 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+/**
+ * mermaid's published flowchart module pulls renderer-only code this app never
+ * calls (layout engines, KaTeX). Stubbing those imports keeps the mermaid
+ * dependency a parser (`contracts/bundle-budget.md`, `specs/mermaid.md`).
+ */
+function stubMermaidRendererDeps() {
+  return {
+    name: "stub-mermaid-renderer-deps",
+    enforce: "pre" as const,
+    resolveId(source: string) {
+      if (source === "katex" || source.startsWith("katex/")) {
+        return "\0stub-katex";
+      }
+      return undefined;
+    },
+    load(id: string) {
+      const normalized = id.replaceAll("\\", "/");
+      if (
+        id === "\0stub-katex" ||
+        normalized.includes("/node_modules/katex/")
+      ) {
+        return "export default { renderToString: (text) => text };";
+      }
+      if (
+        /\/mermaid\/dist\/chunks\/mermaid\.core\/(dagre-|swimlanes-|cose-bilkent-)/.test(
+          normalized,
+        )
+      ) {
+        return "export async function render() {}\nexport default { render };";
+      }
+      return undefined;
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), stubMermaidRendererDeps()],
   base: "/ir-visualizer/",
   build: {
     // Per-chunk size is the wrong axis for this app: the warning does not

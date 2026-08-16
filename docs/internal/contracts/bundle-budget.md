@@ -7,7 +7,7 @@ rather than being noticed later.
 | metric                        | budget | what it is                                                        |
 | ----------------------------- | ------ | ----------------------------------------------------------------- |
 | initial-load JavaScript, gzip | 250 kB | every script `dist/index.html` loads or preloads, gzipped, summed |
-| total `dist`                  | 3.5 MB | every emitted file, uncompressed                                  |
+| total `dist`                  | 4.0 MB | every emitted file, uncompressed                                  |
 
 The first number is what a visitor waits for. The second is what gets deployed, and it is
 the one that catches a dependency shipping code nobody asked for: a lazy chunk costs a
@@ -37,8 +37,15 @@ its highlighter from `shiki/core` with the grammars, theme, and engine named exp
 **An IR mode's parser lives behind a lazy boundary.** A mode's `parse` dynamic-imports its
 parser module, so only the parser of the mode the visitor actually selects is fetched
 (`contracts/ir-mode-registry.md`, "Parsing is asynchronous"). Without this, every IR's parser
-lands in the initial chunk: the default mode is LLVM-IR, yet ohm-js — used only by the
-Mermaid and SelectionDAG parsers — was downloaded on first paint.
+lands in the initial chunk: the default mode is LLVM-IR, yet ohm-js (SelectionDAG) and the
+upstream mermaid flowchart parser would be downloaded on first paint.
+
+Mermaid mode imports mermaid's flowchart parser/DB chunk, not the all-diagram `mermaid`
+entry. That entry statically `import()`s every diagram type, which Rollup would emit into
+`dist` even if none of them ran. Layout engines and KaTeX that the flowchart module also
+`import()`s are stubbed at the Vite boundary so they are not emitted; they are renderer
+code this app never calls (`specs/mermaid.md`). The total-dist budget is 4.0 MB to hold
+that parser chunk (about 0.6 MB lazy) on top of elkjs.
 
 Both rules are about the same thing. The build only splits where the source says it may, so
 these boundaries are stated in code, not inferred by the bundler.

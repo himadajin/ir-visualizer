@@ -53,6 +53,8 @@ export function convertASTToGraph(ast: MermaidAST): GraphData {
     source: edge.sourceId,
     target: edge.targetId,
     label: edge.label,
+    stroke: edge.stroke,
+    arrowhead: edge.arrowhead,
   }));
 
   return {

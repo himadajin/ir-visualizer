@@ -18,6 +18,8 @@ interface GraphEdge {
   targetHandle?: string; // SelectionDAG only
   isChainOrGlue?: boolean; // SelectionDAG only
   dashed?: boolean; // render with strokeDasharray (LLVM use-def phi edges)
+  stroke?: MermaidEdgeStroke; // Mermaid only — specs/mermaid.md §5
+  arrowhead?: string; // Mermaid only — FlowDB edge type
 }
 ```
 
@@ -28,7 +30,12 @@ mode-specific edge type — that is what lets `useGraphData` and `layout.ts` run
 
 `dashed` is mode-agnostic: the standard edge factory (`createReactFlowEdge`) applies a dash
 pattern when it is set. The LLVM Use-Def view sets it on phi incoming-value edges
-(`specs/llvm-use-def-view.md` §3.1).
+(`specs/llvm-use-def-view.md` §3.1). Mermaid dotted edges do not set `dashed`; they carry
+`stroke: "dotted"` and Mermaid's `edgeBuilder` maps that onto the same dash pattern.
+
+`stroke` and `arrowhead` are Mermaid-only. Other modes omit them. The Mermaid graphBuilder
+copies both from the AST; the Mermaid `edgeBuilder` is what turns them into stroke style
+and markers (`specs/mermaid.md` §5). LLVM's factory does not read them.
 
 ## Id uniqueness
 

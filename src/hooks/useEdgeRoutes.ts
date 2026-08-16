@@ -165,7 +165,9 @@ const collectRects = (
 /**
  * One request per `routed` edge. SelectionDAG's edges use React Flow's
  * built-in `default` type and are deliberately left alone — they keep their
- * handle-anchored beziers (`specs/graph-view.md` §4).
+ * handle-anchored beziers (`specs/graph-view.md` §4). Hidden routed edges
+ * (Mermaid invisible links) are omitted: they stay in `GraphData` for ranking
+ * and are not painted (`specs/mermaid.md` §5).
  */
 const collectRequests = (
   edges: readonly Edge[],
@@ -174,6 +176,7 @@ const collectRequests = (
   const requests: RouteRequest[] = [];
   for (const edge of edges) {
     if (edge.type !== "routed") continue;
+    if (edge.hidden === true) continue;
     const sourceNode = nodeLookup.get(edge.source);
     const targetNode = nodeLookup.get(edge.target);
     if (sourceNode === undefined || targetNode === undefined) continue;

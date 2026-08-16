@@ -8,7 +8,7 @@ import type {
   LLVMUseDefInstructionData,
   LLVMUseDefValueData,
 } from "../ast/llvmAST";
-import type { MermaidASTNode } from "../ast/mermaidAST";
+import type { MermaidASTNode, MermaidEdgeStroke } from "../ast/mermaidAST";
 import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
 
 interface GraphNodeBase {
@@ -68,6 +68,10 @@ export interface GraphEdge {
    * factory. Mode-agnostic; used by the LLVM Use-Def view's phi edges.
    */
   dashed?: boolean;
+  /** Mermaid flowchart stroke. Omitted for other modes. */
+  stroke?: MermaidEdgeStroke;
+  /** Mermaid flowchart FlowDB arrow type. Omitted for other modes. */
+  arrowhead?: string;
 }
 
 export interface GraphData {

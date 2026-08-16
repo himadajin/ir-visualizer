@@ -5,7 +5,7 @@ import type {
   ElkPort,
   LayoutOptions as ElkLayoutOptions,
 } from "elkjs/lib/elk-api";
-import { type Node, type Edge, MarkerType } from "@xyflow/react";
+import { type Node, type Edge } from "@xyflow/react";
 import type { GraphData, GraphEdge, GraphNode } from "../types/graph";
 import { isContainerNode } from "../types/graph";
 import type { RoutedEdgeData } from "../components/Graph/RoutedEdge";
@@ -13,8 +13,10 @@ import { getUseDefPorts } from "../components/Graph/LLVM/UseDef/useDefPorts";
 import {
   createReactFlowNode,
   createReactFlowEdge,
+  createMermaidReactFlowEdge,
   createSelectionDAGReactFlowEdge,
   BACK_EDGE_COLOR,
+  recolorMarker,
 } from "./converter";
 import { quantizeRect } from "./edgeRouter";
 import {
@@ -35,9 +37,17 @@ export interface IREdgeBuilder {
   buildReactFlowEdge(edge: GraphEdge): Edge;
 }
 
-/** LLVM/Mermaid: ELK-routed edges (specs/graph-view.md §4). */
+/** LLVM: ELK-routed edges (specs/graph-view.md §4). */
 export const codeGraphEdgeBuilder: IREdgeBuilder = {
   buildReactFlowEdge: (edge) => createReactFlowEdge(edge, "routed"),
+};
+
+/**
+ * Mermaid: the same routed geometry as LLVM, with flowchart stroke/arrowhead
+ * mapped onto style and markers (specs/mermaid.md §5).
+ */
+export const mermaidGraphEdgeBuilder: IREdgeBuilder = {
+  buildReactFlowEdge: (edge) => createMermaidReactFlowEdge(edge),
 };
 
 /**
@@ -294,12 +304,10 @@ const buildElkEdge = (
 /** Sets a routed edge's data and applies the back-edge accent styling. */
 const applyRoutedData = (rfEdge: Edge, data: RoutedEdgeData): Edge => {
   rfEdge.data = data;
-  if (data.isBackEdge === true) {
+  if (data.isBackEdge === true && rfEdge.hidden !== true) {
     rfEdge.style = { ...rfEdge.style, stroke: BACK_EDGE_COLOR };
-    rfEdge.markerEnd = {
-      type: MarkerType.ArrowClosed,
-      color: BACK_EDGE_COLOR,
-    };
+    rfEdge.markerEnd = recolorMarker(rfEdge.markerEnd, BACK_EDGE_COLOR);
+    rfEdge.markerStart = recolorMarker(rfEdge.markerStart, BACK_EDGE_COLOR);
   }
   return rfEdge;
 };

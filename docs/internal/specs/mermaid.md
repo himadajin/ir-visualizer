@@ -103,7 +103,7 @@ back-fill follow FlowDB (a later labeled occurrence fills an unlabeled one).
   (`contracts/graph-data.md`, Hierarchy).
 - Every AST edge becomes one `GraphEdge`; ids are `e<i>-<source>-<target>`
   (index-prefixed, so parallel edges between the same endpoints stay unique).
-  Stroke and arrowhead stay on the AST; they do not yet change rendering.
+  `stroke` and `arrowhead` are copied onto the `GraphEdge` (`contracts/graph-data.md`).
 - `GraphData.direction` is the AST direction.
 
 > Pinned by: `src/graphBuilder/__tests__/mermaid/{nodes,edges,metadata,invariants,subgraphs}.test.ts`,
@@ -140,8 +140,38 @@ shape are listed.
 | process (fallback) | any other name, including omitted, `hexagon` / `hex`, `doc`, `delay`, `bang`, `cloud`, and future catalog names                                                                                                                                       |
 
 The fallback is spec, not a stopgap: unknown and future shapes always render
-as process. Edge stroke/arrowhead variants are carried on the AST and
-currently all render as the standard routed edge.
+as process.
+
+Edge variants are distinguished inside this app's edge grammar (gray `#666`,
+back-edge purple), not reproduced from mermaid's renderer. Stroke and
+arrowhead compose. Mermaid's `edgeBuilder` maps them; the router stays
+appearance-blind (`specs/graph-view.md` §4).
+
+| Upstream `stroke`  | Presentation                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `normal` / omitted | 1 px solid                                                                                                       |
+| `dotted`           | dash pattern `6 6` (same as LLVM Use-Def phi)                                                                    |
+| `thick`            | 2 px solid                                                                                                       |
+| `invisible`        | not painted; the edge stays in `GraphData` so ELK ranking still sees it, and it is omitted from the routing pass |
+
+| Upstream `arrowhead`                        | Presentation                                    |
+| ------------------------------------------- | ----------------------------------------------- |
+| `arrow_point` / omitted                     | closed arrow at the target                      |
+| `arrow_open`                                | no markers                                      |
+| `arrow_circle`                              | filled circle at the target                     |
+| `arrow_cross`                               | cross at the target                             |
+| `double_arrow_point` / `_circle` / `_cross` | the matching marker at both ends                |
+| any other name                              | closed arrow at the target (permanent fallback) |
+
+The arrowhead fallback is spec, like the shape fallback. `style` / `linkStyle`
+still contribute nothing.
+
+A back edge recolors the stroke and whatever markers the variant already has;
+it does not replace an open, circle, or cross marker with a closed arrow.
+An invisible edge is not painted, so the accent does not apply.
 
 > Pinned by: `src/components/Graph/Mermaid/__tests__/shapeFamily.test.ts`,
-> `src/components/Graph/Mermaid/MermaidNode.stories.tsx`
+> `src/components/Graph/Mermaid/MermaidNode.stories.tsx`,
+> `src/graphBuilder/__tests__/mermaid/edges.test.ts`,
+> `src/utils/__tests__/converter.test.ts`,
+> `src/utils/__tests__/layout.test.ts`

@@ -3,8 +3,14 @@ import { MarkerType } from "@xyflow/react";
 import {
   createReactFlowNode,
   createReactFlowEdge,
+  createMermaidReactFlowEdge,
   createSelectionDAGReactFlowEdge,
   nodeTypeToReactFlowType,
+  mermaidMarkerKinds,
+  recolorMarker,
+  BACK_EDGE_COLOR,
+  EDGE_MARKER,
+  EDGE_STROKE_COLOR,
 } from "../converter";
 import type { GraphNode, GraphEdge } from "../../types/graph";
 
@@ -207,5 +213,193 @@ describe("createReactFlowEdge", () => {
 
     const rfEdge = createReactFlowEdge(graphEdge);
     expect(rfEdge.style).not.toHaveProperty("strokeDasharray");
+  });
+});
+
+describe("mermaidMarkerKinds", () => {
+  it("maps the closed FlowDB set and falls unknown names back to arrow", () => {
+    expect(mermaidMarkerKinds("arrow_point")).toEqual({
+      start: "none",
+      end: "arrow",
+    });
+    expect(mermaidMarkerKinds("arrow_open")).toEqual({
+      start: "none",
+      end: "none",
+    });
+    expect(mermaidMarkerKinds("arrow_circle")).toEqual({
+      start: "none",
+      end: "circle",
+    });
+    expect(mermaidMarkerKinds("arrow_cross")).toEqual({
+      start: "none",
+      end: "cross",
+    });
+    expect(mermaidMarkerKinds("double_arrow_point")).toEqual({
+      start: "arrow",
+      end: "arrow",
+    });
+    expect(mermaidMarkerKinds("double_arrow_circle")).toEqual({
+      start: "circle",
+      end: "circle",
+    });
+    expect(mermaidMarkerKinds("double_arrow_cross")).toEqual({
+      start: "cross",
+      end: "cross",
+    });
+    expect(mermaidMarkerKinds(undefined)).toEqual({
+      start: "none",
+      end: "arrow",
+    });
+    expect(mermaidMarkerKinds("stadium")).toEqual({
+      start: "none",
+      end: "arrow",
+    });
+  });
+});
+
+describe("recolorMarker", () => {
+  it("recolors an object marker without changing its type", () => {
+    expect(
+      recolorMarker(
+        { type: MarkerType.ArrowClosed, color: EDGE_STROKE_COLOR },
+        BACK_EDGE_COLOR,
+      ),
+    ).toEqual({ type: MarkerType.ArrowClosed, color: BACK_EDGE_COLOR });
+  });
+
+  it("swaps circle and cross urls to the back-edge defs", () => {
+    expect(recolorMarker(EDGE_MARKER.circle, BACK_EDGE_COLOR)).toBe(
+      EDGE_MARKER.circleBack,
+    );
+    expect(recolorMarker(EDGE_MARKER.cross, BACK_EDGE_COLOR)).toBe(
+      EDGE_MARKER.crossBack,
+    );
+  });
+
+  it("leaves an absent marker absent", () => {
+    expect(recolorMarker(undefined, BACK_EDGE_COLOR)).toBeUndefined();
+  });
+});
+
+describe("createMermaidReactFlowEdge", () => {
+  const base: GraphEdge = { id: "e1", source: "A", target: "B" };
+
+  it("should draw a closed arrow for the default point arrowhead", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "normal",
+      arrowhead: "arrow_point",
+    });
+    expect(rfEdge.hidden).toBeUndefined();
+    expect(rfEdge.style).toEqual({ stroke: EDGE_STROKE_COLOR });
+    expect(rfEdge.markerStart).toBeUndefined();
+    expect(rfEdge.markerEnd).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: EDGE_STROKE_COLOR,
+    });
+  });
+
+  it("should omit markers for an open line", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "normal",
+      arrowhead: "arrow_open",
+    });
+    expect(rfEdge.markerStart).toBeUndefined();
+    expect(rfEdge.markerEnd).toBeUndefined();
+  });
+
+  it("should dash a dotted stroke with the same pattern as LLVM phi", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "dotted",
+      arrowhead: "arrow_point",
+    });
+    expect(rfEdge.style).toEqual({
+      stroke: EDGE_STROKE_COLOR,
+      strokeDasharray: "6 6",
+    });
+  });
+
+  it("should thicken a thick stroke", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "thick",
+      arrowhead: "arrow_point",
+    });
+    expect(rfEdge.style).toEqual({
+      stroke: EDGE_STROKE_COLOR,
+      strokeWidth: 2,
+    });
+  });
+
+  it("should not paint an invisible edge", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "invisible",
+      arrowhead: "arrow_point",
+    });
+    expect(rfEdge.hidden).toBe(true);
+    expect(rfEdge.markerEnd).toBeUndefined();
+  });
+
+  it("should place a circle marker for arrow_circle", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "normal",
+      arrowhead: "arrow_circle",
+    });
+    expect(rfEdge.markerEnd).toBe(EDGE_MARKER.circle);
+    expect(rfEdge.markerStart).toBeUndefined();
+  });
+
+  it("should place a cross marker for arrow_cross", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "normal",
+      arrowhead: "arrow_cross",
+    });
+    expect(rfEdge.markerEnd).toBe(EDGE_MARKER.cross);
+  });
+
+  it("should place arrows at both ends for a bidirectional point", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "normal",
+      arrowhead: "double_arrow_point",
+    });
+    expect(rfEdge.markerStart).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: EDGE_STROKE_COLOR,
+    });
+    expect(rfEdge.markerEnd).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: EDGE_STROKE_COLOR,
+    });
+  });
+
+  it("should compose dotted stroke with a circle marker", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "dotted",
+      arrowhead: "arrow_circle",
+    });
+    expect(rfEdge.style).toEqual({
+      stroke: EDGE_STROKE_COLOR,
+      strokeDasharray: "6 6",
+    });
+    expect(rfEdge.markerEnd).toBe(EDGE_MARKER.circle);
+  });
+
+  it("should fall an unknown arrowhead back to a closed arrow", () => {
+    const rfEdge = createMermaidReactFlowEdge({
+      ...base,
+      stroke: "normal",
+      arrowhead: "not-a-real-type",
+    });
+    expect(rfEdge.markerEnd).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: EDGE_STROKE_COLOR,
+    });
   });
 });

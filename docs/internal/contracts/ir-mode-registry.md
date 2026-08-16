@@ -173,11 +173,13 @@ interface IREdgeBuilder {
 }
 ```
 
-- LLVM/Mermaid (`codeGraphEdgeBuilder`) build `type: "routed"` edges; the ELK layout
-  attaches each edge's back-edge flag to `edge.data` afterwards (derived from the final
-  layout geometry, not chosen by the builder), and the edge's geometry is computed at
-  render time from the live node rectangles (`specs/graph-view.md` §4). A builder
-  therefore contributes no geometry at all.
+- LLVM (`codeGraphEdgeBuilder`) and Mermaid (`mermaidGraphEdgeBuilder`) build
+  `type: "routed"` edges; the ELK layout attaches each edge's back-edge flag to
+  `edge.data` afterwards (derived from the final layout geometry, not chosen by
+  the builder), and the edge's geometry is computed at render time from the live
+  node rectangles (`specs/graph-view.md` §4). A builder therefore contributes no
+  geometry at all. Mermaid's builder is the one that maps flowchart stroke and
+  arrowhead onto style and markers (`specs/mermaid.md` §5); LLVM's does not.
 - SelectionDAG (`selectionDAGEdgeBuilder`) builds React Flow built-in `default` (bezier)
   edges connecting specific operand/type Handles; routing does not apply to them.
 
@@ -243,8 +245,9 @@ implementation land with #88; the router-side guarantee it feeds lands with #86.
    needs no change there.
 4. Write `src/irModes/newMode.ts` implementing `IRModeDefinition`. Have `parse` `import()` the
    parser rather than importing it at the top of the file (see "Parsing is asynchronous").
-   Reuse `codeGraphEdgeBuilder` unless the new IR needs custom edge semantics like
-   SelectionDAG. Declare `bundleOf` only if the IR has same-value fan-out (see Bundles);
+   Reuse `codeGraphEdgeBuilder` unless the new IR needs custom edge semantics
+   (SelectionDAG's handle-anchored beziers, Mermaid's stroke/arrowhead mapping).
+   Declare `bundleOf` only if the IR has same-value fan-out (see Bundles);
    omitting it means no two of its edges may overlap, which is the right answer for a
    control-flow graph.
 5. Add the new entry to `IR_MODES`/`IR_MODE_LIST` in `src/irModes/index.ts`.

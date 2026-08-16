@@ -132,5 +132,10 @@ the header. `style` / `classDef` / `class` / `linkStyle` are accepted and ignore
   box. Edge stroke (solid, dotted, thick, invisible) and arrowhead (arrow, none,
   circle, cross, bidirectional) variants are distinguished in this app's edge
   look, not copied from mermaid's renderer. Invisible links still affect layout
-  ranking but are not drawn. Per-subgraph direction is not applied to layout.
+  ranking but are not drawn. Root and nested-subgraph directions (`TD`/`TB`,
+  `BT`, `LR`, `RL`) are applied to layout. A subgraph without its own
+  direction follows its parent. If a node inside a subgraph links directly to
+  a node outside it, that subgraph's direction is ignored (Mermaid's documented
+  limitation); an edge that only touches the subgraph's id does not trigger
+  this.
 - Click handlers, tooltips, and hyperlinks are ignored.

@@ -11,6 +11,24 @@ import type {
 import type { MermaidASTNode, MermaidEdgeStroke } from "../ast/mermaidAST";
 import type { SelectionDAGNode as SelectionDAGNodeAST } from "../ast/selectionDAGAST";
 
+export const GRAPH_DIRECTIONS = ["TD", "TB", "BT", "LR", "RL"] as const;
+export type GraphDirection = (typeof GRAPH_DIRECTIONS)[number];
+
+export const isGraphDirection = (
+  value: string | undefined,
+): value is GraphDirection =>
+  value === "TD" ||
+  value === "TB" ||
+  value === "BT" ||
+  value === "LR" ||
+  value === "RL";
+
+/** Generic container payload (`contracts/graph-data.md`, Hierarchy). */
+export interface GraphGroupData {
+  /** This container's rank direction. Omitted: inherit parent. */
+  direction?: GraphDirection;
+}
+
 interface GraphNodeBase {
   id: string;
   label: string;
@@ -39,7 +57,7 @@ type GraphNodeAstData =
   | { nodeType: "llvm-useDefValue"; astData: LLVMUseDefValueData }
   | { nodeType: "mermaid-node"; astData: MermaidASTNode }
   | { nodeType: "selectionDAG-node"; astData: SelectionDAGNodeAST }
-  | { nodeType: "graph-group"; astData: Record<string, never> }
+  | { nodeType: "graph-group"; astData: GraphGroupData }
   | { nodeType?: undefined; astData?: undefined };
 
 export type GraphNode = GraphNodeBase & GraphNodeAstData;
@@ -77,5 +95,5 @@ export interface GraphEdge {
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  direction?: string;
+  direction?: GraphDirection;
 }

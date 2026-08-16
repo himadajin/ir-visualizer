@@ -6,6 +6,7 @@ import {
   useEdgesState,
 } from "@xyflow/react";
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
+import { isContainerNode } from "../types/graph";
 import type { IRLayoutBehavior } from "../irModes/types";
 import {
   getLayoutedElements,
@@ -31,7 +32,12 @@ const getTopologySignature = (graph: GraphData) => {
     .map((n) => `${n.id}:${n.parentId ?? ""}`)
     .sort()
     .join(",");
-  return `${graph.direction}|${nodeIds}|${edgeIds}|${parents}`;
+  const containerDirs = graph.nodes
+    .filter(isContainerNode)
+    .map((n) => `${n.id}:${n.astData.direction ?? ""}`)
+    .sort()
+    .join(",");
+  return `${graph.direction}|${nodeIds}|${edgeIds}|${parents}|${containerDirs}`;
 };
 
 export const useGraphData = () => {

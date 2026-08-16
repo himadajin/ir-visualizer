@@ -44,8 +44,34 @@ A -->|No| C`;
     expect(graph.edges[0].label).toBe("Yes");
     expect(graph.edges[1].label).toBe("No");
   });
-});
 
+  it("applies nested subgraph directions and the external-child-edge fallback", async () => {
+    const kept = await parseMermaid(`graph TD
+subgraph box [Box]
+  direction LR
+  A --> B
+end
+C --> box`);
+    const box = kept.nodes.find((n) => n.id === "box");
+    expect(box?.nodeType).toBe("graph-group");
+    expect(
+      box?.nodeType === "graph-group" ? box.astData.direction : undefined,
+    ).toBe("LR");
+
+    const dropped = await parseMermaid(`graph TD
+subgraph box [Box]
+  direction LR
+  A --> B
+end
+B --> C`);
+    const droppedBox = dropped.nodes.find((n) => n.id === "box");
+    expect(
+      droppedBox?.nodeType === "graph-group"
+        ? droppedBox.astData.direction
+        : "missing",
+    ).toBeUndefined();
+  });
+});
 describe("Integration: parseLLVM (parser + graph builder)", () => {
   it("should produce GraphData from LLVM IR text", () => {
     const input = `

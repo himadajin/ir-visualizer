@@ -13,7 +13,12 @@ export type CorpusCase = {
       stroke?: string;
       arrowhead?: string;
     }>;
-    subgraphs?: Array<{ id: string; title: string; nodeIds: string[] }>;
+    subgraphs?: Array<{
+      id: string;
+      title: string;
+      nodeIds: string[];
+      direction?: string;
+    }>;
   };
 };
 
@@ -136,6 +141,23 @@ end
       subgraphs: [
         { id: "inner", title: "Inner", nodeIds: ["A", "B"] },
         { id: "outer", title: "Outer", nodeIds: ["inner", "C"] },
+      ],
+    },
+  },
+  {
+    name: "subgraph-direction",
+    input: `graph TD
+subgraph box [Box]
+  direction LR
+  A --> B
+end
+`,
+    expected: {
+      direction: "TB",
+      nodeIds: ["A", "B"],
+      edges: [{ sourceId: "A", targetId: "B", arrowhead: "arrow_point" }],
+      subgraphs: [
+        { id: "box", title: "Box", nodeIds: ["A", "B"], direction: "LR" },
       ],
     },
   },

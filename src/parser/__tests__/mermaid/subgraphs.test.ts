@@ -69,5 +69,25 @@ B --> box`);
         graph.edges.some((e) => e.source === "B" && e.target === "box"),
       ).toBe(true);
     });
+
+    it("when a subgraph declares a direction, should store it on the AST", async () => {
+      const ast = await parseMermaidToAST(`graph TD
+subgraph box [Box]
+  direction LR
+  A --> B
+end`);
+
+      expect(ast.subgraphs).toHaveLength(1);
+      expect(ast.subgraphs[0].direction).toBe("LR");
+    });
+
+    it("when a subgraph has no direction statement, should omit direction", async () => {
+      const ast = await parseMermaidToAST(`graph TD
+subgraph box [Box]
+  A --> B
+end`);
+
+      expect(ast.subgraphs[0].direction).toBeUndefined();
+    });
   });
 });

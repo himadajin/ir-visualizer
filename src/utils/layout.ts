@@ -6,8 +6,13 @@ import type {
   LayoutOptions as ElkLayoutOptions,
 } from "elkjs/lib/elk-api";
 import { type Node, type Edge } from "@xyflow/react";
-import type { GraphData, GraphEdge, GraphNode } from "../types/graph";
-import { isContainerNode } from "../types/graph";
+import type {
+  GraphData,
+  GraphDirection,
+  GraphEdge,
+  GraphNode,
+} from "../types/graph";
+import { isContainerNode, isGraphDirection } from "../types/graph";
 import type { RoutedEdgeData } from "../components/Graph/RoutedEdge";
 import { getUseDefPorts } from "../components/Graph/LLVM/UseDef/useDefPorts";
 import {
@@ -85,6 +90,20 @@ const getElk = (): Promise<ELK> => {
   );
   return elkInstance;
 };
+
+type ElkDirection = "DOWN" | "UP" | "RIGHT" | "LEFT";
+
+const ELK_DIRECTION = {
+  TD: "DOWN",
+  TB: "DOWN",
+  BT: "UP",
+  LR: "RIGHT",
+  RL: "LEFT",
+} as const satisfies Record<GraphDirection, ElkDirection>;
+
+/** Map a graph rank direction to ELK (`specs/graph-view.md` §3). Unknown → DOWN. */
+export const toElkDirection = (direction: string | undefined): ElkDirection =>
+  isGraphDirection(direction) ? ELK_DIRECTION[direction] : "DOWN";
 
 const DEFAULT_ELK_OPTIONS: ElkLayoutOptions = {
   "elk.algorithm": "layered",
@@ -191,6 +210,7 @@ const buildElkNode = (
   node: GraphNode,
   sizes: NodeSizeMap,
   childrenOf: Map<string, GraphNode[]>,
+  parentElkDirection: ElkDirection,
 ): ElkNode => {
   const size = sizes.get(node.id);
   if (size === undefined) {
@@ -215,12 +235,18 @@ const buildElkNode = (
 
   const children = childrenOf.get(node.id) ?? [];
   if (children.length > 0) {
+    const elkDirection =
+      isContainerNode(node) && node.astData.direction !== undefined
+        ? toElkDirection(node.astData.direction)
+        : parentElkDirection;
     elkNode.children = children.map((child) =>
-      buildElkNode(child, sizes, childrenOf),
+      buildElkNode(child, sizes, childrenOf, elkDirection),
     );
     elkNode.layoutOptions = {
       ...elkNode.layoutOptions,
-      "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+      "elk.algorithm": "layered",
+      "elk.hierarchyHandling": "SEPARATE_CHILDREN",
+      "elk.direction": elkDirection,
       "elk.nodeSize.constraints": "MINIMUM_SIZE",
       "elk.padding": `[top=${String(height)},left=${String(CONTAINER_PADDING)},bottom=${String(CONTAINER_PADDING)},right=${String(CONTAINER_PADDING)}]`,
     };
@@ -342,10 +368,11 @@ export const getLayoutedElements = async (
 ): Promise<{ nodes: Node[]; edges: Edge[] }> => {
   const { edgeBuilder = codeGraphEdgeBuilder } = options;
   const direction = options.direction || graph.direction || "TD";
+  const elkDirection = toElkDirection(direction);
   const hierarchy = assertHierarchy(graph);
 
   const elkChildren = hierarchy.roots.map((node) =>
-    buildElkNode(node, sizes, hierarchy.childrenOf),
+    buildElkNode(node, sizes, hierarchy.childrenOf, elkDirection),
   );
   const portIds = new Set<string>();
   for (const child of elkChildren) collectPortIds(child, portIds);
@@ -355,7 +382,7 @@ export const getLayoutedElements = async (
     id: "root",
     layoutOptions: {
       ...DEFAULT_ELK_OPTIONS,
-      "elk.direction": direction === "LR" ? "RIGHT" : "DOWN",
+      "elk.direction": elkDirection,
       ...options.layoutOptions,
     },
     children: elkChildren,
@@ -386,10 +413,14 @@ export const getLayoutedElements = async (
 
     const source = absoluteBox(edge.source, layoutById);
     const target = absoluteBox(edge.target, layoutById);
-    // Back edge: a self-loop, or the target sits entirely above the source
-    // in absolute flow coordinates (specs/graph-view.md §4).
+    // Back edge: a self-loop, or the target sits entirely against the root
+    // rank direction (specs/graph-view.md §4). BT inverts the Y test so
+    // forward edges in a bottom-to-top graph are not painted as loops.
     const isBackEdge =
-      edge.source === edge.target || target.y + target.height <= source.y;
+      edge.source === edge.target ||
+      (elkDirection === "UP"
+        ? target.y >= source.y + source.height
+        : target.y + target.height <= source.y);
 
     return applyRoutedData(rfEdge, {
       ...(rfEdge.data as RoutedEdgeData | undefined),

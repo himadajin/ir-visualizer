@@ -26,10 +26,10 @@ const HighlightedCode = ({
         });
 
         // Shiki's <pre> carries the user-agent default block margin (12px
-        // top/bottom in this app), which converter.ts's node-size estimate
-        // does not account for (nodeTextStyle.ts, specs/graph-view.md §5) —
-        // reset it so the rendered box matches the estimate. A no-op when
-        // `inline` strips the tag below.
+        // top/bottom in this app), which would inflate the measured box
+        // handed to ELK (specs/graph-view.md §5) — reset it so the painted
+        // node is the box that was measured. A no-op when `inline` strips
+        // the tag below.
         highlighted = highlighted.replace(
           /(<pre[^>]*\sstyle=")/,
           "$1margin:0;",

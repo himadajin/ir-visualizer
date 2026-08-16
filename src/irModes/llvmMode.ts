@@ -1,4 +1,5 @@
 import { codeGraphEdgeBuilder } from "../utils/layout";
+import { USE_DEF_NODE_NODE_BETWEEN_LAYERS } from "../utils/spacing";
 import LLVMBasicBlockNode from "../components/Graph/LLVM/LLVMBasicBlockNode";
 import LLVMFunctionHeaderNode from "../components/Graph/LLVM/LLVMFunctionHeaderNode";
 import LLVMGlobalVariableNode from "../components/Graph/LLVM/LLVMGlobalVariableNode";
@@ -81,8 +82,9 @@ export const llvmMode = {
       label: "Use-Def",
       parse: parseUseDef,
       layoutOptions: {
-        "elk.layered.spacing.nodeNodeBetweenLayers": "60",
-        "elk.spacing.nodeNode": "40",
+        "elk.layered.spacing.nodeNodeBetweenLayers": String(
+          USE_DEF_NODE_NODE_BETWEEN_LAYERS,
+        ),
       },
     },
   ],

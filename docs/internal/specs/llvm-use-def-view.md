@@ -119,9 +119,9 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   as a back edge from the final layout geometry without any special casing here.
 - **Per-operand ports**: an instruction card exposes one target `Handle`
   (id `u-<name>`) per entry in `uses`, horizontally positioned at the first
-  occurrence of `%name` in the monospace text (measured with the same
-  `getFontMetrics` char width the size estimator uses, shifted right by the
-  inline badge's width plus its gap), on the card's top edge; and a source
+  occurrence of `%name` in the monospace text (measured with `getFontMetrics` char
+  width, shifted right by the inline badge's width plus its gap), on the card's top
+  edge; and a source
   `Handle` under the `def` name on the bottom edge. A name that cannot be
   located in the text falls back to the default centered handle. The layout
   declares the same offsets as ELK `FIXED_POS` ports so routed edges aim at the

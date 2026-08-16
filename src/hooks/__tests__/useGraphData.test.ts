@@ -5,6 +5,8 @@ import { useGraphData } from "../useGraphData";
 import { llvmMode, selectionDAGMode } from "../../irModes";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
+import type { IRLayoutBehavior } from "../../irModes/types";
+import type { NodeSizeMap } from "../../utils/layout";
 
 function twoNodeGraph(labelA = "A", labelB = "B"): GraphData {
   return {
@@ -58,6 +60,10 @@ function selectionDAGGraph(): GraphData {
   };
 }
 
+const BOX = { width: 120, height: 40 };
+const sizesOf = (graph: GraphData): NodeSizeMap =>
+  new Map(graph.nodes.map((node) => [node.id, BOX]));
+
 /**
  * Layout is async (specs/graph-view.md §2): wait for it to land. The elkjs
  * bundle is dynamically imported on first use (`layout.ts`), which under CPU
@@ -77,28 +83,77 @@ async function waitForNodeCount(
   );
 }
 
+async function layoutGraph(
+  result: { current: ReturnType<typeof useGraphData> },
+  graph: GraphData,
+  mode: IRLayoutBehavior,
+) {
+  act(() => {
+    result.current.updateGraph(graph, mode);
+  });
+  await waitForNodeCount(result, graph.nodes.length);
+  await act(async () => {
+    await result.current.applyLayout(sizesOf(graph));
+  });
+}
+
 describe("useGraphData", () => {
-  it("lays out nodes and edges on the first updateGraph call", async () => {
+  it("mounts hidden nodes with no edges until measured sizes are applied", async () => {
     const { result } = renderHook(() => useGraphData());
+    const graph = twoNodeGraph();
 
     act(() => {
-      result.current.updateGraph(twoNodeGraph(), llvmMode);
+      result.current.updateGraph(graph, llvmMode);
     });
     await waitForNodeCount(result, 2);
 
+    expect(result.current.layoutPending).toBe(true);
+    expect(result.current.edges).toHaveLength(0);
+    expect(
+      result.current.nodes.every((node) => node.style?.visibility === "hidden"),
+    ).toBe(true);
+
+    await act(async () => {
+      await result.current.applyLayout(sizesOf(graph));
+    });
+
+    expect(result.current.layoutPending).toBe(false);
     expect(result.current.edges).toHaveLength(1);
-    // ELK should have assigned real (non-origin) positions.
+    expect(
+      result.current.nodes.every((node) => node.style?.visibility !== "hidden"),
+    ).toBe(true);
+  });
+
+  it("lays out nodes and edges once measured sizes are applied", async () => {
+    const { result } = renderHook(() => useGraphData());
+    await layoutGraph(result, twoNodeGraph(), llvmMode);
+
+    expect(result.current.edges).toHaveLength(1);
     const positions = result.current.nodes.map((n) => n.position);
     expect(positions.some((p) => p.x !== 0 || p.y !== 0)).toBe(true);
+  });
+
+  it("ignores applyLayout when the size map does not cover the graph", async () => {
+    const { result } = renderHook(() => useGraphData());
+    const graph = twoNodeGraph();
+
+    act(() => {
+      result.current.updateGraph(graph, llvmMode);
+    });
+    await waitForNodeCount(result, 2);
+
+    await act(async () => {
+      await result.current.applyLayout(new Map([["n1", BOX]]));
+    });
+
+    expect(result.current.layoutPending).toBe(true);
+    expect(result.current.edges).toHaveLength(0);
   });
 
   it("preserves node positions and edges' back-edge flags on a content-only update (same topology)", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.updateGraph(twoNodeGraph(), llvmMode);
-    });
-    await waitForNodeCount(result, 2);
+    await layoutGraph(result, twoNodeGraph(), llvmMode);
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
     const backEdgeAfterFirst = (result.current.edges[0].data as RoutedEdgeData)
       .isBackEdge;
@@ -127,15 +182,8 @@ describe("useGraphData", () => {
   it("re-runs layout when the topology changes", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.updateGraph(twoNodeGraph(), llvmMode);
-    });
-    await waitForNodeCount(result, 2);
-
-    act(() => {
-      result.current.updateGraph(threeNodeGraph(), llvmMode);
-    });
-    await waitForNodeCount(result, 3);
+    await layoutGraph(result, twoNodeGraph(), llvmMode);
+    await layoutGraph(result, threeNodeGraph(), llvmMode);
 
     expect(result.current.edges).toHaveLength(2);
   });
@@ -150,6 +198,9 @@ describe("useGraphData", () => {
       result.current.updateGraph(threeNodeGraph(), llvmMode);
     });
     await waitForNodeCount(result, 3);
+    await act(async () => {
+      await result.current.applyLayout(sizesOf(threeNodeGraph()));
+    });
 
     expect(result.current.edges).toHaveLength(2);
     // The discarded first layout must not land afterwards.
@@ -159,18 +210,13 @@ describe("useGraphData", () => {
 
   it("flags same-source/target edges as back edges", async () => {
     const { result } = renderHook(() => useGraphData());
+    const graph: GraphData = {
+      direction: "TD",
+      nodes: [{ id: "n1", label: "A" }],
+      edges: [{ id: "self", source: "n1", target: "n1" }],
+    };
 
-    act(() => {
-      result.current.updateGraph(
-        {
-          direction: "TD",
-          nodes: [{ id: "n1", label: "A" }],
-          edges: [{ id: "self", source: "n1", target: "n1" }],
-        },
-        llvmMode,
-      );
-    });
-    await waitForNodeCount(result, 1);
+    await layoutGraph(result, graph, llvmMode);
 
     expect(result.current.edges[0].type).toBe("routed");
     expect((result.current.edges[0].data as RoutedEdgeData).isBackEdge).toBe(
@@ -178,13 +224,10 @@ describe("useGraphData", () => {
     );
   });
 
-  it("resetLayout re-applies layout to the last graph passed to updateGraph", async () => {
+  it("applyLayout re-applies layout to the last graph passed to updateGraph", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.updateGraph(twoNodeGraph(), llvmMode);
-    });
-    await waitForNodeCount(result, 2);
+    await layoutGraph(result, twoNodeGraph(), llvmMode);
     act(() => {
       result.current.setNodes(
         result.current.nodes.map((n) => ({
@@ -200,7 +243,7 @@ describe("useGraphData", () => {
     ).toBe(true);
 
     await act(async () => {
-      await result.current.resetLayout();
+      await result.current.applyLayout(sizesOf(twoNodeGraph()));
     });
 
     expect(
@@ -210,30 +253,24 @@ describe("useGraphData", () => {
     ).toBe(true);
   });
 
-  it("resetLayout is a no-op when no graph has been set yet", async () => {
+  it("applyLayout is a no-op when no graph has been set yet", async () => {
     const { result } = renderHook(() => useGraphData());
 
     await act(async () => {
-      await result.current.resetLayout();
+      await result.current.applyLayout(new Map());
     });
 
     expect(result.current.nodes).toHaveLength(0);
     expect(result.current.edges).toHaveLength(0);
   });
 
-  it("keeps updateGraph/resetLayout identities stable across graph updates", async () => {
+  it("keeps updateGraph/applyLayout identities stable across graph updates", async () => {
     const { result } = renderHook(() => useGraphData());
     const firstUpdateGraph = result.current.updateGraph;
-    const firstResetLayout = result.current.resetLayout;
+    const firstApplyLayout = result.current.applyLayout;
 
-    act(() => {
-      result.current.updateGraph(twoNodeGraph(), llvmMode);
-    });
-    await waitForNodeCount(result, 2);
-    act(() => {
-      result.current.updateGraph(threeNodeGraph(), llvmMode);
-    });
-    await waitForNodeCount(result, 3);
+    await layoutGraph(result, twoNodeGraph(), llvmMode);
+    await layoutGraph(result, threeNodeGraph(), llvmMode);
     act(() => {
       result.current.setNodes(
         result.current.nodes.map((n) => ({ ...n, position: { x: 7, y: 7 } })),
@@ -243,16 +280,13 @@ describe("useGraphData", () => {
     // Unstable identities re-arm useIRWorkspace's debounced parse effect, which
     // re-parses unchanged code forever (specs/graph-view.md §1–§2).
     expect(result.current.updateGraph).toBe(firstUpdateGraph);
-    expect(result.current.resetLayout).toBe(firstResetLayout);
+    expect(result.current.applyLayout).toBe(firstApplyLayout);
   });
 
   it("lays out SelectionDAG nodes via the SelectionDAG mode", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
-    });
-    await waitForNodeCount(result, 2);
+    await layoutGraph(result, selectionDAGGraph(), selectionDAGMode);
 
     expect(result.current.edges).toHaveLength(1);
   });
@@ -260,10 +294,7 @@ describe("useGraphData", () => {
   it("preserves positions and edge types on a SelectionDAG content-only update", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
-    });
-    await waitForNodeCount(result, 2);
+    await layoutGraph(result, selectionDAGGraph(), selectionDAGMode);
     const positionsAfterFirst = result.current.nodes.map((n) => n.position);
     const edgeTypesAfterFirst = result.current.edges.map((e) => e.type);
 
@@ -279,13 +310,10 @@ describe("useGraphData", () => {
     );
   });
 
-  it("resetLayout re-applies the SelectionDAG layout", async () => {
+  it("applyLayout re-applies the SelectionDAG layout", async () => {
     const { result } = renderHook(() => useGraphData());
 
-    act(() => {
-      result.current.updateGraph(selectionDAGGraph(), selectionDAGMode);
-    });
-    await waitForNodeCount(result, 2);
+    await layoutGraph(result, selectionDAGGraph(), selectionDAGMode);
     act(() => {
       result.current.setNodes(
         result.current.nodes.map((n) => ({
@@ -296,7 +324,7 @@ describe("useGraphData", () => {
     });
 
     await act(async () => {
-      await result.current.resetLayout();
+      await result.current.applyLayout(sizesOf(selectionDAGGraph()));
     });
 
     expect(

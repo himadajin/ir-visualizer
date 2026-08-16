@@ -35,30 +35,35 @@ behavior with no covering test.
 signature**: `direction | sorted node ids | sorted source-target pairs`.
 
 - **Signature changed** (first parse, node/edge added or removed, direction changed):
-  full **asynchronous** ELK re-layout; all node positions are recomputed. A layout that
-  resolves after a newer parse has started is discarded (generation counter), so an
-  outdated layout can never overwrite a newer graph.
+  a **measure-then-layout** pass (§3, §5). Nodes are mounted so React Flow can measure
+  them; no positioned graph is committed until ELK has run on those measured sizes.
+  A layout that resolves after a newer parse has started is discarded (generation
+  counter), so an outdated layout can never overwrite a newer graph.
 - **Signature unchanged** (content-only edit, e.g. changing an instruction inside a block):
   synchronous update — node **positions are preserved**, labels/content update in place,
   and edges are rebuilt by the mode's `IREdgeBuilder`, inheriting the previous edge's
   back-edge flag by id (§4). Nothing geometric is inherited: edge geometry is recomputed
   from the live node rectangles on every render (§4), so a content edit that changes a
-  node's rendered _size_ is reflected immediately, with no re-layout needed.
+  node's rendered _size_ is reflected immediately, with no re-layout. The spacing
+  promise (§3) is not re-asserted until the next full layout.
 - Switching views always changes the signature (the two projections emit different node id
   namespaces), so each view switch performs a full re-layout; **positions are not preserved
   across view switches** — the projections' topologies are unrelated, so there is nothing
   to carry over.
 
 **Reset Layout** re-runs the full (async) layout for the last parsed graph (using the active
-view's edge builder and layout options) and is a no-op before the first parse; the viewer
-then re-fits the viewport (after a 50 ms delay — _observed, untested_).
+view's edge builder and layout options, and the **current** measured sizes) and is a no-op
+before the first parse; the graph stays visible while it runs. The viewer then re-fits the
+viewport (after a 50 ms delay — _observed, untested_).
 
 > Pinned by: `src/hooks/__tests__/useGraphData.test.ts`
 
 ## 3. Layout (ELK — node placement)
 
 Node placement is computed by ELK (`elkjs`, layered algorithm). ELK computes **placement
-only** — edge geometry is not taken from it (§4).
+only** — edge geometry is not taken from it (§4). `getLayoutedElements` is a pure
+function of the graph plus a size map: it does not estimate, and it does not read the
+DOM. The hook owns the measure pass that produces that map (§5).
 
 - `getLayoutedElements` is **async**: the elkjs bundle is dynamically imported on first use
   and layout runs on the main thread (graphs are small; no worker).
@@ -68,14 +73,29 @@ only** — edge geometry is not taken from it (§4).
   nodes within a layer and it therefore improves **placement**. The route points ELK
   produces are **discarded**: they are not stored on the React Flow edges.
 - Per-mode `layoutOptions` (ELK option map) merge into the root options (e.g. Use-Def's
-  tighter spacing, SelectionDAG's layer spacing). _(merging: observed, untested)_
-- Node boxes given to ELK use the estimated dimensions from §5, so spacing reflects real
-  rendered sizes. Use-Def instruction nodes additionally declare `FIXED_POS` ports at
-  operand text offsets (`specs/llvm-use-def-view.md` §4); the ports shape placement and
-  decide which handle an edge attaches to. _(observed, untested)_
+  extra layer spacing). _(merging: observed, untested)_
+- Node boxes given to ELK are the **measured** sizes from §5, quantized to the same
+  integer lattice the router uses (`contracts/edge-routing.md`, Input quantization —
+  a size is a rect at the origin). No estimated size is an ELK input. Use-Def
+  instruction nodes additionally declare `FIXED_POS` ports at operand text offsets
+  (`specs/llvm-use-def-view.md` §4); those offsets stay font-metric estimates, clamped
+  to the measured width. The ports shape placement and decide which handle an edge
+  attaches to. _(ports: observed, untested)_
+- **Spacing promise.** After a full layout, the gap between adjacent live node rects in
+  the same layer or consecutive layers is **at least** the configured node spacing
+  (`NODE_NODE_SPACING` / `NODE_NODE_BETWEEN_LAYERS` in `src/utils/spacing.ts`). ELK's
+  guarantee is a minimum: packing and alignment may leave more. Undershoot against the
+  painted boxes is a bug; extra gap is not. The promise applies to full layouts (first
+  parse, topology change, Reset Layout), not to content-only updates (§2).
+- ELK options and the live router's clearances come from **one** module,
+  `src/utils/spacing.ts`. `elk.spacing.edgeNode` / `edgeEdge` (and their between-layer
+  counterparts) are derived from `NODE_MARGIN` so they cannot drift from the clearance
+  the router actually keeps, even though ELK's own routes are discarded. Lane width for
+  non-bundle separation is not in that module yet — it lands with #86.
 - The layout is also where the structural back-edge flag is decided (§4).
 
-> Pinned by: `src/utils/__tests__/layout.test.ts`
+> Pinned by: `src/utils/__tests__/layout.test.ts`,
+> `src/utils/__tests__/spacing.test.ts`
 
 ## 4. Edge routing and rendering
 
@@ -204,18 +224,15 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   demand `nodeMargin = 16` and 48 px of spacing, above the configured `elk.spacing.nodeNode`,
   and would widen the clearance band that already closes corridors between unrelated rects
   ("Known limitations" below); shrinking the radius is the safer of the two directions. The
-  radius is therefore computed from the router's exported margin
-  (`src/components/Graph/roundedPath.ts`), never restated as a literal of its own; it moves
-  into the shared spacing module once #91 introduces one.
+  radius is `BEND_RADIUS` in `src/utils/spacing.ts`, derived from `NODE_MARGIN`, never
+  restated as a literal of its own.
 
   The shrink-to-fit in `roundedPath` (`min(bendRadius, inLen / 2, outLen / 2)`) stays as the
-  safety valve, and after this it engages only where the layout genuinely leaves a corridor
-  narrower than `2 × bendRadius` — today, where ELK lays out on estimated rather than
-  measured sizes and delivers less gap than it was asked for (#91). What is deliberately
-  _not_ done is making the router guarantee a minimum run length so the radius is always
-  nominal: that would put a stroke-appearance constraint into the topology search and could
-  make an edge unroutable for a cosmetic reason. Clearance and topology are the router's
-  concern; stroke appearance is not.
+  safety valve, and it engages only where the layout genuinely leaves a corridor narrower
+  than `2 × bendRadius`. What is deliberately _not_ done is making the router guarantee a
+  minimum run length so the radius is always nominal: that would put a stroke-appearance
+  constraint into the topology search and could make an edge unroutable for a cosmetic
+  reason. Clearance and topology are the router's concern; stroke appearance is not.
 
 - **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a self-loop
   or its target node lies entirely above its source node. The flag is **structural** —
@@ -227,10 +244,10 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
 - **Known limitations,** both accepted since the alternatives are a stale route or a second
   geometry generator: the no-path fallback does no obstacle avoidance
   (`contracts/edge-routing.md`), so dragging one node onto or nearly onto another can make
-  a fallback edge visibly thread between the two boxes; and ELK's placement can leave two
-  _unrelated_ node rects closer than `2 × nodeMargin` apart, closing the corridor a third
-  edge would otherwise route through and forcing that edge to the fallback — a
-  layout-constant question, not a router defect. _(observed, untested)_
+  a fallback edge visibly thread between the two boxes; and a content-only edit that grows
+  a node can close a corridor that the last full layout had reserved, forcing a third edge
+  to the fallback until the next full layout re-asserts the spacing promise (§3).
+  _(observed, untested)_
 - **Reset layout** (§2) re-runs ELK placement and nothing else. It has no role in edge
   rendering: edge geometry is always current, dragged or not.
 - **SelectionDAG**: unaffected by routing — its edges connect per-operand/type Handles and
@@ -259,32 +276,49 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
 > a different marker from the two above: there is nothing to observe and nothing to pin until
 > #86–#88 land.
 
-## 5. Node dimension estimation
+## 5. Node sizing (measure, then lay out)
 
-ELK needs node sizes before React renders anything, so `converter.ts` estimates them:
+Nodes size themselves. ELK never sees an estimate: it receives the sizes React Flow
+measured after the nodes were mounted, quantized to the router's integer lattice (§3).
 
-- Text nodes: character-count based. Char width/line height come from `getFontMetrics`
-  (measures a monospace `M` in the DOM; falls back to 8×16 px in non-browser environments).
-  Width clamps per mode: Mermaid 10–30 chars, LLVM 16–80, SelectionDAG fallback 12–50. The
-  estimated box is exactly the rendered NodeShell frame:
-  `chars·charW + 2·(NODE_PADDING_X + NODE_BORDER_WIDTH)` wide and
-  `lines·lineHeight + 2·(NODE_PADDING_Y + NODE_BORDER_WIDTH)` tall, plus
-  `NODE_HEADER_HEIGHT` when a block label band is present (`blockLabel !== undefined`, so
-  labeled and `null`-labeled entry blocks both count).
-- SelectionDAG nodes: structural estimation mirroring `SelectionDAGNode.tsx`'s row/cell layout.
-- The estimation and the rendered CSS share single-source constants — `common/nodeTextStyle.ts`
-  owns the whole node frame (font 12 px / line height 16 px, paddings 8×6, border 1 px, radius
-  2 px, header band 20 px), with `SelectionDAG/selectionDAGStyleConstants.ts` and
-  `CodeFragment.tsx`'s exported paddings for their structures. When changing node styling,
-  change the constant, never a literal, or layout spacing silently drifts from rendering.
-- LLVM node bodies and the Use-Def instruction card render their code line(s) through
-  `HighlightedCode.tsx`, which resets the user-agent block margin on Shiki's `<pre>` output
-  to `0` before mounting it — the estimate above assumes no margin. (Inline mode, used by
-  SelectionDAG's `CodeFragment.tsx`, strips the `<pre>`/`<code>` tags entirely; Mermaid
-  nodes render plain text and are unaffected.)
+**Measure pass.** On a full layout (topology change or first parse):
 
-> Pinned by: `src/utils/__tests__/converter.test.ts`,
-> `src/components/Graph/common/__tests__/HighlightedCode.test.tsx`
+1. `useGraphData` mounts the new nodes at the origin with `visibility: hidden` and **no
+   edges**. The canvas ground (background dots, controls) stays; the graph itself is not
+   shown. Edges are omitted rather than drawn between stacked origin boxes, so the
+   unmeasured-node rule in §4 is not asked to stand in for a placeholder geometry.
+2. React Flow measures each node's DOM box (`measured.width` / `measured.height`).
+3. Once every node has a positive measured size, `GraphViewer` hands that map to
+   `applyLayout`. `getLayoutedElements` runs ELK on the quantized sizes and commits
+   positions. Edges appear with that commit. A result whose generation is stale is
+   discarded, as in §2.
+
+Until step 3 commits, **no positioned graph is shown** — not an estimate-based preview,
+and not a pile of overlapping origin nodes. Reset Layout skips this hide: the graph
+stays visible and ELK re-runs against the current measurements.
+
+**Wrapping.** Width clamps are CSS, in `ch`, not a font-metric pixel guess handed to ELK.
+`nodeTextStyle.ts` owns the frame (font 12 px / line height 16 px, paddings 8×6, border
+1 px, radius 2 px, header band 20 px) and the wrap bounds: Mermaid 10–30 ch, LLVM 16–80 ch,
+Use-Def code 8–80 ch. SelectionDAG nodes shrink-wrap their table; they have no char clamp.
+Change the constant, never a literal.
+
+**HighlightedCode.** LLVM node bodies and the Use-Def instruction card render through
+`HighlightedCode.tsx`, which resets the user-agent block margin on Shiki's `<pre>` to `0`
+before mounting it — otherwise that margin is part of the measured box. (Inline mode, used
+by SelectionDAG's `CodeFragment.tsx`, strips the `<pre>`/`<code>` tags entirely; Mermaid
+nodes render plain text and are unaffected.) Highlighting is async; the first layout uses
+the first complete measurement. A later size change from highlighting is a content-only
+size change: edges follow, positions do not.
+
+Use-Def per-operand port _offsets_ still use `getFontMetrics` (`specs/llvm-use-def-view.md`
+§4). That is handle placement along a side, not the box ELK packs.
+
+> Pinned by: `src/hooks/__tests__/useGraphData.test.ts`,
+> `src/utils/__tests__/layout.test.ts`,
+> `src/components/Graph/common/__tests__/HighlightedCode.test.tsx`.
+> Wrap bounds and the hidden measure pass: _observed, untested_ except as exercised by
+> the layout/hook tests above.
 
 ## 6. Shell UI (canvas-first shell)
 
@@ -369,9 +403,10 @@ reset (§2).
   using the @xyflow/react 12.10 object form (e.g. `fitView({ padding: { left: "436px" } })`),
   so "fit" centers the graph in the _visible_ area. The padding is `0` while the panel is
   collapsed. This applies to the initial fit, the fit-view button, and the re-fit after Reset
-  Layout. Because layout is async (§2), the initial fit is triggered by
-  `useNodesInitialized` once the first layout's nodes are measured, not by the `fitView`
-  prop (which would fire before any nodes exist). _(observed, untested)_
+  Layout. Because layout is a measure-then-place pass (§5), the initial fit waits until
+  the measured layout has been **committed** (not merely until `useNodesInitialized`, which
+  fires on the hidden measure mount), not by the `fitView` prop (which would fire before
+  any nodes exist). _(observed, untested)_
 - The cluster stays clear of any bottom inset the shell reserves: in narrow mode with the
   sheet open it is lifted above the sheet by the sheet's height, and it returns to the
   viewport's bottom-right corner whenever that inset is `0`. _(observed, untested)_

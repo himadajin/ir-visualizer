@@ -1,7 +1,6 @@
 import HighlightedCode from "./HighlightedCode";
 
-// Consumed by selectionDAGLayoutUtils.ts and converter.ts to size SelectionDAG
-// nodes, which are the only current consumer of CodeFragment.
+// Padding of each CodeFragment cell in a SelectionDAG node.
 export const CODE_FRAGMENT_PADDING_X = 4;
 export const CODE_FRAGMENT_PADDING_Y = 2;
 

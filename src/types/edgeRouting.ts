@@ -31,9 +31,9 @@ export interface RouteRequest {
 }
 
 export interface EdgeRouterOptions {
-  nodeMargin?: number; // default 12
+  nodeMargin?: number; // default NODE_MARGIN (src/utils/spacing.ts)
   bendPenalty?: number; // default 30
-  selfLoopGap?: number; // default 24
+  selfLoopGap?: number; // default SELF_LOOP_GAP (src/utils/spacing.ts)
 }
 
 /**

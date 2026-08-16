@@ -1,7 +1,11 @@
 import type { NodeProps } from "@xyflow/react";
 import type { MermaidASTNode } from "../../../ast/mermaidAST";
 import NodeShell from "../common/NodeShell";
-import { NODE_BORDER_RADIUS } from "../common/nodeTextStyle";
+import {
+  NODE_BORDER_RADIUS,
+  NODE_WRAP_MAX_CHARS_MERMAID,
+  NODE_WRAP_MIN_CHARS_MERMAID,
+} from "../common/nodeTextStyle";
 
 const shapeToBorderRadius = (shape?: string): string => {
   switch (shape) {
@@ -31,6 +35,10 @@ const MermaidNode = ({ data }: NodeProps) => {
   return (
     <NodeShell
       borderRadius={borderRadius}
+      wrap={{
+        minChars: NODE_WRAP_MIN_CHARS_MERMAID,
+        maxChars: NODE_WRAP_MAX_CHARS_MERMAID,
+      }}
       style={{
         border,
         textAlign: "center",

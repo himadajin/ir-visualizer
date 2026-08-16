@@ -55,7 +55,8 @@ const { modeA, modeB, updateGraph, graphState } = vi.hoisted(() => {
       setNodes: vi.fn(),
       setEdges: vi.fn(),
       updateGraph,
-      resetLayout: vi.fn(),
+      applyLayout: vi.fn(),
+      layoutPending: false,
     },
   };
 });

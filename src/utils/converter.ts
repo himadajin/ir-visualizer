@@ -1,32 +1,5 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import type { GraphNode, GraphEdge } from "../types/graph";
-import { estimateSelectionDAGRowWidths } from "../components/Graph/SelectionDAG/selectionDAGLayoutUtils";
-import {
-  SELECTION_DAG_BORDER_WIDTH,
-  SELECTION_DAG_CELL_PADDING,
-  SELECTION_DAG_ITEM_PADDING,
-} from "../components/Graph/SelectionDAG/selectionDAGStyleConstants";
-import {
-  NODE_BORDER_WIDTH,
-  NODE_FONT_FAMILY,
-  NODE_FONT_SIZE,
-  NODE_HEADER_HEIGHT,
-  NODE_LINE_HEIGHT,
-  NODE_PADDING_X,
-  NODE_PADDING_Y,
-} from "../components/Graph/common/nodeTextStyle";
-import { CODE_FRAGMENT_PADDING_Y } from "../components/Graph/common/CodeFragment";
-import { USE_DEF_BADGE_GAP } from "../components/Graph/LLVM/UseDef/useDefStyleConstants";
-import { estimateBadgeWidth } from "../components/Graph/LLVM/UseDef/useDefPorts";
-import { getFontMetrics } from "./fontUtils";
-
-// Configuration for min and max characters width
-const MIN_CHARS_MERMAID = 10;
-const MAX_CHARS_MERMAID = 30;
-const MIN_CHARS_LLVM = 16;
-const MAX_CHARS_LLVM = 80;
-const MIN_CHARS_SELECTION_DAG = 12;
-const MAX_CHARS_SELECTION_DAG = 50;
 
 /**
  * Maps GraphNode.nodeType (kebab-case) to React Flow nodeTypes key (camelCase).
@@ -38,184 +11,11 @@ export const nodeTypeToReactFlowType = (nodeType?: string): string => {
   return nodeType.replace(/-([a-zA-Z])/g, (_, c: string) => c.toUpperCase());
 };
 
-type NodeSizingConfig = {
-  minChars: number;
-  maxChars: number;
-};
-
-const getSizingConfig = (node: GraphNode): NodeSizingConfig => {
-  if (node.nodeType === "selectionDAG-node") {
-    return {
-      minChars: MIN_CHARS_SELECTION_DAG,
-      maxChars: MAX_CHARS_SELECTION_DAG,
-    };
-  }
-
-  if (node.language === "mermaid") {
-    return { minChars: MIN_CHARS_MERMAID, maxChars: MAX_CHARS_MERMAID };
-  }
-
-  return { minChars: MIN_CHARS_LLVM, maxChars: MAX_CHARS_LLVM };
-};
-
-const getLabelLines = (label?: string): string[] => label?.split("\n") || [""];
-
-const measureWrappedLines = (lines: string[], maxChars: number) => {
-  let maxLineLength = 0;
-  let totalLines = 0;
-
-  lines.forEach((line) => {
-    const lineLength = line.length;
-    if (lineLength > maxLineLength) {
-      maxLineLength = lineLength;
-    }
-
-    const wrappedLines = Math.max(1, Math.ceil(lineLength / maxChars));
-    totalLines += wrappedLines;
-  });
-
-  return { maxLineLength, totalLines };
-};
-
-const calculateSelectionDAGDimensions = (
-  node: GraphNode & { nodeType: "selectionDAG-node" },
-) => {
-  const metrics = getFontMetrics(
-    NODE_FONT_FAMILY,
-    NODE_FONT_SIZE,
-    NODE_LINE_HEIGHT,
-  );
-  const ast = node.astData;
-  const rowWidths = estimateSelectionDAGRowWidths(ast, metrics.width);
-  const width = Math.max(...rowWidths);
-
-  // Calculate actual height based on CSS structure in SelectionDAGNode.tsx
-  const operands = ast.operands ?? [];
-  const hasOperands = operands.length > 0;
-
-  // Each CodeFragment has vertical padding on both sides.
-  const codeFragmentHeight = metrics.height + CODE_FRAGMENT_PADDING_Y * 2;
-
-  // Row 1 (Operands): Cell Padding + Item Padding + CF Height + Item Padding + Cell Padding
-  const operandsRowHeight = hasOperands
-    ? codeFragmentHeight +
-      (SELECTION_DAG_CELL_PADDING + SELECTION_DAG_ITEM_PADDING) * 2
-    : 0;
-
-  // Row 2 (Main Content): Cell Padding + CF Height + Cell Padding
-  const mainContentRowHeight =
-    codeFragmentHeight + SELECTION_DAG_CELL_PADDING * 2;
-
-  // Row 3 (Types): Cell Padding + Item Padding + CF Height + Item Padding + Cell Padding
-  // Types are always present in SelectionDAG nodes
-  const typesRowHeight =
-    codeFragmentHeight +
-    (SELECTION_DAG_CELL_PADDING + SELECTION_DAG_ITEM_PADDING) * 2;
-
-  const totalHeight =
-    SELECTION_DAG_BORDER_WIDTH * 2 +
-    (hasOperands ? operandsRowHeight + SELECTION_DAG_BORDER_WIDTH : 0) +
-    mainContentRowHeight +
-    SELECTION_DAG_BORDER_WIDTH +
-    typesRowHeight;
-
-  return { width, height: totalHeight };
-};
-
-const calculateCodeNodeDimensions = (
-  node: GraphNode,
-  metricsParam?: {
-    width: number;
-    height: number;
-  },
-) => {
-  const metrics =
-    metricsParam ??
-    getFontMetrics(NODE_FONT_FAMILY, NODE_FONT_SIZE, NODE_LINE_HEIGHT);
-  const { minChars, maxChars } = getSizingConfig(node);
-  const lines = getLabelLines(node.label);
-  const { maxLineLength, totalLines } = measureWrappedLines(lines, maxChars);
-
-  const effectiveMaxChars = Math.min(maxLineLength, maxChars);
-  const finalChars = Math.max(effectiveMaxChars, minChars);
-
-  // Exactly the rendered NodeShell frame (specs/graph-view.md §5).
-  const width =
-    finalChars * metrics.width + (NODE_PADDING_X + NODE_BORDER_WIDTH) * 2;
-  const hasLabel = node.blockLabel !== undefined;
-  const height =
-    totalLines * metrics.height +
-    (NODE_PADDING_Y + NODE_BORDER_WIDTH) * 2 +
-    (hasLabel ? NODE_HEADER_HEIGHT : 0);
-
-  return { width, height };
-};
-
-// Use-def instruction/value cards are single-row NodeShell cards with an
-// inline block badge (specs/llvm-use-def-view.md §4), so they get their own
-// estimation. The Use-Def graph is flat (no containers), so an inaccurate
-// estimate is cosmetic — it only shifts layout spacing — and erring a few
-// px large reads better than nodes overlapping.
-const MIN_CHARS_USE_DEF = 8;
-const MAX_CHARS_USE_DEF = 80;
-const USE_DEF_SIZE_SLACK = 8;
-
-const calculateUseDefCardDimensions = (node: GraphNode) => {
-  const metrics = getFontMetrics(
-    NODE_FONT_FAMILY,
-    NODE_FONT_SIZE,
-    NODE_LINE_HEIGHT,
-  );
-  const lines = getLabelLines(node.label);
-  const { maxLineLength, totalLines } = measureWrappedLines(
-    lines,
-    MAX_CHARS_USE_DEF,
-  );
-  const chars = Math.max(
-    Math.min(maxLineLength, MAX_CHARS_USE_DEF),
-    MIN_CHARS_USE_DEF,
-  );
-  // NodeShell frame: padding and border on both sides.
-  const frameX = (NODE_PADDING_X + NODE_BORDER_WIDTH) * 2;
-  const frameY = (NODE_PADDING_Y + NODE_BORDER_WIDTH) * 2;
-  // Instruction cards put the block badge chip inline, left of the code
-  // line; value pills have no badge.
-  const badgeLabel =
-    node.nodeType === "llvm-useDefInstruction" ? node.astData.blockLabel : null;
-  const badgeSpan =
-    badgeLabel === null
-      ? 0
-      : estimateBadgeWidth(badgeLabel) + USE_DEF_BADGE_GAP;
-
-  return {
-    width: badgeSpan + chars * metrics.width + frameX + USE_DEF_SIZE_SLACK,
-    height: totalLines * metrics.height + frameY + USE_DEF_SIZE_SLACK,
-  };
-};
-
-export const calculateNodeDimensions = (node: GraphNode) => {
-  if (node.nodeType === "selectionDAG-node") {
-    return calculateSelectionDAGDimensions(node);
-  }
-
-  if (
-    node.nodeType === "llvm-useDefInstruction" ||
-    node.nodeType === "llvm-useDefValue"
-  ) {
-    return calculateUseDefCardDimensions(node);
-  }
-
-  return calculateCodeNodeDimensions(node);
-};
-
 export const createReactFlowNode = (
   node: GraphNode,
   position: { x: number; y: number },
+  options?: { hidden?: boolean },
 ): Node => {
-  const { width } = calculateNodeDimensions(node);
-
-  // We don't strictly enforce height in style to allow it to grow,
-  // but we use calculations for initial layout.
   return {
     id: node.id,
     position,
@@ -227,7 +27,15 @@ export const createReactFlowNode = (
       astData: node.astData,
     },
     type: nodeTypeToReactFlowType(node.nodeType),
-    style: { width: width },
+    // fit-content: the node sizes itself; ELK is fed the measured box
+    // afterwards (specs/graph-view.md §5). React Flow's default 150×40 must
+    // not win. `hidden` is CSS visibility so the measure pass stays in the
+    // layout (display:none would not measure).
+    style: {
+      width: "fit-content",
+      height: "fit-content",
+      ...(options?.hidden === true ? { visibility: "hidden" } : {}),
+    },
   };
 };
 

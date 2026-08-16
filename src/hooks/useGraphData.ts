@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Node,
   type Edge,
@@ -7,8 +7,15 @@ import {
 } from "@xyflow/react";
 import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
 import type { IRLayoutBehavior } from "../irModes/types";
-import { getLayoutedElements, inheritBackEdgeFlag } from "../utils/layout";
+import {
+  getLayoutedElements,
+  inheritBackEdgeFlag,
+  sizesCoverGraph,
+  type NodeSizeMap,
+} from "../utils/layout";
 import { createReactFlowNode } from "../utils/converter";
+
+export type { NodeSize, NodeSizeMap } from "../utils/layout";
 
 // Helper to generate a topology signature
 const getTopologySignature = (graph: GraphData) => {
@@ -26,6 +33,7 @@ const getTopologySignature = (graph: GraphData) => {
 export const useGraphData = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [layoutPending, setLayoutPending] = useState(false);
 
   // `updateGraph` needs the *latest* nodes/edges (a content-only update
   // preserves the previous positions and inherits edges' back-edge flags
@@ -51,16 +59,24 @@ export const useGraphData = () => {
   const currentRef = useRef<{
     graph: GraphData;
     mode: IRLayoutBehavior;
+    signature: string;
   } | null>(null);
+  const layoutPendingRef = useRef(false);
   // ELK layout is async (specs/graph-view.md §2): each full layout gets a
   // generation number, and a result that resolves after a newer layout
   // started is discarded rather than overwriting the newer graph.
   const layoutGenerationRef = useRef(0);
 
-  const runLayout = useCallback(
-    (graph: GraphData, mode: IRLayoutBehavior, signature: string | null) => {
+  const applyLayout = useCallback(
+    (sizes: NodeSizeMap) => {
+      const current = currentRef.current;
+      if (!current || !sizesCoverGraph(current.graph, sizes)) {
+        return Promise.resolve();
+      }
       const generation = ++layoutGenerationRef.current;
-      return getLayoutedElements(graph, {
+      const { graph, mode, signature } = current;
+      const storeSignature = layoutPendingRef.current;
+      return getLayoutedElements(graph, sizes, {
         edgeBuilder: mode.edgeBuilder,
         layoutOptions: mode.layoutOptions,
       }).then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
@@ -69,7 +85,9 @@ export const useGraphData = () => {
         nodesRef.current = layoutedNodes;
         setEdges(layoutedEdges);
         edgesRef.current = layoutedEdges;
-        if (signature !== null) lastSignatureRef.current = signature;
+        layoutPendingRef.current = false;
+        setLayoutPending(false);
+        if (storeSignature) lastSignatureRef.current = signature;
       });
     },
     [setNodes, setEdges],
@@ -77,10 +95,9 @@ export const useGraphData = () => {
 
   const updateGraph = useCallback(
     (graph: GraphData, mode: IRLayoutBehavior) => {
-      currentRef.current = { graph, mode };
       const signature = getTopologySignature(graph);
+      currentRef.current = { graph, mode, signature };
 
-      // Check if topology changed
       const isTopologyEqual = signature === lastSignatureRef.current;
 
       if (isTopologyEqual) {
@@ -113,18 +130,23 @@ export const useGraphData = () => {
         setEdges(newEdges);
         edgesRef.current = newEdges;
       } else {
-        // Topology changed or first run: full async re-layout.
-        void runLayout(graph, mode, signature);
+        // Topology changed or first run: mount hidden nodes so React Flow
+        // can measure them. No edges until applyLayout commits placement
+        // (specs/graph-view.md §5).
+        layoutGenerationRef.current += 1;
+        layoutPendingRef.current = true;
+        setLayoutPending(true);
+        const measuring = graph.nodes.map((node: GraphNode) =>
+          createReactFlowNode(node, { x: 0, y: 0 }, { hidden: true }),
+        );
+        setNodes(measuring);
+        nodesRef.current = measuring;
+        setEdges([]);
+        edgesRef.current = [];
       }
     },
-    [setNodes, setEdges, runLayout],
+    [setNodes, setEdges],
   );
-
-  const resetLayout = useCallback(async () => {
-    const current = currentRef.current;
-    if (!current) return;
-    await runLayout(current.graph, current.mode, null);
-  }, [runLayout]);
 
   return {
     nodes,
@@ -134,6 +156,7 @@ export const useGraphData = () => {
     setNodes, // expose in case we need manual override
     setEdges,
     updateGraph,
-    resetLayout,
+    applyLayout,
+    layoutPending,
   };
 };

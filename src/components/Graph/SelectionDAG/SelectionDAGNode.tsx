@@ -36,7 +36,6 @@ const ROOT_STYLE: React.CSSProperties = {
   lineHeight: "20px",
   whiteSpace: "nowrap",
   boxSizing: "border-box",
-  width: "100%",
 };
 
 /** Left column: nodeId + source handle */

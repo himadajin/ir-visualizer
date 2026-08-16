@@ -2,13 +2,15 @@ import { Box } from "@mui/material";
 import type { Node, Edge, OnNodesChange, OnEdgesChange } from "@xyflow/react";
 import { GraphViewer } from "../Graph/GraphViewer";
 import { SHELL_COLORS, type ShellFitViewInset } from "./shellTokens";
+import type { NodeSizeMap } from "../../utils/layout";
 
 interface CanvasShellProps {
   nodes: Node[];
   edges: Edge[];
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
-  onResetLayout: () => void;
+  onApplyLayout: (sizes: NodeSizeMap) => void | Promise<void>;
+  layoutPending: boolean;
   /** Space reserved for the floating editor panel when fitting the view. */
   fitViewInset: ShellFitViewInset;
 }
@@ -23,7 +25,8 @@ export function CanvasShell({
   edges,
   onNodesChange,
   onEdgesChange,
-  onResetLayout,
+  onApplyLayout,
+  layoutPending,
   fitViewInset,
 }: CanvasShellProps) {
   return (
@@ -39,7 +42,8 @@ export function CanvasShell({
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onResetLayout={onResetLayout}
+        onApplyLayout={onApplyLayout}
+        layoutPending={layoutPending}
         fitViewInset={fitViewInset}
       />
     </Box>

@@ -10,12 +10,18 @@ import type { GraphData, GraphEdge } from "../types/graph";
 import type { RoutedEdgeData } from "../components/Graph/RoutedEdge";
 import { getUseDefPorts } from "../components/Graph/LLVM/UseDef/useDefPorts";
 import {
-  calculateNodeDimensions,
   createReactFlowNode,
   createReactFlowEdge,
   createSelectionDAGReactFlowEdge,
   BACK_EDGE_COLOR,
 } from "./converter";
+import { quantizeRect } from "./edgeRouter";
+import {
+  EDGE_EDGE_SPACING,
+  EDGE_NODE_SPACING,
+  NODE_NODE_BETWEEN_LAYERS,
+  NODE_NODE_SPACING,
+} from "./spacing";
 
 /**
  * How a mode turns a GraphEdge into a React Flow edge — see
@@ -48,6 +54,14 @@ export interface LayoutOptions {
   layoutOptions?: Record<string, string>;
 }
 
+/** Measured (or test-supplied) box for one node, flow px. */
+export interface NodeSize {
+  width: number;
+  height: number;
+}
+
+export type NodeSizeMap = ReadonlyMap<string, NodeSize>;
+
 /**
  * The elkjs bundle is ~1.4 MB, so it stays out of the initial chunk and
  * loads with the first layout. Graphs are small; main-thread layout is fine.
@@ -63,21 +77,59 @@ const getElk = (): Promise<ELK> => {
 const DEFAULT_ELK_OPTIONS: ElkLayoutOptions = {
   "elk.algorithm": "layered",
   "elk.edgeRouting": "ORTHOGONAL",
-  "elk.layered.spacing.nodeNodeBetweenLayers": "50",
-  "elk.spacing.nodeNode": "40",
-  "elk.spacing.edgeNode": "16",
-  "elk.spacing.edgeEdge": "12",
-  "elk.layered.spacing.edgeNodeBetweenLayers": "16",
-  "elk.layered.spacing.edgeEdgeBetweenLayers": "12",
+  "elk.layered.spacing.nodeNodeBetweenLayers": String(NODE_NODE_BETWEEN_LAYERS),
+  "elk.spacing.nodeNode": String(NODE_NODE_SPACING),
+  "elk.spacing.edgeNode": String(EDGE_NODE_SPACING),
+  "elk.spacing.edgeEdge": String(EDGE_EDGE_SPACING),
+  "elk.layered.spacing.edgeNodeBetweenLayers": String(EDGE_NODE_SPACING),
+  "elk.layered.spacing.edgeEdgeBetweenLayers": String(EDGE_EDGE_SPACING),
+};
+
+/**
+ * Integer box ELK will pack, using the router's origin-rect quantization
+ * (`contracts/edge-routing.md`). A missing or sub-pixel size is rejected by
+ * `sizesCoverGraph` before this is called.
+ */
+export const toElkSize = (size: NodeSize): NodeSize => {
+  const quantized = quantizeRect({
+    id: "_",
+    x: 0,
+    y: 0,
+    width: size.width,
+    height: size.height,
+  });
+  return { width: quantized.width, height: quantized.height };
+};
+
+/** Every graph node has a quantized size of at least 1×1 px. */
+export const sizesCoverGraph = (
+  graph: GraphData,
+  sizes: NodeSizeMap,
+): boolean => {
+  for (const node of graph.nodes) {
+    const size = sizes.get(node.id);
+    if (size === undefined) return false;
+    const elkSize = toElkSize(size);
+    if (elkSize.width < 1 || elkSize.height < 1) return false;
+  }
+  return true;
 };
 
 /** ELK port ids are global, so node-local handle ids get namespaced. */
 const elkPortId = (nodeId: string, handleId: string) =>
   `${nodeId}::${handleId}`;
 
-const buildElkNode = (graph: GraphData, nodeIndex: number): ElkNode => {
+const buildElkNode = (
+  graph: GraphData,
+  nodeIndex: number,
+  sizes: NodeSizeMap,
+): ElkNode => {
   const node = graph.nodes[nodeIndex];
-  const { width, height } = calculateNodeDimensions(node);
+  const size = sizes.get(node.id);
+  if (size === undefined) {
+    throw new Error(`getLayoutedElements: missing size for node ${node.id}`);
+  }
+  const { width, height } = toElkSize(size);
   const elkNode: ElkNode = { id: node.id, width, height };
 
   if (node.nodeType === "llvm-useDefInstruction") {
@@ -157,14 +209,20 @@ export const inheritBackEdgeFlag = (
   });
 };
 
+/**
+ * Place `graph` with ELK against `sizes` (specs/graph-view.md §3). Pure in
+ * the sizes: it does not estimate and does not read the DOM. Callers that
+ * measured must pass `sizesCoverGraph(graph, sizes)` first.
+ */
 export const getLayoutedElements = async (
   graph: GraphData,
+  sizes: NodeSizeMap,
   options: LayoutOptions = {},
 ): Promise<{ nodes: Node[]; edges: Edge[] }> => {
   const { edgeBuilder = codeGraphEdgeBuilder } = options;
   const direction = options.direction || graph.direction || "TD";
 
-  const elkChildren = graph.nodes.map((_, i) => buildElkNode(graph, i));
+  const elkChildren = graph.nodes.map((_, i) => buildElkNode(graph, i, sizes));
   const portIds = new Set(
     elkChildren.flatMap((child) => (child.ports ?? []).map((p) => p.id)),
   );

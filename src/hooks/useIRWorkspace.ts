@@ -36,7 +36,8 @@ export function useIRWorkspace() {
     onNodesChange,
     onEdgesChange,
     updateGraph,
-    resetLayout,
+    applyLayout,
+    layoutPending,
   } = useGraphData();
 
   // Parsing is async (contracts/ir-mode-registry.md, "Parsing is
@@ -103,7 +104,8 @@ export function useIRWorkspace() {
     edges,
     onNodesChange,
     onEdgesChange,
-    resetLayout,
+    applyLayout,
+    layoutPending,
     changeMode,
     changeView,
     clearCode,

@@ -6,6 +6,7 @@ import type {
   RouteRequest,
   RouteSide,
 } from "../types/edgeRouting";
+import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
 
 /**
  * Self-contained orthogonal edge router (`contracts/edge-routing.md`,
@@ -23,12 +24,12 @@ import type {
  * an optimization — see "Per-edge regions" and "Locality" in the contract.
  */
 
-/** Clearance kept around every node rect, px. */
-export const DEFAULT_NODE_MARGIN = 12;
+/** Clearance kept around every node rect, px (`NODE_MARGIN` in spacing.ts). */
+export const DEFAULT_NODE_MARGIN = NODE_MARGIN;
 /** Price of one bend, expressed in px of path length (`length + bendPenalty * turns`). */
 export const DEFAULT_BEND_PENALTY = 30;
 /** Distance from a node's right edge to its self-loop lane, px. */
-export const DEFAULT_SELF_LOOP_GAP = 24;
+export const DEFAULT_SELF_LOOP_GAP = SELF_LOOP_GAP;
 
 /**
  * How far beyond its own endpoints an edge's search may look, px

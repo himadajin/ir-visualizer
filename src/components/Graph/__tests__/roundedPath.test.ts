@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BEND_RADIUS, roundedPath } from "../roundedPath";
-import { DEFAULT_NODE_MARGIN } from "../../../utils/edgeRouter";
+import { NODE_MARGIN, NODE_NODE_SPACING } from "../../../utils/spacing";
 
 /**
  * The bend radius is derived from the router's node margin rather than chosen
@@ -22,7 +22,7 @@ const drawnRadii = (path: string): number[] => {
   const radii: number[] = [];
   const pattern = /L ([-\d.]+) ([-\d.]+) Q ([-\d.]+) ([-\d.]+)/g;
   for (const match of path.matchAll(pattern)) {
-    const [entryX, entryY, cornerX, cornerY] = match.slice(1).map(Number);
+    const [entryX, entryY, cornerX, cornerY] = match.slice(1, 5).map(Number);
     radii.push(Math.hypot(cornerX - entryX, cornerY - entryY));
   }
   return radii;
@@ -30,20 +30,16 @@ const drawnRadii = (path: string): number[] => {
 
 describe("BEND_RADIUS", () => {
   it("is half the router's node margin", () => {
-    expect(BEND_RADIUS).toBe(DEFAULT_NODE_MARGIN / 2);
+    expect(BEND_RADIUS).toBe(NODE_MARGIN / 2);
   });
 
   it("leaves a full-radius bend room in a route's mandatory endpoint stub", () => {
-    expect(2 * BEND_RADIUS).toBeLessThanOrEqual(DEFAULT_NODE_MARGIN);
+    expect(2 * BEND_RADIUS).toBeLessThanOrEqual(NODE_MARGIN);
   });
 
   it("leaves a full-radius bend room in the corridor the ELK spacing reserves", () => {
-    // The narrowest node spacing any mode configures (layout.ts's default
-    // `elk.spacing.nodeNode`, matched by the Use-Def override). The corridor
-    // between two nodes' clearance bands is that minus both margins.
-    const narrowestNodeSpacing = 40;
-    expect(2 * DEFAULT_NODE_MARGIN + 2 * BEND_RADIUS).toBeLessThanOrEqual(
-      narrowestNodeSpacing,
+    expect(2 * NODE_MARGIN + 2 * BEND_RADIUS).toBeLessThanOrEqual(
+      NODE_NODE_SPACING,
     );
   });
 });
@@ -51,15 +47,15 @@ describe("BEND_RADIUS", () => {
 describe("roundedPath", () => {
   it("draws every corner of a router-shaped route at the nominal radius", () => {
     // Leaves a node's bottom edge at (0, 100), crosses a 16 px corridor
-    // (`elk.spacing.nodeNode` 40 minus both clearance bands), and arrives on a
+    // (`NODE_NODE_SPACING` minus both clearance bands), and arrives on a
     // node's top edge at (120, 140). Both end segments are exactly
-    // `DEFAULT_NODE_MARGIN` long, as the router guarantees.
+    // `NODE_MARGIN` long, as the router guarantees.
     const points = [
       { x: 0, y: 100 },
-      { x: 0, y: 112 },
-      { x: 60, y: 112 },
-      { x: 60, y: 128 },
-      { x: 120, y: 128 },
+      { x: 0, y: 100 + NODE_MARGIN },
+      { x: 60, y: 100 + NODE_MARGIN },
+      { x: 60, y: 140 - NODE_MARGIN },
+      { x: 120, y: 140 - NODE_MARGIN },
       { x: 120, y: 140 },
     ];
 
@@ -72,9 +68,9 @@ describe("roundedPath", () => {
   });
 
   it("shrinks to fit only where the corridor is narrower than two radii", () => {
-    // A 6 px corridor — what ELK leaves when it lays out on an estimated node
-    // size smaller than the measured one (#91), not something this radius can
-    // avoid.
+    // A 6 px corridor — narrower than `2 × BEND_RADIUS`, so shrink-to-fit
+    // engages. Full layouts promise at least the configured spacing; this
+    // is the safety valve for a content-only size change that closed a gap.
     const points = [
       { x: 0, y: 0 },
       { x: 40, y: 0 },

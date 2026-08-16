@@ -56,7 +56,8 @@ function App() {
     edges,
     onNodesChange,
     onEdgesChange,
-    resetLayout,
+    applyLayout,
+    layoutPending,
     changeMode,
     changeView,
     clearCode,
@@ -131,7 +132,8 @@ function App() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onResetLayout={resetLayout}
+        onApplyLayout={applyLayout}
+        layoutPending={layoutPending}
         fitViewInset={fitViewInset}
       />
 

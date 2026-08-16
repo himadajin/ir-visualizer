@@ -4,6 +4,7 @@ import {
   Background,
   useNodesInitialized,
   useReactFlow,
+  useStoreApi,
   type Node,
   type Edge,
   type OnNodesChange,
@@ -22,26 +23,113 @@ import {
   buildFitViewPadding,
   type ShellFitViewInset,
 } from "../AppShell/shellTokens";
+import type { NodeSize, NodeSizeMap } from "../../utils/layout";
 
 const edgeTypes = {
   routed: RoutedEdge,
 };
 
 /**
- * Layout is async (specs/graph-view.md §2), so the first render has zero
- * nodes and React Flow's `fitView` prop would fire on nothing. This fits
- * once, when the first layout's nodes have been measured (§6.4).
+ * Collect measured boxes from React Flow's store. `null` until every node
+ * has a positive measured size (specs/graph-view.md §5).
  */
-const InitialFit = ({ padding }: { padding: FitViewPadding }) => {
+const collectMeasuredSizes = (
+  nodeLookup: ReadonlyMap<
+    string,
+    { id: string; measured: { width?: number; height?: number } }
+  >,
+  nodeIds: readonly string[],
+): NodeSizeMap | null => {
+  const sizes = new Map<string, NodeSize>();
+  for (const id of nodeIds) {
+    const internal = nodeLookup.get(id);
+    const width = internal?.measured.width;
+    const height = internal?.measured.height;
+    if (
+      width === undefined ||
+      height === undefined ||
+      width < 1 ||
+      height < 1
+    ) {
+      return null;
+    }
+    sizes.set(id, { width, height });
+  }
+  return sizes;
+};
+
+/**
+ * Layout is a measure-then-place pass (specs/graph-view.md §5), so the first
+ * `nodesInitialized` fires on the hidden measure mount, not on a placed graph.
+ * This fits once, when that measured layout has been committed.
+ */
+const InitialFit = ({
+  padding,
+  layoutPending,
+}: {
+  padding: FitViewPadding;
+  layoutPending: boolean;
+}) => {
   const nodesInitialized = useNodesInitialized();
   const { fitView } = useReactFlow();
   const hasFitted = useRef(false);
   useEffect(() => {
-    if (!hasFitted.current && nodesInitialized) {
+    if (!hasFitted.current && nodesInitialized && !layoutPending) {
       hasFitted.current = true;
       void fitView({ padding, duration: 0 });
     }
-  }, [nodesInitialized, fitView, padding]);
+  }, [nodesInitialized, layoutPending, fitView, padding]);
+  return null;
+};
+
+/**
+ * When a measure pass is pending, wait until every mounted node has a size
+ * and hand that map to `applyLayout`. Subscribes to the store because
+ * `useNodesInitialized` can still be true from the previous graph when the
+ * new measuring nodes mount.
+ */
+const MeasureAndLayout = ({
+  layoutPending,
+  nodeIds,
+  onApplyLayout,
+}: {
+  layoutPending: boolean;
+  nodeIds: readonly string[];
+  onApplyLayout: (sizes: NodeSizeMap) => void | Promise<void>;
+}) => {
+  const store = useStoreApi();
+  const sentKeyRef = useRef<string | null>(null);
+  const nodeIdKey = nodeIds.join("\0");
+
+  useEffect(() => {
+    if (!layoutPending) {
+      sentKeyRef.current = null;
+      return;
+    }
+
+    const tryApply = () => {
+      if (nodeIds.length === 0) {
+        if (sentKeyRef.current === "") return;
+        sentKeyRef.current = "";
+        void onApplyLayout(new Map());
+        return;
+      }
+      const sizes = collectMeasuredSizes(store.getState().nodeLookup, nodeIds);
+      if (sizes === null) return;
+      const key = [...sizes.entries()]
+        .map(
+          ([id, size]) => `${id}:${String(size.width)}x${String(size.height)}`,
+        )
+        .join("|");
+      if (sentKeyRef.current === key) return;
+      sentKeyRef.current = key;
+      void onApplyLayout(sizes);
+    };
+
+    tryApply();
+    return store.subscribe(tryApply);
+  }, [layoutPending, nodeIdKey, nodeIds, onApplyLayout, store]);
+
   return null;
 };
 
@@ -58,8 +146,14 @@ interface GraphViewerProps {
   edges: Edge[];
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
-  /** Re-runs the (async) layout; resolves when positions have been applied. */
-  onResetLayout: () => Promise<void> | void;
+  /**
+   * Run ELK against the given measured sizes and commit positions
+   * (`specs/graph-view.md` §5). Used both when the measure pass completes
+   * and by Reset Layout.
+   */
+  onApplyLayout: (sizes: NodeSizeMap) => Promise<void> | void;
+  /** True while hidden origin nodes are mounted for measurement. */
+  layoutPending: boolean;
   /**
    * Space (px) the floating editor panel takes up along the viewport edge it
    * is anchored to — its width plus its margin on the left in wide mode, its
@@ -75,10 +169,13 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
   edges,
   onNodesChange,
   onEdgesChange,
-  onResetLayout,
+  onApplyLayout,
+  layoutPending,
   fitViewInset,
 }) => {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+  const store = useStoreApi();
+  const nodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
 
   const fitViewPadding: FitViewPadding = useMemo(
     () => buildFitViewPadding(fitViewInset),
@@ -86,7 +183,12 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
   );
 
   const handleResetLayout = () => {
-    void Promise.resolve(onResetLayout()).then(() => {
+    const sizes = collectMeasuredSizes(
+      store.getState().nodeLookup,
+      nodes.map((node) => node.id),
+    );
+    if (sizes === null) return;
+    void Promise.resolve(onApplyLayout(sizes)).then(() => {
       // Slight delay to allow nodes to update position before fitting view
       setTimeout(() => {
         if (rfInstance) {
@@ -125,7 +227,12 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
           // fit actually contain the graph (specs/graph-view.md §6.1).
           minZoom={0.1}
         >
-          <InitialFit padding={fitViewPadding} />
+          <InitialFit padding={fitViewPadding} layoutPending={layoutPending} />
+          <MeasureAndLayout
+            layoutPending={layoutPending}
+            nodeIds={nodeIds}
+            onApplyLayout={onApplyLayout}
+          />
           <Background color={SHELL_COLORS.groundDots} />
           <CanvasControls
             fitViewPadding={fitViewPadding}

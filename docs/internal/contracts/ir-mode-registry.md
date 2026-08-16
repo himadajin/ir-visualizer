@@ -225,7 +225,7 @@ implementation land with #88; the router-side guarantee it feeds lands with #86.
   asynchronous"), hands `result.graph` to `useGraphData` and `result.diagnostics` to the status
   footer, uses `mode.defaultCode` on mode switch and `mode.editorLanguage` for the editor.
 - `useGraphData` — takes an `IRLayoutBehavior` into `updateGraph(graph, behavior)` /
-  `resetLayout()`, so layout, edge-building and bundling are mode- (or view-) driven rather
+  `applyLayout(sizes)`, so layout, edge-building and bundling are mode- (or view-) driven rather
   than branching by string.
 - `GraphViewer` — merges `nodeTypes` from every entry in `IR_MODE_LIST` (plus the
   mode-agnostic fallback `codeNode`) instead of importing each mode's node components directly.

@@ -93,11 +93,11 @@ once, not an obstacle in the search.
 
 ### Defaults
 
-| option        | default | meaning                                                               |
-| ------------- | ------- | --------------------------------------------------------------------- |
-| `nodeMargin`  | `12`    | clearance kept around every node rect, px — rounded (see below)       |
-| `bendPenalty` | `30`    | price of one bend, in px of path length — a cost, never a coordinate  |
-| `selfLoopGap` | `24`    | distance from a node's right edge to its self-loop lane, px — rounded |
+| option        | default | meaning                                                                                                                                                           |
+| ------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nodeMargin`  | `12`    | clearance kept around every node rect, px — rounded (see below). The number is `NODE_MARGIN` in `src/utils/spacing.ts`, the same module ELK's node spacing reads. |
+| `bendPenalty` | `30`    | price of one bend, in px of path length — a cost, never a coordinate                                                                                              |
+| `selfLoopGap` | `24`    | distance from a node's right edge to its self-loop lane, px — rounded. `SELF_LOOP_GAP` in the same module.                                                        |
 
 `nodeMargin` and `selfLoopGap` are distances that end up added to coordinates, so they are
 quantized like every other input. That is what makes the integer guarantee below

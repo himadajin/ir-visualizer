@@ -13,7 +13,14 @@ import {
   NODE_LINE_HEIGHT,
   NODE_PADDING_X,
   NODE_PADDING_Y,
+  NODE_WRAP_MAX_CHARS_LLVM,
+  NODE_WRAP_MIN_CHARS_LLVM,
 } from "./nodeTextStyle";
+
+export interface NodeShellWrap {
+  minChars: number;
+  maxChars: number;
+}
 
 export interface NodeShellProps {
   children: ReactNode;
@@ -23,14 +30,24 @@ export interface NodeShellProps {
   headerLabel?: string;
   headerColor?: string;
   style?: CSSProperties;
+  /**
+   * CSS `ch` wrap on the content box (`specs/graph-view.md` §5). `false`
+   * leaves the node shrink-wrapped (Use-Def cards). Default is the LLVM
+   * 16–80 ch clamp.
+   */
+  wrap?: NodeShellWrap | false;
 }
+
+const DEFAULT_WRAP: NodeShellWrap = {
+  minChars: NODE_WRAP_MIN_CHARS_LLVM,
+  maxChars: NODE_WRAP_MAX_CHARS_LLVM,
+};
 
 /**
  * The shared node frame (specs/graph-view.md §5–§6.6): 1px border, 2px
  * radius, white surface, dense monospace, and — when a block label is
- * present — a full-width header band with a bottom hairline. The frame
- * metrics all come from nodeTextStyle.ts so converter.ts can estimate the
- * exact rendered box. `style` lands on the wrapper: border overrides
+ * present — a full-width header band with a bottom hairline. Frame metrics
+ * come from nodeTextStyle.ts. `style` lands on the wrapper: border overrides
  * (Mermaid shapes) apply directly, inherited text properties reach the
  * content.
  */
@@ -42,7 +59,18 @@ const NodeShell = ({
   headerLabel,
   headerColor = NODE_HEADER_BACKGROUND,
   style,
+  wrap = DEFAULT_WRAP,
 }: NodeShellProps) => {
+  const wrapStyle: CSSProperties =
+    wrap === false
+      ? {}
+      : {
+          minWidth: `${String(wrap.minChars)}ch`,
+          maxWidth: `${String(wrap.maxChars)}ch`,
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+        };
+
   return (
     <div
       className="node-shell-wrapper"
@@ -54,7 +82,7 @@ const NodeShell = ({
         fontSize: NODE_FONT_SIZE,
         lineHeight: NODE_LINE_HEIGHT,
         textAlign: "left",
-        height: "100%",
+        height: "auto",
         boxSizing: "border-box",
         position: "relative",
         overflow: "hidden",
@@ -81,7 +109,12 @@ const NodeShell = ({
         </div>
       )}
 
-      <div style={{ padding: `${NODE_PADDING_Y}px ${NODE_PADDING_X}px` }}>
+      <div
+        style={{
+          padding: `${NODE_PADDING_Y}px ${NODE_PADDING_X}px`,
+          ...wrapStyle,
+        }}
+      >
         {children}
       </div>
 

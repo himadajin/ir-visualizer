@@ -4,18 +4,9 @@ import {
   createReactFlowNode,
   createReactFlowEdge,
   createSelectionDAGReactFlowEdge,
-  calculateNodeDimensions,
   nodeTypeToReactFlowType,
 } from "../converter";
 import type { GraphNode, GraphEdge } from "../../types/graph";
-import {
-  NODE_BORDER_WIDTH,
-  NODE_HEADER_HEIGHT,
-  NODE_PADDING_X,
-  NODE_PADDING_Y,
-} from "../../components/Graph/common/nodeTextStyle";
-import { USE_DEF_BADGE_GAP } from "../../components/Graph/LLVM/UseDef/useDefStyleConstants";
-import { estimateBadgeWidth } from "../../components/Graph/LLVM/UseDef/useDefPorts";
 
 describe("createSelectionDAGReactFlowEdge", () => {
   it("should create a normal edge when isChainOrGlue is false", () => {
@@ -46,136 +37,6 @@ describe("createSelectionDAGReactFlowEdge", () => {
       type: MarkerType.ArrowClosed,
       color: "#666",
     });
-  });
-});
-
-describe("calculateNodeDimensions", () => {
-  // In Node.js test environment, fontUtils falls back to width 8 and the
-  // requested line height (16px).
-  const FALLBACK_CHAR_WIDTH = 8;
-  const FALLBACK_LINE_HEIGHT = 16;
-  // The rendered NodeShell frame (specs/graph-view.md §5).
-  const FRAME_X = (NODE_PADDING_X + NODE_BORDER_WIDTH) * 2;
-  const FRAME_Y = (NODE_PADDING_Y + NODE_BORDER_WIDTH) * 2;
-
-  it("should calculate dimensions for a simple mermaid node", () => {
-    const node: GraphNode = {
-      id: "A",
-      label: "Hello",
-      language: "mermaid",
-    };
-
-    const dims = calculateNodeDimensions(node);
-
-    // "Hello" = 5 chars, but MIN_CHARS_MERMAID = 10, so effectiveChars = 10
-    expect(dims.width).toBe(10 * FALLBACK_CHAR_WIDTH + FRAME_X);
-    expect(dims.height).toBe(1 * FALLBACK_LINE_HEIGHT + FRAME_Y);
-  });
-
-  it("should calculate dimensions for a multi-line LLVM node", () => {
-    const node: GraphNode = {
-      id: "B",
-      label: "line one\nline two\nline three",
-      language: "llvm",
-    };
-
-    const dims = calculateNodeDimensions(node);
-
-    // MAX_CHARS_LLVM = 80, MIN_CHARS_LLVM = 16
-    // longest line = "line three" = 10 chars < MIN_CHARS_LLVM = 16
-    expect(dims.width).toBe(16 * FALLBACK_CHAR_WIDTH + FRAME_X);
-    expect(dims.height).toBe(3 * FALLBACK_LINE_HEIGHT + FRAME_Y);
-  });
-
-  it("should add the header band when blockLabel is present", () => {
-    const node: GraphNode = {
-      id: "C",
-      label: "some code",
-      language: "llvm",
-      blockLabel: "entry",
-    };
-
-    const dims = calculateNodeDimensions(node);
-
-    expect(dims.height).toBe(
-      1 * FALLBACK_LINE_HEIGHT + FRAME_Y + NODE_HEADER_HEIGHT,
-    );
-  });
-
-  it("should add the header band when blockLabel is null (entry block)", () => {
-    const node: GraphNode = {
-      id: "C",
-      label: "some code",
-      language: "llvm",
-      blockLabel: null as unknown as string,
-    };
-
-    const dims = calculateNodeDimensions(node);
-
-    // blockLabel is null (not undefined) => header band added
-    expect(dims.height).toBe(
-      1 * FALLBACK_LINE_HEIGHT + FRAME_Y + NODE_HEADER_HEIGHT,
-    );
-  });
-
-  it("should handle wrapping for long lines", () => {
-    const longLine = "x".repeat(100); // 100 chars, MAX_CHARS_LLVM=80
-    const node: GraphNode = {
-      id: "D",
-      label: longLine,
-      language: "llvm",
-    };
-
-    const dims = calculateNodeDimensions(node);
-
-    // effectiveMaxChars = min(100, 80) = 80; wrappedLines = ceil(100/80) = 2
-    expect(dims.width).toBe(80 * FALLBACK_CHAR_WIDTH + FRAME_X);
-    expect(dims.height).toBe(2 * FALLBACK_LINE_HEIGHT + FRAME_Y);
-  });
-
-  it("should widen a use-def instruction card by its inline badge", () => {
-    const label = "%1 = add i32 %0, 1";
-    const instruction: GraphNode = {
-      id: "f_main_ud_entry_i0",
-      label,
-      nodeType: "llvm-useDefInstruction",
-      astData: {
-        text: label,
-        def: "1",
-        uses: ["0"],
-        isTerminator: false,
-        blockLabel: "entry",
-        blockIndex: 0,
-      },
-    };
-    const value: GraphNode = {
-      id: "f_main_udarg_a",
-      label,
-      nodeType: "llvm-useDefValue",
-      astData: { name: "a", kind: "argument", paramType: "i32" },
-    };
-
-    const instructionDims = calculateNodeDimensions(instruction);
-    const valueDims = calculateNodeDimensions(value);
-
-    // Same text, single row each: same height; the instruction card is
-    // wider by the inline badge plus its gap.
-    expect(instructionDims.height).toBe(valueDims.height);
-    expect(instructionDims.width).toBeCloseTo(
-      valueDims.width + estimateBadgeWidth("entry") + USE_DEF_BADGE_GAP,
-    );
-  });
-
-  it("should handle empty label", () => {
-    const node: GraphNode = {
-      id: "E",
-      label: "",
-      language: "mermaid",
-    };
-
-    const dims = calculateNodeDimensions(node);
-    expect(dims.width).toBeGreaterThan(0);
-    expect(dims.height).toBeGreaterThan(0);
   });
 });
 
@@ -229,12 +90,22 @@ describe("createReactFlowNode", () => {
     expect(rfNode.type).toBe("codeNode");
   });
 
-  it("should set width in style", () => {
+  it("lets the node size itself rather than forcing an estimated width", () => {
     const rfNode = createReactFlowNode(
       { id: "x", label: "Hello", language: "mermaid" },
       { x: 0, y: 0 },
     );
-    expect(rfNode.style?.width).toBeGreaterThan(0);
+    expect(rfNode.style?.width).toBe("fit-content");
+    expect(rfNode.style?.height).toBe("fit-content");
+  });
+
+  it("hides a measuring node without taking it out of layout", () => {
+    const rfNode = createReactFlowNode(
+      { id: "x", label: "Hello" },
+      { x: 0, y: 0 },
+      { hidden: true },
+    );
+    expect(rfNode.style?.visibility).toBe("hidden");
   });
 });
 

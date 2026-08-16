@@ -1,9 +1,7 @@
 /**
  * Single source of truth for SelectionDAGNode's box model. Shared by the
- * component itself (SelectionDAGNode.tsx), its width estimation
- * (selectionDAGLayoutUtils.ts), and its height calculation (converter.ts) —
- * these three previously duplicated the same pixel values with a
- * "MUST stay in sync" comment instead of importing one definition.
+ * component itself (SelectionDAGNode.tsx) so cell padding is not restated
+ * as a literal next to the styles.
  */
 export const SELECTION_DAG_BORDER_COLOR = "#050505";
 export const SELECTION_DAG_BORDER_WIDTH = 1;

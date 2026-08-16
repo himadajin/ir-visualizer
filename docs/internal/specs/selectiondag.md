@@ -76,9 +76,9 @@ reassoc nofpexcept`.
   `SelectionDAGNode.tsx` renders per type cell / operand cell.
 - If the referenced result type at that index is `ch` or `glue`, the edge is flagged
   `isChainOrGlue` and renders **dashed** (see `createSelectionDAGReactFlowEdge`).
-- The graph is always `direction: "TD"`; SelectionDAG layout uses
-  `elk.layered.spacing.nodeNodeBetweenLayers: 50` (`selectionDAGMode.layoutOptions`,
-  an ELK option — see `specs/graph-view.md` §3). _(the spacing value: observed, untested)_
+- The graph is always `direction: "TD"`; SelectionDAG layout uses the shared
+  between-layer spacing (`NODE_NODE_BETWEEN_LAYERS` in `src/utils/spacing.ts` —
+  see `specs/graph-view.md` §3). _(the spacing value: observed, untested)_
 
 > Pinned by: `src/graphBuilder/__tests__/selectionDAG/{nodes,edges,metadata}.test.ts`,
 > `src/parser/__tests__/selectionDAG/invariants.test.ts`,
@@ -89,8 +89,8 @@ reassoc nofpexcept`.
 `SelectionDAGNode.tsx` renders a table-like box: a colored left column with the node id, an
 operands row (one cell per operand, each `node` operand carrying its target Handle), an
 opName+details row, and a types row (one cell per result type, each carrying a source Handle).
-Dimension estimation for layout mirrors this structure via the shared style constants
-(`selectionDAGStyleConstants.ts`, `selectionDAGLayoutUtils.ts`) — see `specs/graph-view.md` §5.
+The node shrink-wraps that table; ELK places it from the measured box
+(`specs/graph-view.md` §5).
 
 The left-column color encodes an opName **category**
 (`src/components/Graph/SelectionDAG/selectionDAGNodeColor.ts`):

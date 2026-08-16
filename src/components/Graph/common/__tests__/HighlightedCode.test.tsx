@@ -19,11 +19,9 @@ vi.mock("../../../../utils/highlighter", () => ({
 /**
  * Regression coverage for the drift fixed alongside live edge routing
  * (specs/graph-view.md §5): Shiki's <pre> carries the user-agent default
- * block margin, which converter.ts's node-size estimate (nodeTextStyle.ts,
- * specs/graph-view.md §5) does not account for. jsdom cannot run real
- * layout, so this only asserts the rendered frame declares no margin of its
- * own — not that text metrics match — which is what the estimator actually
- * assumes.
+ * block margin, which would inflate the measured box handed to ELK. jsdom
+ * cannot run real layout, so this only asserts the rendered frame declares
+ * no margin of its own.
  */
 describe("HighlightedCode", () => {
   it("resets the UA margin on the rendered <pre> (block mode)", async () => {

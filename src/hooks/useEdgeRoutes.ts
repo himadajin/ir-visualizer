@@ -34,11 +34,10 @@ import type {
  *
  * `routeEdges` takes every node and every request in a single call, so it
  * cannot be driven from a per-edge component. This hook reads React Flow's
- * store — **measured** rects and live handle positions, never the estimates
- * `converter.ts` hands to ELK — calls the router once per animation frame in
- * which something geometric changed, and publishes the resulting
- * `Map<edgeId, points>` through a React context. `RoutedEdge` looks up its own
- * entry by edge id; an edge with no entry is not drawn that frame.
+ * store — **measured** rects and live handle positions — calls the router once
+ * per animation frame in which something geometric changed, and publishes the
+ * resulting `Map<edgeId, points>` through a React context. `RoutedEdge` looks
+ * up its own entry by edge id; an edge with no entry is not drawn that frame.
  */
 
 /** Routes keyed by React Flow edge id. */

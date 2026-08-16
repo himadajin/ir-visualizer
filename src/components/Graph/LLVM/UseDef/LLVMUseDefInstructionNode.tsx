@@ -3,7 +3,10 @@ import type { LLVMUseDefInstructionData } from "../../../../ast/llvmAST";
 import NodeShell from "../../common/NodeShell";
 import HighlightedCode from "../../common/HighlightedCode";
 import { getUseDefPorts } from "./useDefPorts";
-import { NODE_BORDER_WIDTH } from "../../common/nodeTextStyle";
+import {
+  NODE_BORDER_WIDTH,
+  NODE_WRAP_MAX_CHARS_USE_DEF,
+} from "../../common/nodeTextStyle";
 import {
   USE_DEF_BADGE_BORDER_RADIUS,
   USE_DEF_BADGE_FONT_SIZE,
@@ -41,6 +44,7 @@ const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
           ? USE_DEF_TERMINATOR_BORDER_COLOR
           : USE_DEF_INSTRUCTION_BORDER_COLOR
       }
+      wrap={false}
       style={{ whiteSpace: "pre" }}
     >
       <div
@@ -68,7 +72,10 @@ const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
         <HighlightedCode
           code={instruction.text}
           language="llvm"
-          style={{ whiteSpace: "pre" }}
+          style={{
+            whiteSpace: "pre",
+            maxWidth: `${String(NODE_WRAP_MAX_CHARS_USE_DEF)}ch`,
+          }}
         />
       </div>
       {/* Per-operand ports (specs/llvm-use-def-view.md §4). Port x is

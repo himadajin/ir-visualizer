@@ -1,16 +1,11 @@
-import { DEFAULT_NODE_MARGIN } from "../../utils/edgeRouter";
+import { BEND_RADIUS as SPACING_BEND_RADIUS } from "../../utils/spacing";
 
 /**
  * Corner radius of routed orthogonal bends, px — derived, not chosen
- * (`specs/graph-view.md` §4). A route's first and last segments are exactly
- * `nodeMargin` long, because the contract keeps the pushed endpoint as
- * `points[1]` and as the second-to-last point, so a bend there can consume at
- * most half of that: `2 · bendRadius ≤ nodeMargin`. The interior form of the
- * same statement, `2 · nodeMargin + 2 · bendRadius ≤ ELK node spacing`, holds
- * for every configured spacing at this radius. Any literal here instead would
- * be a promise the geometry cannot keep.
+ * (`specs/graph-view.md` §4). Re-exported from `src/utils/spacing.ts` so the
+ * drawn stroke and the layout/router clearances cannot disagree.
  */
-export const BEND_RADIUS = DEFAULT_NODE_MARGIN / 2;
+export const BEND_RADIUS = SPACING_BEND_RADIUS;
 
 /**
  * Rounded-corner path through an orthogonal polyline. Consecutive duplicate

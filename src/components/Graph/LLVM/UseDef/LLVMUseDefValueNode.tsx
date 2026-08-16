@@ -33,6 +33,7 @@ const LLVMUseDefValueNode = ({ data }: NodeProps) => {
       backgroundColor={
         isArgument ? USE_DEF_ARGUMENT_BACKGROUND : USE_DEF_EXTERNAL_BACKGROUND
       }
+      wrap={false}
       style={{ whiteSpace: "pre", textAlign: "center" }}
     >
       {text}

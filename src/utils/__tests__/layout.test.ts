@@ -1,8 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { getLayoutedElements } from "../layout";
+import { getLayoutedElements, sizesCoverGraph, toElkSize } from "../layout";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
 import { BACK_EDGE_COLOR } from "../converter";
+
+const BOX = { width: 120, height: 40 };
+const sizesOf = (graph: GraphData) =>
+  new Map(graph.nodes.map((node) => [node.id, BOX]));
+
+const layout = (
+  graph: GraphData,
+  options?: Parameters<typeof getLayoutedElements>[2],
+) => getLayoutedElements(graph, sizesOf(graph), options);
 
 describe("getLayoutedElements", () => {
   it("should layout a simple graph with positions and no stored edge geometry", async () => {
@@ -14,7 +23,7 @@ describe("getLayoutedElements", () => {
       edges: [{ id: "e1", source: "A", target: "B" }],
     };
 
-    const { nodes, edges } = await getLayoutedElements(graph);
+    const { nodes, edges } = await layout(graph);
 
     expect(nodes).toHaveLength(2);
     expect(edges).toHaveLength(1);
@@ -45,8 +54,8 @@ describe("getLayoutedElements", () => {
       edges: [{ id: "e1", source: "A", target: "B" }],
     };
 
-    const tdResult = await getLayoutedElements(graph, { direction: "TD" });
-    const lrResult = await getLayoutedElements(graph, { direction: "LR" });
+    const tdResult = await layout(graph, { direction: "TD" });
+    const lrResult = await layout(graph, { direction: "LR" });
 
     // In TD: A should be above B (lower y)
     const tdA = tdResult.nodes.find((n) => n.id === "A")!;
@@ -71,7 +80,7 @@ describe("getLayoutedElements", () => {
       ],
     };
 
-    const { edges } = await getLayoutedElements(graph);
+    const { edges } = await layout(graph);
 
     // In a pure 2-cycle either edge may be the one ELK reverses; exactly one
     // of them must come out flagged, and the flagged one carries the accent.
@@ -89,7 +98,7 @@ describe("getLayoutedElements", () => {
       edges: [{ id: "e1", source: "A", target: "A" }],
     };
 
-    const { edges } = await getLayoutedElements(graph);
+    const { edges } = await layout(graph);
     expect(edges[0].type).toBe("routed");
     expect((edges[0].data as RoutedEdgeData).isBackEdge).toBe(true);
   });
@@ -103,7 +112,7 @@ describe("getLayoutedElements", () => {
       edges: [],
     };
 
-    const { nodes, edges } = await getLayoutedElements(graph);
+    const { nodes, edges } = await layout(graph);
 
     expect(nodes).toHaveLength(2);
     expect(edges).toHaveLength(0);
@@ -125,7 +134,7 @@ describe("getLayoutedElements", () => {
       ],
     };
 
-    const { nodes } = await getLayoutedElements(graph);
+    const { nodes } = await layout(graph);
 
     // Check that no two nodes have the exact same position
     for (let i = 0; i < nodes.length; i++) {
@@ -180,12 +189,75 @@ describe("getLayoutedElements", () => {
       ],
     };
 
-    const { edges } = await getLayoutedElements(graph);
+    const { edges } = await layout(graph);
 
     // ELK's FIXED_POS operand port determines which handle the edge attaches
     // to; the router (src/utils/edgeRouter.ts) is what routes between the
     // live handle positions, not layout.ts.
     expect(edges[0].targetHandle).toBe("u-1");
     expect(edges[0].sourceHandle).toBe("def");
+  });
+
+  it("places from the given sizes, not from an estimate", async () => {
+    const graph: GraphData = {
+      nodes: [
+        { id: "A", label: "A", language: "mermaid" },
+        { id: "B", label: "B", language: "mermaid" },
+      ],
+      edges: [{ id: "e1", source: "A", target: "B" }],
+    };
+
+    const narrow = await getLayoutedElements(
+      graph,
+      new Map([
+        ["A", { width: 80, height: 40 }],
+        ["B", { width: 80, height: 40 }],
+      ]),
+      { direction: "LR" },
+    );
+    const wide = await getLayoutedElements(
+      graph,
+      new Map([
+        ["A", { width: 400, height: 40 }],
+        ["B", { width: 80, height: 40 }],
+      ]),
+      { direction: "LR" },
+    );
+
+    const narrowA = narrow.nodes.find((node) => node.id === "A")!;
+    const narrowB = narrow.nodes.find((node) => node.id === "B")!;
+    const wideA = wide.nodes.find((node) => node.id === "A")!;
+    const wideB = wide.nodes.find((node) => node.id === "B")!;
+    expect(wideB.position.x - wideA.position.x).toBeGreaterThan(
+      narrowB.position.x - narrowA.position.x,
+    );
+  });
+
+  it("quantizes sizes onto the router's integer lattice", () => {
+    expect(toElkSize({ width: 100.4, height: 40.6 })).toEqual({
+      width: 100,
+      height: 41,
+    });
+  });
+
+  it("rejects a size map that does not cover the graph", () => {
+    const graph: GraphData = {
+      nodes: [
+        { id: "A", label: "A" },
+        { id: "B", label: "B" },
+      ],
+      edges: [],
+    };
+    expect(sizesCoverGraph(graph, new Map([["A", BOX]]))).toBe(false);
+    expect(sizesCoverGraph(graph, sizesOf(graph))).toBe(true);
+    expect(
+      sizesCoverGraph(
+        graph,
+        new Map([
+          ["A", BOX],
+          ["B", { width: 0.4, height: 40 }],
+        ]),
+      ),
+    ).toBe(false);
   });
 });

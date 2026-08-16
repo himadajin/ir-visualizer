@@ -1,8 +1,6 @@
 /**
- * Constants shared by the Use-Def node components' CSS and by
- * `converter.ts`'s dimension estimation (specs/graph-view.md §5: change the
- * constant, never a literal, or the estimated layout spacing drifts from
- * what is actually rendered).
+ * Constants shared by the Use-Def node components' CSS
+ * (`specs/graph-view.md` §5: change the constant, never a literal).
  */
 
 /** Font size of the block badge chip, in px. */

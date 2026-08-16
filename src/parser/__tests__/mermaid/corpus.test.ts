@@ -47,6 +47,7 @@ describe("mermaid parser corpus", () => {
           const actual = ast.subgraphs.find((item) => item.id === sg.id);
           expect(actual?.title).toBe(sg.title);
           expect(actual?.nodeIds.sort()).toEqual([...sg.nodeIds].sort());
+          expect(actual?.direction).toBe(sg.direction);
         }
       }
     },

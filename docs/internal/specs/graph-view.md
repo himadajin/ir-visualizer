@@ -33,10 +33,10 @@ behavior with no covering test.
 `useGraphData.updateGraph(graph, behavior)` (where `behavior` is the active view's
 `edgeBuilder`/`layoutOptions` — see `contracts/ir-mode-registry.md`) computes a **topology
 signature**: `direction | sorted node ids | sorted source-target pairs | sorted
-id:parentId pairs`.
+id:parentId pairs | sorted id:containerDirection pairs`.
 
-- **Signature changed** (first parse, node/edge added or removed, direction changed,
-  parent membership changed):
+- **Signature changed** (first parse, node/edge added or removed, direction changed
+  — root or per-container — parent membership changed):
   a **measure-then-layout** pass (§3, §5). Nodes are mounted so React Flow can measure
   them; no positioned graph is committed until ELK has run on those measured sizes.
   A layout that resolves after a newer parse has started is discarded (generation
@@ -69,12 +69,17 @@ DOM. The hook owns the measure pass that produces that map (§5).
 
 - `getLayoutedElements` is **async**: the elkjs bundle is dynamically imported on first use
   and layout runs on the main thread (graphs are small; no worker).
-- Rank direction: explicit option → `GraphData.direction` → `"TD"`. `TD` maps to ELK
-  `elk.direction: DOWN`, `LR` to `RIGHT`.
-- Nested graphs (`contracts/graph-data.md`, Hierarchy) are laid out as ELK compound nodes
-  (`elk.hierarchyHandling: INCLUDE_CHILDREN`). A container's children are nested ElkNodes;
-  an empty container is a leaf as far as ELK is concerned and uses its measured chrome as
-  its size. Container size is an ELK **output**: children plus `CONTAINER_PADDING` on the
+- Rank direction: explicit option → `GraphData.direction` → `"TD"`. The five
+  `GraphDirection` values map to ELK `elk.direction` as `TD`/`TB` → `DOWN`,
+  `BT` → `UP`, `LR` → `RIGHT`, `RL` → `LEFT`. Any other value is `DOWN`.
+- Nested graphs (`contracts/graph-data.md`, Hierarchy) are laid out as ELK compound nodes.
+  The root keeps `elk.hierarchyHandling: INCLUDE_CHILDREN`. Each container with children
+  is laid out as its own layered graph (`elk.hierarchyHandling: SEPARATE_CHILDREN`) so a
+  container can have a different rank direction from its parent. An empty container is a
+  leaf as far as ELK is concerned and uses its measured chrome as its size. When a
+  container carries `astData.direction`, that value is set as `elk.direction` on that
+  compound node; when it is omitted, layout copies the parent's resolved direction onto
+  the node. Container size is an ELK **output**: children plus `CONTAINER_PADDING` on the
   sides and bottom plus the measured header height as top padding. The measured chrome is
   a `MINIMUM_SIZE` so a title wider than the children is not clipped. React Flow nodes
   receive `parentId`, parent-relative coordinates, and `extent: parent` after this pass;
@@ -247,15 +252,20 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   reason. Clearance and topology are the router's concern; stroke appearance is not.
 
 - **Back edges:** after layout, an edge is flagged `data.isBackEdge` when it is a self-loop
-  or its target node lies entirely above its source node **in absolute flow coordinates**
-  (parent-relative ELK positions are summed up the parent chain). The flag is **structural**
-  — decided once from ELK's placement geometry and never re-derived from live rects — so
-  colors do not flicker while a node is dragged; only geometry is live. Back edges render
-  in the loop accent color (muted purple `#8250df`) — "colored + upward = loop-carried".
-  The accent **recolors** the stroke and whatever markers the edge already has; it does
-  not replace an open, circle, or cross marker with a closed arrow. An edge that is not
-  painted (Mermaid `invisible`) does not take the accent. This accent is graph grammar,
-  not shell chrome (§6.6 has no accent token).
+  or its target sits entirely against the **root** rank direction, in absolute flow
+  coordinates (parent-relative ELK positions are summed up the parent chain). For every
+  root direction except `BT` that means the target lies entirely **above** the source
+  ("colored + upward = loop-carried"). When the root is `BT`, the test is inverted: the
+  target lies entirely **below** the source, so a bottom-to-top graph does not paint
+  every forward edge as a loop. Nested container directions do not change this rule.
+  Horizontal loops on `LR`/`RL` are not accented. The flag is **structural** — decided
+  once from ELK's placement geometry and never re-derived from live rects — so colors
+  do not flicker while a node is dragged; only geometry is live. Back edges render in
+  the loop accent color (muted purple `#8250df`). The accent **recolors** the stroke
+  and whatever markers the edge already has; it does not replace an open, circle, or
+  cross marker with a closed arrow. An edge that is not painted (Mermaid `invisible`)
+  does not take the accent. This accent is graph grammar, not shell chrome (§6.6 has
+  no accent token).
 - **Hidden routed edges:** a routed edge with `hidden: true` is omitted from the routing
   pass and is not drawn. Mermaid invisible links use this (`specs/mermaid.md` §5); they
   remain in `GraphData` so ELK ranking still sees them.

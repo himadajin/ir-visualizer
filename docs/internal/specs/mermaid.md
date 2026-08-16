@@ -63,8 +63,8 @@ breakage is caught by the fixture corpus.
 adapter.
 
 - **`direction`** is FlowDB's `getDirection()` after parse. Mermaid stores `TD`
-  as `TB`; both mean top-down, and layout maps any non-`LR` value to ELK
-  `DOWN` (`specs/graph-view.md` §3).
+  as `TB`; both mean top-down. Layout maps `TD`/`TB`/`BT`/`LR`/`RL` onto ELK
+  (`specs/graph-view.md` §3).
 - **`nodes`**: one entry per FlowDB vertex that is not a subgraph id. `id` is
   the vertex id; `label` is the vertex text with surrounding quotes stripped
   (fallback: the id); `shape` is the upstream shape name (`square`, `round`,
@@ -77,9 +77,9 @@ adapter.
   `double_arrow_point`, …).
 - **`subgraphs`**: one entry per FlowDB subgraph, with `id`, `title` (empty
   string when untitled), `nodeIds` (the subgraph's unique child ids — leaves
-  and nested subgraph ids), and `direction` when FlowDB supplies one.
-  Per-subgraph direction is stored and not applied to layout (the graph layer
-  has one `GraphData.direction`).
+  and nested subgraph ids), and `direction` when the subgraph declared one
+  (FlowDB `hasExplicitDir`). Omitted when the subgraph did not declare a
+  direction, even if FlowDB filled an inherited value.
 
 A node mentioned several times is one node, keyed by id. Label and shape
 back-fill follow FlowDB (a later labeled occurrence fills an unlabeled one).
@@ -101,13 +101,21 @@ back-fill follow FlowDB (a later labeled occurrence fills an unlabeled one).
   (leaves and nested groups) set `parentId` to that subgraph id. A subgraph
   id used as an edge endpoint names the group, not a second leaf
   (`contracts/graph-data.md`, Hierarchy).
+- A group carries `astData.direction` when the AST subgraph declared one **and**
+  no child of that subgraph (leaf or nested descendant) is the endpoint of an
+  edge whose other end is outside the subgraph. An edge whose endpoint is the
+  subgraph id itself does not trigger that fallback — matching Mermaid's
+  documented limitation (direction in subgraphs). A group without
+  `astData.direction` inherits its parent at layout (`specs/graph-view.md` §3).
 - Every AST edge becomes one `GraphEdge`; ids are `e<i>-<source>-<target>`
   (index-prefixed, so parallel edges between the same endpoints stay unique).
   `stroke` and `arrowhead` are copied onto the `GraphEdge` (`contracts/graph-data.md`).
-- `GraphData.direction` is the AST direction.
+- `GraphData.direction` is the AST direction when it is a `GraphDirection`;
+  otherwise `"TB"`.
 
 > Pinned by: `src/graphBuilder/__tests__/mermaid/{nodes,edges,metadata,invariants,subgraphs}.test.ts`,
-> `src/parser/__tests__/mermaid/graphData.test.ts`
+> `src/parser/__tests__/mermaid/graphData.test.ts`,
+> `src/__tests__/integration.test.ts`
 
 ## 5. Rendering
 

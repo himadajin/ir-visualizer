@@ -420,4 +420,30 @@ describe("useGraphData", () => {
       "A changed",
     );
   });
+
+  it("re-runs layout when a container's direction changes", async () => {
+    const { result } = renderHook(() => useGraphData());
+    const withDir = (direction?: "LR" | "TD"): GraphData => ({
+      direction: "TD",
+      nodes: [
+        {
+          id: "g",
+          label: "G",
+          nodeType: "graph-group",
+          astData: direction !== undefined ? { direction } : {},
+        },
+        { id: "n1", label: "A", parentId: "g" },
+        { id: "n2", label: "B", parentId: "g" },
+      ],
+      edges: [{ id: "n1-n2", source: "n1", target: "n2" }],
+    });
+    await layoutGraph(result, withDir("TD"), llvmMode);
+
+    act(() => {
+      result.current.updateGraph(withDir("LR"), llvmMode);
+    });
+    await waitForNodeCount(result, 3);
+    expect(result.current.layoutPending).toBe(true);
+    expect(result.current.edges).toHaveLength(0);
+  });
 });

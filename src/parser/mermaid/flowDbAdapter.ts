@@ -41,7 +41,7 @@ export function flowDbToAST(db: FlowDbSnapshot): MermaidAST {
     id: sg.id,
     title: sg.title,
     nodeIds: [...sg.nodes],
-    direction: sg.dir,
+    ...(sg.hasExplicitDir && sg.dir ? { direction: sg.dir } : {}),
   }));
   const subgraphIds = new Set(subgraphs.map((sg) => sg.id));
 

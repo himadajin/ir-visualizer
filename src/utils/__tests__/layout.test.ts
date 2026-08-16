@@ -3,6 +3,7 @@ import {
   getLayoutedElements,
   sizesCoverGraph,
   toElkSize,
+  toElkDirection,
   mermaidGraphEdgeBuilder,
 } from "../layout";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
@@ -71,6 +72,78 @@ describe("getLayoutedElements", () => {
     const lrA = lrResult.nodes.find((n) => n.id === "A")!;
     const lrB = lrResult.nodes.find((n) => n.id === "B")!;
     expect(lrA.position.x).toBeLessThan(lrB.position.x);
+  });
+
+  it("maps graph directions onto ELK", () => {
+    expect(toElkDirection("TD")).toBe("DOWN");
+    expect(toElkDirection("TB")).toBe("DOWN");
+    expect(toElkDirection("BT")).toBe("UP");
+    expect(toElkDirection("LR")).toBe("RIGHT");
+    expect(toElkDirection("RL")).toBe("LEFT");
+    expect(toElkDirection(undefined)).toBe("DOWN");
+    expect(toElkDirection("nope")).toBe("DOWN");
+  });
+
+  it("places BT, RL, and TB roots in the declared orientation", async () => {
+    const graph: GraphData = {
+      nodes: [
+        { id: "A", label: "A" },
+        { id: "B", label: "B" },
+      ],
+      edges: [{ id: "e1", source: "A", target: "B" }],
+    };
+
+    const bt = await layout(graph, { direction: "BT" });
+    expect(bt.nodes.find((n) => n.id === "A")!.position.y).toBeGreaterThan(
+      bt.nodes.find((n) => n.id === "B")!.position.y,
+    );
+
+    const rl = await layout(graph, { direction: "RL" });
+    expect(rl.nodes.find((n) => n.id === "A")!.position.x).toBeGreaterThan(
+      rl.nodes.find((n) => n.id === "B")!.position.x,
+    );
+
+    const tb = await layout(graph, { direction: "TB" });
+    expect(tb.nodes.find((n) => n.id === "A")!.position.y).toBeLessThan(
+      tb.nodes.find((n) => n.id === "B")!.position.y,
+    );
+  });
+
+  it("does not flag a BT forward edge as a back edge", async () => {
+    const graph: GraphData = {
+      direction: "BT",
+      nodes: [
+        { id: "A", label: "A" },
+        { id: "B", label: "B" },
+      ],
+      edges: [{ id: "fwd", source: "A", target: "B" }],
+    };
+
+    const { nodes, edges } = await layout(graph);
+    const a = nodes.find((n) => n.id === "A")!;
+    const b = nodes.find((n) => n.id === "B")!;
+    expect(a.position.y).toBeGreaterThan(b.position.y);
+    expect((edges[0].data as RoutedEdgeData).isBackEdge).toBe(false);
+  });
+
+  it("flags the downward edge of a BT cycle as a back edge", async () => {
+    const graph: GraphData = {
+      direction: "BT",
+      nodes: [
+        { id: "A", label: "A" },
+        { id: "B", label: "B" },
+      ],
+      edges: [
+        { id: "ab", source: "A", target: "B" },
+        { id: "ba", source: "B", target: "A" },
+      ],
+    };
+
+    const { edges } = await layout(graph);
+    const flagged = edges.filter(
+      (e) => (e.data as RoutedEdgeData).isBackEdge === true,
+    );
+    expect(flagged).toHaveLength(1);
   });
 
   it("should flag backward edges as back edges and style them", async () => {
@@ -268,11 +341,15 @@ describe("getLayoutedElements", () => {
 });
 
 describe("getLayoutedElements — nested nodes", () => {
-  const group = (id: string, label: string): GraphData["nodes"][number] => ({
+  const group = (
+    id: string,
+    label: string,
+    direction?: GraphData["direction"],
+  ): GraphData["nodes"][number] => ({
     id,
     label,
     nodeType: "graph-group",
-    astData: {},
+    astData: direction !== undefined ? { direction } : {},
   });
 
   it("places children inside the parent with parentId and extent", async () => {
@@ -320,6 +397,86 @@ describe("getLayoutedElements — nested nodes", () => {
     const { nodes } = await layout(graph);
     expect(nodes.find((n) => n.id === "inner")?.parentId).toBe("outer");
     expect(nodes.find((n) => n.id === "A")?.parentId).toBe("inner");
+  });
+
+  it("lays out a container's children in that container's direction", async () => {
+    const graph: GraphData = {
+      direction: "TD",
+      nodes: [
+        group("g", "G", "LR"),
+        { id: "A", label: "A", parentId: "g" },
+        { id: "B", label: "B", parentId: "g" },
+      ],
+      edges: [{ id: "e1", source: "A", target: "B" }],
+    };
+
+    const { nodes } = await layout(graph);
+    const a = nodes.find((n) => n.id === "A")!;
+    const b = nodes.find((n) => n.id === "B")!;
+    expect(a.position.x).toBeLessThan(b.position.x);
+  });
+
+  it("inherits parent direction when a container has none", async () => {
+    const graph: GraphData = {
+      direction: "LR",
+      nodes: [
+        group("g", "G"),
+        { id: "A", label: "A", parentId: "g" },
+        { id: "B", label: "B", parentId: "g" },
+      ],
+      edges: [{ id: "e1", source: "A", target: "B" }],
+    };
+
+    const { nodes } = await layout(graph);
+    const a = nodes.find((n) => n.id === "A")!;
+    const b = nodes.find((n) => n.id === "B")!;
+    expect(a.position.x).toBeLessThan(b.position.x);
+  });
+
+  it("applies mixed nested directions independently of root and parent", async () => {
+    const graph: GraphData = {
+      direction: "TD",
+      nodes: [
+        group("outer", "outer", "LR"),
+        { ...group("inner", "inner", "BT"), parentId: "outer" },
+        { id: "A", label: "A", parentId: "inner" },
+        { id: "B", label: "B", parentId: "inner" },
+        { id: "C", label: "C", parentId: "outer" },
+      ],
+      edges: [
+        { id: "ab", source: "A", target: "B" },
+        { id: "inner-c", source: "inner", target: "C" },
+      ],
+    };
+
+    const { nodes } = await layout(graph);
+    const a = nodes.find((n) => n.id === "A")!;
+    const b = nodes.find((n) => n.id === "B")!;
+    const inner = nodes.find((n) => n.id === "inner")!;
+    const c = nodes.find((n) => n.id === "C")!;
+    expect(a.position.y).toBeGreaterThan(b.position.y);
+    expect(inner.position.x).toBeLessThan(c.position.x);
+  });
+
+  it("keeps a container's direction when an edge targets the container id", async () => {
+    const graph: GraphData = {
+      direction: "TD",
+      nodes: [
+        group("g", "G", "LR"),
+        { id: "A", label: "A", parentId: "g" },
+        { id: "B", label: "B", parentId: "g" },
+        { id: "C", label: "C" },
+      ],
+      edges: [
+        { id: "ab", source: "A", target: "B" },
+        { id: "cg", source: "C", target: "g" },
+      ],
+    };
+
+    const { nodes } = await layout(graph);
+    const a = nodes.find((n) => n.id === "A")!;
+    const b = nodes.find((n) => n.id === "B")!;
+    expect(a.position.x).toBeLessThan(b.position.x);
   });
 
   it("keeps an empty container as a sized node", async () => {

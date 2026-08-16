@@ -8,6 +8,14 @@ the wrong AST type under a given `nodeType` is a compile error, not a silent `an
 ## GraphData / GraphEdge
 
 ```ts
+type GraphDirection = "TD" | "TB" | "BT" | "LR" | "RL";
+
+interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  direction?: GraphDirection; // rank direction; omitted means TD
+}
+
 interface GraphEdge {
   id: string;
   source: string;
@@ -22,6 +30,11 @@ interface GraphEdge {
   arrowhead?: string; // Mermaid only — FlowDB edge type
 }
 ```
+
+`direction` is the graph's root rank direction. Layout maps `TD`/`TB` → ELK `DOWN`,
+`BT` → `UP`, `LR` → `RIGHT`, `RL` → `LEFT`; any other or omitted value is `TD`
+(`specs/graph-view.md` §3). A container may override that for its children — see
+Hierarchy. LLVM (both views) and SelectionDAG always emit `"TD"`.
 
 The SelectionDAG-only fields connect specific operand/type Handles instead of generic node
 boundaries. They are optional fields on the one shared interface rather than a
@@ -83,9 +96,13 @@ type GraphNode = GraphNodeBase &
     | { nodeType: "llvm-useDefValue"; astData: LLVMUseDefValueData }
     | { nodeType: "mermaid-node"; astData: MermaidASTNode }
     | { nodeType: "selectionDAG-node"; astData: SelectionDAGNode }
-    | { nodeType: "graph-group"; astData: Record<string, never> } // generic container
+    | { nodeType: "graph-group"; astData: GraphGroupData } // generic container
     | { nodeType?: undefined; astData?: undefined } // codeNode fallback, no specialized renderer
   );
+
+interface GraphGroupData {
+  direction?: GraphDirection; // this container's rank direction; omitted inherits parent
+}
 ```
 
 `GraphNodeBase` holds the fields every node has regardless of mode. `parentId` is optional:
@@ -102,6 +119,13 @@ nodes of their own, just the typed payload a renderer expects. Conversion rules:
 A node is a **leaf** (opaque box) or a **container** (`nodeType: "graph-group"`). Children
 point at their parent with `parentId`. The tree may nest. An empty container is a valid
 node: it has no children and still occupies a measured chrome box.
+
+A container may carry `astData.direction`. When it is set, layout applies that rank
+direction to the container's children (`specs/graph-view.md` §3). When it is omitted,
+the container inherits its parent's direction (the root uses `GraphData.direction`).
+Layout does not invent producer-specific rules for when a direction is present —
+that is the graphBuilder's job. Mermaid's subgraph-direction fallback lives in
+the Mermaid graphBuilder (`specs/mermaid.md` §4).
 
 This is a graphBuilder obligation, like id uniqueness — layout will not repair a broken
 tree. A `parentId` that is set must name a node in the same `GraphData`, that node must

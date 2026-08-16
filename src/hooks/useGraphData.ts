@@ -27,7 +27,11 @@ const getTopologySignature = (graph: GraphData) => {
     .map((e) => `${e.source}-${e.target}`)
     .sort()
     .join(",");
-  return `${graph.direction}|${nodeIds}|${edgeIds}`;
+  const parents = graph.nodes
+    .map((n) => `${n.id}:${n.parentId ?? ""}`)
+    .sort()
+    .join(",");
+  return `${graph.direction}|${nodeIds}|${edgeIds}|${parents}`;
 };
 
 export const useGraphData = () => {
@@ -107,16 +111,24 @@ export const useGraphData = () => {
         // live node rectangles on every render (useEdgeRoutes).
         const previousNodes = nodesRef.current;
         const previousEdges = edgesRef.current;
-        const positionMap = new Map(
-          previousNodes.map((n: Node) => [n.id, n.position]),
+        const previousNodeMap = new Map(
+          previousNodes.map((n: Node) => [n.id, n]),
         );
         const previousEdgeMap = new Map(
           previousEdges.map((e: Edge) => [e.id, e]),
         );
 
         const newNodes = graph.nodes.map((node: GraphNode) => {
-          const existingPos = positionMap.get(node.id) || { x: 0, y: 0 };
-          return createReactFlowNode(node, existingPos);
+          const previous = previousNodeMap.get(node.id);
+          const existingPos = previous?.position ?? { x: 0, y: 0 };
+          const prevWidth = previous?.style?.width;
+          const prevHeight = previous?.style?.height;
+          return createReactFlowNode(node, existingPos, {
+            parentId: node.parentId,
+            ...(typeof prevWidth === "number" && typeof prevHeight === "number"
+              ? { width: prevWidth, height: prevHeight }
+              : {}),
+          });
         });
         setNodes(newNodes);
         nodesRef.current = newNodes;

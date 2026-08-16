@@ -3,6 +3,7 @@ import {
   BEND_RADIUS,
   EDGE_EDGE_SPACING,
   EDGE_NODE_SPACING,
+  CONTAINER_PADDING,
   NODE_MARGIN,
   NODE_NODE_BETWEEN_LAYERS,
   NODE_NODE_SPACING,
@@ -38,5 +39,9 @@ describe("spacing constants", () => {
 
   it("keeps the self-loop lane outside the node margin", () => {
     expect(SELF_LOOP_GAP).toBeGreaterThanOrEqual(NODE_MARGIN);
+  });
+
+  it("derives container padding from the node margin", () => {
+    expect(CONTAINER_PADDING).toBe(NODE_MARGIN);
   });
 });

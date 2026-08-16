@@ -12,6 +12,12 @@ export const NODE_MARGIN = 12;
 /** Distance from a node's right edge to its self-loop lane, px. */
 export const SELF_LOOP_GAP = 24;
 
+/**
+ * Inset from a container's border to its children, px — left, right, and
+ * bottom. Top padding is the measured header height (`specs/graph-view.md` §3).
+ */
+export const CONTAINER_PADDING = NODE_MARGIN;
+
 /** ELK same-layer node-node spacing, px. */
 export const NODE_NODE_SPACING = 40;
 

@@ -18,6 +18,8 @@ export interface RouteNodeRect {
   y: number; // absolute top-left
   width: number;
   height: number;
+  /** Default true. `false`: an endpoint frame whose interior does not block. */
+  obstacle?: boolean;
 }
 
 export interface RouteRequest {

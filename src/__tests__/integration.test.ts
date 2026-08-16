@@ -132,8 +132,8 @@ describe("Integration: parseLLVMUseDef (parser + use-def graph builder)", () => 
     expect(graph.edges.length).toBeGreaterThan(0);
     expect(graph.direction).toBe("TD");
 
-    // The view is flat: layered layout ranks instructions directly, so no node may
-    // carry a parentId (the rejected compound/container design).
+    // The view is flat so layered layout ranks instructions by dataflow
+    // (`specs/llvm-use-def-view.md`); the producer does not set parentId.
     graph.nodes.forEach((node) => {
       expect(node).not.toHaveProperty("parentId");
     });

@@ -19,10 +19,10 @@ boundary.
 The router implementation and its test suite are written against this boundary. It is
 frozen — names and signature are reproduced here verbatim and must not be "improved".
 
-One exception to "verbatim", and it is deliberate: `RouteRequest.bundleId` is not in
-`src/types/edgeRouting.ts` yet. It is fixed here ahead of its use so the boundary is
-decided once rather than reopened twice, and it lands in code with #86. Everything else in
-the block is what the source declares today.
+Two fields are fixed here ahead of a later payer so the boundary is decided once rather
+than reopened: `RouteRequest.bundleId` is not in `src/types/edgeRouting.ts` yet and lands
+with #86; `RouteNodeRect.obstacle` **is** in the source (default `true`). Everything else
+in the block is what the source declares today.
 
 ```ts
 // src/types/edgeRouting.ts
@@ -38,6 +38,7 @@ export interface RouteNodeRect {
   y: number; // absolute top-left
   width: number;
   height: number;
+  obstacle?: boolean; // default true — false: a frame that does not block
 }
 
 export interface RouteRequest {
@@ -85,8 +86,12 @@ export const quantizeRequest: (request: RouteRequest) => RouteRequest;
 ```
 
 `routeEdges` is a **pure function**: nothing here depends on React Flow or ELK, and no
-side effect crosses the boundary in either direction. `nodes` are the only obstacles;
-there is no notion of edges, labels, or anything else blocking a route. Routes are not
+side effect crosses the boundary in either direction. Rects whose `obstacle` is not
+`false` are the only obstacles; there is no notion of edges, labels, or anything else
+blocking a route. A rect with `obstacle: false` still names an endpoint — missing-node
+and self-loop look it up like any other — but it is not inflated, does not contribute
+grid lines, and does not block. That is how a container frame can be an edge endpoint
+without sealing its interior (`contracts/graph-data.md`, Hierarchy). Routes are not
 independent of one another for all that — separation (see Bundles) is a relation between
 the returned polylines — but that is a property of the pass, which sees every request at
 once, not an obstacle in the search.
@@ -134,15 +139,15 @@ ever negative zero.
   different and wrong operation — it can move the rect's right edge by up to a whole pixel,
   so the obstacle would no longer cover what was measured. Under the rule above the left
   edge lands on `round(x)` and the right edge on `round(x + width)`, each within 0.5 px of
-  the measurement.
+  the measurement. `obstacle` is not a coordinate and is copied through unchanged.
 - **Request points are quantized per component.** `sourcePoint` and `targetPoint` have their
   `x` and `y` rounded independently. A handle position is a point, not an interval, so there
   is no companion field whose consistency has to be preserved.
 - **Options.** `nodeMargin` and `selfLoopGap` are rounded, `bendPenalty` is not, as described
   under Defaults above.
 - Everything else in the input is not a coordinate and is untouched: `RouteRequest.id`,
-  `source`, `target`, `sourceSide`, `targetSide` and `RouteNodeRect.id` pass through
-  unchanged.
+  `source`, `target`, `sourceSide`, `targetSide`, `RouteNodeRect.id` and
+  `RouteNodeRect.obstacle` pass through unchanged.
 
 For a caller that already passes integers, quantization is the identity **on the input**:
 every rect, point and option reaches the router unchanged, so the obstacle set and the
@@ -221,10 +226,12 @@ coupled to.
 
 Two rules together make the region the whole of what a search can see.
 
-- **Only intersecting rects take part.** A rect contributes candidate grid lines, and blocks,
-  only when its _inflated_ rect — the rect grown by `nodeMargin`, the same shape the obstacle
-  test uses — intersects the region. Every other rect is absent from that edge's search
-  entirely, rather than present but unreachable.
+- **Only intersecting obstacle rects take part.** A rect contributes candidate grid lines, and
+  blocks, only when `obstacle !== false` and its _inflated_ rect — the rect grown by
+  `nodeMargin`, the same shape the obstacle test uses — intersects the region. Every other
+  rect is absent from that edge's search entirely, rather than present but unreachable. A
+  non-obstacle rect never takes part, even when it fills the region: it is an endpoint
+  frame, not a wall.
 - **Candidate lines are clipped to the region.** Of an intersecting rect's four inflated
   boundaries, only those that fall inside the region become grid lines. Every grid vertex
   therefore lies inside the region, so every segment does too. Without the clip, a rect
@@ -304,16 +311,17 @@ avoidance at all), so both are already functions of strictly less than the regio
   points, with no dependence on the iteration order of either the `nodes` array or the
   `requests` array — reordering either changes no individual route.
 - **Locality.** A route found on its own region (see Per-edge regions) is a function of the
-  rects intersecting that region and of its own request — of nothing else in the input. Adding,
-  removing, moving or resizing any other rect leaves that polyline byte-identical, so an edge
-  changes only when something near it changed. This is the guarantee that makes the router
+  obstacle rects intersecting that region and of its own request — of nothing else in the
+  input. Adding, removing, moving or resizing any other rect, including a non-obstacle
+  frame that is not an endpoint of this request, leaves that polyline byte-identical, so an
+  edge changes only when something near it changed. This is the guarantee that makes the router
   _stable_ as well as deterministic: determinism says the same input gives the same output,
   which a search over a graph-wide grid satisfies while still letting an unrelated node's
   one-pixel move flip a route through the tie-break. Locality is what rules that out, and it
   is a property of the pure function, not of a cache — no route is ever kept because it was
   the previous answer. It is claimed for searched routes on the first rung, for self-loops and
   for fallbacks; it is **not** claimed for a route that fell through to the whole-graph retry,
-  which is by definition a function of every rect.
+  which is by definition a function of every obstacle rect.
 - **A fixed tie-break total order.** When multiple candidate paths are equally cheap, the
   router picks among them by, in order: (1) total cost (`length + bendPenalty * turns`),
   (2) number of bends, (3) the point sequence compared lexicographically by `(x, y)` — a

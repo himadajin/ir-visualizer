@@ -15,6 +15,7 @@ import "@xyflow/react/dist/style.css";
 import RoutedEdge from "./RoutedEdge";
 
 import CodeNode from "./CodeNode";
+import GraphGroupNode from "./GraphGroupNode";
 import { EdgeRoutesProvider } from "../../hooks/useEdgeRoutes";
 import { CanvasControls, type FitViewPadding } from "./CanvasControls";
 import { IR_MODE_LIST } from "../../irModes";
@@ -134,11 +135,12 @@ const MeasureAndLayout = ({
 };
 
 // codeNode is the mode-agnostic fallback (used when a GraphNode has no
-// nodeType); every other renderer comes from the IR mode registry, so this
-// component never needs to know about a specific IR.
+// nodeType); graphGroup is the generic container. Every other renderer
+// comes from the IR mode registry, so this component never needs to know
+// about a specific IR.
 const nodeTypes = IR_MODE_LIST.reduce(
   (acc, mode) => ({ ...acc, ...mode.nodeTypes }),
-  { codeNode: CodeNode },
+  { codeNode: CodeNode, graphGroup: GraphGroupNode },
 );
 
 interface GraphViewerProps {

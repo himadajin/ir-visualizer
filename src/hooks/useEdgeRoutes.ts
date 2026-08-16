@@ -151,6 +151,12 @@ const collectRects = (
       y: node.internals.positionAbsolute.y,
       width,
       height,
+      ...(typeof node.data === "object" &&
+      node.data !== null &&
+      "obstacle" in node.data &&
+      node.data.obstacle === false
+        ? { obstacle: false }
+        : {}),
     });
   }
   return rects;

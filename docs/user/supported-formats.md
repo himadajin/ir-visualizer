@@ -108,7 +108,8 @@ node** (and its edges) instead of showing an error.
 
 ## Mermaid
 
-A subset of [Mermaid flowchart](https://mermaid.js.org/syntax/flowchart.html) notation:
+[Mermaid flowchart](https://mermaid.js.org/syntax/flowchart.html) notation, parsed by the
+upstream mermaid parser. Other mermaid diagram types (sequence, class, …) are rejected.
 
 ```mermaid
 graph TD
@@ -118,14 +119,15 @@ graph TD
   C -->|no| B
 ```
 
-Supported: `graph`/`flowchart` headers with `TB|TD|BT|RL|LR` directions; nodes with square
-`[..]`, round `(..)`, and curly `{..}` labels; `-->` / `---` links with optional `|label|` or
-`--label-->` labels; newline or `;` separated statements; `%%` comment lines, which are
-ignored.
+Supported: `graph` / `flowchart` headers; the full node-shape set (bracket forms and
+`@{ shape: ... }`); edge variants; chains (`A --> B --> C`); `&`-lists; subgraphs
+(including nesting and edges that end on a subgraph); `%%` comments, including before
+the header. `style` / `classDef` / `class` / `linkStyle` are accepted and ignored.
 
 **Limitations to know about:**
 
-- Subgraphs, styling, multi-link chains (`A --> B --> C`), and other node shapes are not
-  supported.
-- Edge labels are displayed with their pipe delimiters (`|yes|`), matching how they are
-  written.
+- This app is an IR viewer, not a mermaid renderer. Node shapes the viewer does not yet
+  classify use the default box; `[]`, `()`, and `{}` keep distinct presentations.
+  Edge stroke/arrowhead variants parse but currently all look like the standard routed
+  edge. Per-subgraph direction is not applied to layout.
+- Click handlers, tooltips, and hyperlinks are ignored.

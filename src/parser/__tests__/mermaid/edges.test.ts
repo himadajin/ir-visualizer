@@ -1,34 +1,44 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { parseMermaidToAST } from "../../mermaid";
 
 describe("mermaid parser", () => {
   describe("edges", () => {
-    it("when arrow edge is used, should parse arrow edge type", () => {
-      const ast = parseMermaidToAST(`\ngraph TD\nA --> B`);
+    it("when arrow edge is used, should parse arrow_point with normal stroke", async () => {
+      const ast = await parseMermaidToAST(`graph TD\nA --> B`);
 
-      expect(ast.edges[0].edgeType).toBe("arrow");
+      expect(ast.edges[0].arrowhead).toBe("arrow_point");
+      expect(ast.edges[0].stroke).toBe("normal");
       expect(ast.edges[0].label).toBeUndefined();
     });
 
-    it("when line edge is used, should parse line edge type", () => {
-      const ast = parseMermaidToAST(`\ngraph TD\nA --- B`);
+    it("when open line edge is used, should parse arrow_open", async () => {
+      const ast = await parseMermaidToAST(`graph TD\nA --- B`);
 
-      expect(ast.edges[0].edgeType).toBe("line");
+      expect(ast.edges[0].arrowhead).toBe("arrow_open");
+      expect(ast.edges[0].stroke).toBe("normal");
       expect(ast.edges[0].label).toBeUndefined();
     });
 
-    it("when arrow edge has pipe label, should preserve delimiters in label", () => {
-      const ast = parseMermaidToAST(`\ngraph TD\nA -->|Yes| B`);
+    it("when arrow edge has pipe label, should store the label without delimiters", async () => {
+      const ast = await parseMermaidToAST(`graph TD\nA -->|Yes| B`);
 
-      expect(ast.edges[0].edgeType).toBe("arrow");
-      expect(ast.edges[0].label).toBe("|Yes|");
+      expect(ast.edges[0].arrowhead).toBe("arrow_point");
+      expect(ast.edges[0].label).toBe("Yes");
     });
 
-    it("when line edge has pipe label, should preserve delimiters in label", () => {
-      const ast = parseMermaidToAST(`\ngraph TD\nA ---|link text| B`);
+    it("when open edge has pipe label, should store the label without delimiters", async () => {
+      const ast = await parseMermaidToAST(`graph TD\nA ---|link text| B`);
 
-      expect(ast.edges[0].edgeType).toBe("line");
-      expect(ast.edges[0].label).toBe("|link text|");
+      expect(ast.edges[0].arrowhead).toBe("arrow_open");
+      expect(ast.edges[0].label).toBe("link text");
+    });
+
+    it("when dotted and thick strokes are used, should record them on the AST", async () => {
+      const ast = await parseMermaidToAST(`graph TD\nA -.-> B\nA ==> C`);
+
+      expect(ast.edges[0].stroke).toBe("dotted");
+      expect(ast.edges[1].stroke).toBe("thick");
     });
   });
 });

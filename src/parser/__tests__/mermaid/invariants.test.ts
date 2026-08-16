@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { parseMermaidToAST } from "../../mermaid";
 
@@ -13,8 +14,10 @@ describe("mermaid parser", () => {
       expect(COVERAGE_CHECKPOINTS.length).toBeGreaterThan(0);
     });
 
-    it("when same node appears across multiple edges, should keep unique node ids", () => {
-      const ast = parseMermaidToAST(`\ngraph TD\nA --> B\nA --> C\nA --> B`);
+    it("when same node appears across multiple edges, should keep unique node ids", async () => {
+      const ast = await parseMermaidToAST(
+        `graph TD\nA --> B\nA --> C\nA --> B`,
+      );
       const ids = ast.nodes.map((node) => node.id);
 
       expect(new Set(ids).size).toBe(ids.length);
@@ -23,11 +26,13 @@ describe("mermaid parser", () => {
       expect(ids).toContain("C");
     });
 
-    it("when separators and whitespace are mixed, should parse equivalent node and edge counts", () => {
-      const lineBreakVariant = parseMermaidToAST(
-        `\ngraph TD\nA --> B\nB --> C`,
+    it("when separators and whitespace are mixed, should parse equivalent node and edge counts", async () => {
+      const lineBreakVariant = await parseMermaidToAST(
+        `graph TD\nA --> B\nB --> C`,
       );
-      const semicolonVariant = parseMermaidToAST("graph TD;A --> B;B --> C");
+      const semicolonVariant = await parseMermaidToAST(
+        "graph TD;A --> B;B --> C",
+      );
 
       expect(semicolonVariant.nodes).toHaveLength(
         lineBreakVariant.nodes.length,

@@ -1,89 +1,130 @@
 # Spec: Mermaid mode
 
-Behavior specification for the `mermaid` mode: the accepted Mermaid-flowchart subset
-(`src/parser/mermaid.ohm` / `mermaid.ts`) and the flowchart-to-graph conversion
+Behavior specification for the `mermaid` mode: flowchart text is parsed by the
+pinned upstream mermaid flowchart parser (`mermaid@11.16.1`), adapted into
+`MermaidAST` (`src/parser/mermaid.ts`), and converted to `GraphData`
 (`src/graphBuilder/mermaidGraphBuilder.ts`).
 
-Conventions: every normative statement is covered by a **Pinned by** reference to the test
-file(s) that fix the behavior. Statements marked _observed, untested_ describe current
-behavior with no covering test.
+This mode is an IR viewer of flowchart structure, not a mermaid renderer. The
+upstream package is a parser source of truth; mermaid's diagram renderer is not
+part of the product. The adapter imports mermaid's flowchart parser/DB module
+rather than the all-diagram `mermaid` entry, so other diagram types never land
+in the bundle (`contracts/bundle-budget.md`).
+
+Conventions: every normative statement is covered by a **Pinned by** reference to
+the test file(s) that fix the behavior. Statements marked _observed, untested_
+describe current behavior with no covering test.
 
 ## 1. Input model
 
-The whole input is parsed as one document. On failure (including empty input or a missing
-header), `parse` throws an `Error` with Ohm's match diagnostic.
+The whole input is one document. `parse` is async (upstream `parser.parse` is).
+On failure it rejects with an `Error`.
 
-> Pinned by: `src/parser/__tests__/mermaid/errors.test.ts`
+- Empty input, a missing flowchart header, and input that is not a flowchart
+  (sequence diagrams, class diagrams, `swimlane`, …) reject. The mermaid mode
+  does not parse other mermaid diagram types.
+- A flowchart that mermaid's parser rejects (syntax error) rejects with that
+  parser's message.
+- YAML frontmatter and `%%{init}%%` / `%%{initialize}%%` directives are stripped
+  before parse and otherwise ignored (they do not change this app's layout,
+  theme, or security settings).
+- Full-line `%%` comments (not `%%{`) are stripped before parse. They may appear
+  before the header.
+
+> Pinned by: `src/parser/__tests__/mermaid/errors.test.ts`,
+> `src/parser/__tests__/mermaid/comments.test.ts`,
+> `src/parser/__tests__/mermaid/headerAndDirection.test.ts`
 
 ## 2. Accepted syntax
 
-- **Header** (required, first non-separator content): `graph <dir>` or `flowchart <dir>` where
-  `<dir>` is `TB | TD | BT | RL | LR`. The direction string is carried into
-  `GraphData.direction` as-is.
-- **Statements** after the header, separated by newlines and/or `;`:
-  - Node declaration: `Id` with an optional label (see shapes below).
-  - Edge: `Node Link Node`.
-  - Comment: `%%` and everything up to the end of the line. A comment is a statement like any
-    other, so it may stand on its own line or follow another statement on the same line; it
-    contributes no node and no edge. Comments before the header are not accepted, since only
-    separators may precede it.
-- **Node ids** are alphanumeric (`alnum+`). **Shapes** by label bracket:
+Accepted input is mermaid flowchart syntax as implemented by the pinned
+package: `graph` / `flowchart` / `flowchart-elk` headers, every node shape the
+parser knows (bracket forms and `@{ shape: ... }`), edge stroke and arrowhead
+variants, chains (`A --> B --> C`), `&`-lists, subgraphs (including nesting),
+and `style` / `classDef` / `class` / `linkStyle` statements.
 
-  | Syntax     | `shape`  | Rendered as (see `MermaidNode.tsx`) |
-  | ---------- | -------- | ----------------------------------- |
-  | `A[text]`  | `square` | 4px-radius solid border             |
-  | `A(text)`  | `round`  | 20px-radius solid border            |
-  | `A{text}`  | `curly`  | dashed border                       |
-  | (no label) | —        | label falls back to the node id     |
+`style` / `classDef` / `class` / `linkStyle` parse and contribute nothing to
+`MermaidAST` (no classes, no CSS). `click`, tooltips, and hyperlinks parse and
+are ignored. Interaction is permanently out of scope.
 
-- **Links**: `-->` (arrow) and `---` (line), each optionally labeled `-->|text|`, plus the
-  middle-text forms `--text-->` / `--text---`. The arrow/line distinction is stored on the AST
-  edge (`edgeType`) but does not currently change rendering. _(rendering distinction: observed,
-  untested)_
+The adapter does not re-implement flowchart grammar. What the pinned parser
+accepts, this mode accepts; what it rejects, this mode rejects. Upgrade
+breakage is caught by the fixture corpus.
 
-> Pinned by: `src/parser/__tests__/mermaid/headerAndDirection.test.ts`,
-> `src/parser/__tests__/mermaid/statements.test.ts`,
+> Pinned by: `src/parser/__tests__/mermaid/corpus.test.ts`,
 > `src/parser/__tests__/mermaid/nodes.test.ts`,
 > `src/parser/__tests__/mermaid/edges.test.ts`,
-> `src/parser/__tests__/mermaid/comments.test.ts`
+> `src/parser/__tests__/mermaid/statements.test.ts`,
+> `src/parser/__tests__/mermaid/subgraphs.test.ts`
 
-## 3. Node deduplication and label back-fill
+## 3. `MermaidAST`
 
-A node may appear in any number of declarations and edges; it is created once, keyed by id.
-If a node was first seen without a label (label === id) and a later occurrence carries a label,
-the label and shape are back-filled.
+`MermaidAST` is the stable internal contract. FlowDB types do not leak past the
+adapter.
 
-> Pinned by: `src/parser/__tests__/mermaid/statements.test.ts`,
+- **`direction`** is FlowDB's `getDirection()` after parse. Mermaid stores `TD`
+  as `TB`; both mean top-down, and layout maps any non-`LR` value to ELK
+  `DOWN` (`specs/graph-view.md` §3).
+- **`nodes`**: one entry per FlowDB vertex that is not a subgraph id. `id` is
+  the vertex id; `label` is the vertex text with surrounding quotes stripped
+  (fallback: the id); `shape` is the upstream shape name (`square`, `round`,
+  `diamond`, `stadium`, `hexagon`, …, or a `@{ shape: ... }` catalog name).
+  Omitted shape means the default rectangle.
+- **`edges`**: one entry per FlowDB edge, in source order. `label` is omitted
+  when the edge has no label text (pipe delimiters are not part of the label).
+  `stroke` is `normal` | `thick` | `dotted` | `invisible`. `arrowhead` is
+  FlowDB's `type` (`arrow_point`, `arrow_open`, `arrow_circle`, `arrow_cross`,
+  `double_arrow_point`, …).
+- **`subgraphs`**: one entry per FlowDB subgraph, with `id`, `title` (empty
+  string when untitled), `nodeIds` (the subgraph's unique child ids — leaves
+  and nested subgraph ids), and `direction` when FlowDB supplies one.
+  Per-subgraph direction is stored and not applied to layout (the graph layer
+  has one `GraphData.direction`).
+
+A node mentioned several times is one node, keyed by id. Label and shape
+back-fill follow FlowDB (a later labeled occurrence fills an unlabeled one).
+
+> Pinned by: `src/parser/__tests__/mermaid/nodes.test.ts`,
+> `src/parser/__tests__/mermaid/edges.test.ts`,
+> `src/parser/__tests__/mermaid/headerAndDirection.test.ts`,
 > `src/parser/__tests__/mermaid/invariants.test.ts`,
-> `src/parser/__tests__/mermaid/nodes.test.ts`
+> `src/parser/__tests__/mermaid/subgraphs.test.ts`,
+> `src/parser/__tests__/mermaid/corpus.test.ts`
 
 ## 4. Conversion rules
 
 - Every AST node becomes one `GraphNode` with `nodeType: "mermaid-node"`,
-  `language: "mermaid"`, and the AST node as `astData`; `type` carries the shape.
-- Every AST edge becomes one `GraphEdge`; ids are `e<i>-<source>-<target>` (index-prefixed, so
-  parallel edges between the same endpoints stay unique).
-- `GraphData.direction` is the header direction.
+  `language: "mermaid"`, and the AST node as `astData`; `type` carries the
+  upstream shape name.
+- Every AST subgraph becomes one `GraphNode` with `nodeType: "graph-group"`,
+  `label` equal to the title (or the id when the title is empty). Children
+  (leaves and nested groups) set `parentId` to that subgraph id. A subgraph
+  id used as an edge endpoint names the group, not a second leaf
+  (`contracts/graph-data.md`, Hierarchy).
+- Every AST edge becomes one `GraphEdge`; ids are `e<i>-<source>-<target>`
+  (index-prefixed, so parallel edges between the same endpoints stay unique).
+  Stroke and arrowhead stay on the AST; they do not yet change rendering.
+- `GraphData.direction` is the AST direction.
 
-> Pinned by: `src/graphBuilder/__tests__/mermaid/{nodes,edges,metadata,invariants}.test.ts`,
+> Pinned by: `src/graphBuilder/__tests__/mermaid/{nodes,edges,metadata,invariants,subgraphs}.test.ts`,
 > `src/parser/__tests__/mermaid/graphData.test.ts`
 
-## 5. Known quirks
+## 5. Rendering
 
-These are current, test-pinned behavior — changing them is a spec change:
+The mermaid node renderer distinguishes three presentations, mapped from
+upstream shape names:
 
-1. **Edge labels keep their pipe delimiters.** `A -->|Yes| B` produces the label string
-   `"|Yes|"`, not `"Yes"`, and it renders that way in the graph.
-2. **Double-quoted labels keep their quotes.** `A["Quoted"]` parses as a `square` node whose
-   label is `"Quoted"` including the quotes — the grammar's `squareQuote` alternative is
-   unreachable because the plain `square` rule matches first.
+| Upstream `shape`   | Presentation                          |
+| ------------------ | ------------------------------------- |
+| `square` / omitted | 4px-radius solid border               |
+| `round`            | 20px-radius solid border              |
+| `diamond`          | dashed border                         |
+| any other name     | same as `square` (permanent fallback) |
 
-> Pinned by: `src/parser/__tests__/mermaid/edges.test.ts`,
+The fallback is spec, not a stopgap: unknown and future shapes always render
+as the default until a later change maps them onto a semantic family. Edge
+stroke/arrowhead variants are carried on the AST and currently all render as
+the standard routed edge.
+
+> Pinned by: `src/components/Graph/Mermaid/MermaidNode.tsx` (stories),
 > `src/parser/__tests__/mermaid/nodes.test.ts`
-
-## 6. Known limitations
-
-- Only the flowchart subset above is supported. Subgraphs, styling/class statements, click
-  handlers, other node shapes (`((...))`, `>...]`, `[/.../]`, ...), multi-link chains
-  (`A --> B --> C`), and `&`-lists are not in the grammar; input using them throws.
-  _(observed, untested)_

@@ -11,7 +11,7 @@ const BUDGET = {
   /** Gzipped bytes of everything dist/index.html loads or preloads. */
   initialJsGzip: 250_000,
   /** Uncompressed bytes of every emitted file. */
-  distTotal: 3_500_000,
+  distTotal: 4_000_000,
 };
 
 const distDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist");

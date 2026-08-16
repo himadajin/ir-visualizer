@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { parseMermaid } from "../parser/mermaid";
 import { parseLLVM, parseLLVMUseDef } from "../parser/llvm";
@@ -5,17 +6,17 @@ import { parseSelectionDAGToGraphData } from "../parser/selectionDAG";
 import { llvmMode } from "../irModes/llvmMode";
 
 describe("Integration: parseMermaid (parser + graph builder)", () => {
-  it("should produce GraphData from Mermaid text", () => {
+  it("should produce GraphData from Mermaid text", async () => {
     const input = `
 graph TD
 A[Start] --> B[Process]
 B --> C[End]`;
 
-    const graph = parseMermaid(input);
+    const graph = await parseMermaid(input);
 
     expect(graph.nodes).toHaveLength(3);
     expect(graph.edges).toHaveLength(2);
-    expect(graph.direction).toBe("TD");
+    expect(graph.direction).toBe("TB");
 
     // Nodes should have expected properties
     const startNode = graph.nodes.find((n) => n.id === "A");
@@ -31,18 +32,17 @@ B --> C[End]`;
     expect(graph.edges[1].target).toBe("C");
   });
 
-  it("should handle edge labels end-to-end", () => {
+  it("should handle edge labels end-to-end", async () => {
     const input = `
 graph LR
 A -->|Yes| B
 A -->|No| C`;
 
-    const graph = parseMermaid(input);
+    const graph = await parseMermaid(input);
 
     expect(graph.edges).toHaveLength(2);
-    // The parser preserves pipe delimiters in edge labels
-    expect(graph.edges[0].label).toBe("|Yes|");
-    expect(graph.edges[1].label).toBe("|No|");
+    expect(graph.edges[0].label).toBe("Yes");
+    expect(graph.edges[1].label).toBe("No");
   });
 });
 

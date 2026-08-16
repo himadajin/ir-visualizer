@@ -22,26 +22,50 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Square: Story = {
+export const Process: Story = {
   args: {
-    astData: { id: "A", label: "Hello World", shape: "square" },
+    astData: { id: "A", label: "Process", shape: "square" },
   },
 };
 
-export const Round: Story = {
+export const Decision: Story = {
   args: {
-    astData: { id: "B", label: "Rounded node", shape: "round" },
+    astData: { id: "B", label: "Decision?", shape: "diamond" },
   },
 };
 
-export const Curly: Story = {
+export const Terminal: Story = {
   args: {
-    astData: { id: "C", label: "Decision?", shape: "diamond" },
+    astData: { id: "C", label: "Start", shape: "round" },
   },
 };
 
-export const UnknownShapeFallsBackToDefault: Story = {
+export const TerminalStadium: Story = {
   args: {
-    astData: { id: "D", label: "Hexagon", shape: "hexagon" },
+    astData: { id: "D", label: "End", shape: "stadium" },
+  },
+};
+
+export const DataIO: Story = {
+  args: {
+    astData: { id: "E", label: "Input", shape: "lean_right" },
+  },
+};
+
+export const Storage: Story = {
+  args: {
+    astData: { id: "F", label: "Store", shape: "cylinder" },
+  },
+};
+
+export const Subroutine: Story = {
+  args: {
+    astData: { id: "G", label: "Helper", shape: "subroutine" },
+  },
+};
+
+export const UnknownShapeFallsBackToProcess: Story = {
+  args: {
+    astData: { id: "H", label: "Hexagon", shape: "hexagon" },
   },
 };

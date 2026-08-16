@@ -64,5 +64,24 @@ describe("mermaid parser", () => {
       expect(ast.nodes[0].shape).toBe("stadium");
       expect(ast.nodes[0].label).toBe("stadium");
     });
+
+    it.each([
+      ["A[[helper]]", "subroutine"],
+      ["A[(store)]", "cylinder"],
+      ["A((start))", "circle"],
+      ["A[/input/]", "lean_right"],
+      ["A[\\output\\]", "lean_left"],
+      ['A@{ shape: diam, label: "Q" }', "diam"],
+      ['A@{ shape: diamond, label: "Q" }', "diamond"],
+      ['A@{ shape: cyl, label: "S" }', "cyl"],
+      ['A@{ shape: fr-rect, label: "P" }', "fr-rect"],
+    ] as const)(
+      "when source is %s, should carry upstream shape %s",
+      async (declaration, shape) => {
+        const ast = await parseMermaidToAST(`graph TD\n${declaration}`);
+
+        expect(ast.nodes[0].shape).toBe(shape);
+      },
+    );
   });
 });

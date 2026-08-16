@@ -2,36 +2,16 @@ import type { NodeProps } from "@xyflow/react";
 import type { MermaidASTNode } from "../../../ast/mermaidAST";
 import NodeShell from "../common/NodeShell";
 import {
-  NODE_BORDER_RADIUS,
   NODE_WRAP_MAX_CHARS_MERMAID,
   NODE_WRAP_MIN_CHARS_MERMAID,
 } from "../common/nodeTextStyle";
-
-const shapeToBorderRadius = (shape?: string): string => {
-  switch (shape) {
-    case "round":
-      return "20px";
-    case "diamond":
-    case "curly":
-      return "4px";
-    case "square":
-    default:
-      return `${NODE_BORDER_RADIUS}px`;
-  }
-};
-
-const shapeToBorderStyle = (shape?: string): string => {
-  if (shape === "diamond" || shape === "curly") {
-    return "2px dashed #777";
-  }
-  return "1px solid #777";
-};
+import { mermaidFamilyPresentation, mermaidShapeFamily } from "./shapeFamily";
 
 const MermaidNode = ({ data }: NodeProps) => {
   const node = data.astData as MermaidASTNode;
-
-  const borderRadius = shapeToBorderRadius(node.shape);
-  const border = shapeToBorderStyle(node.shape);
+  const { borderRadius, border } = mermaidFamilyPresentation(
+    mermaidShapeFamily(node.shape),
+  );
 
   return (
     <NodeShell

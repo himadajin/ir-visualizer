@@ -204,7 +204,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
       style={{
         width: "100%",
         height: "100%",
-        backgroundColor: "var(--app-canvas-ground)",
+        backgroundColor: "var(--app-canvas)",
       }}
     >
       {/* The routing pass (specs/graph-view.md §4) must wrap `<ReactFlow>`:

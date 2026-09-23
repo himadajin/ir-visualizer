@@ -7,6 +7,7 @@ import {
   IconPlus,
   IconRefresh,
 } from "@tabler/icons-react";
+import classes from "./CanvasControls.module.css";
 
 export type FitViewPadding = NonNullable<FitViewOptions["padding"]>;
 
@@ -33,13 +34,7 @@ function ControlButton({
   children: ReactNode;
 }) {
   return (
-    <ActionIcon
-      variant="subtle"
-      color="gray"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-    >
+    <ActionIcon aria-label={label} title={label} onClick={onClick}>
       {children}
     </ActionIcon>
   );
@@ -68,7 +63,7 @@ export function CanvasControls({
     // whatever edge it rests against. Repositioning is instant on purpose — it
     // happens under the panel ⇄ pill morph, the shell's only animation (§6.6).
     <Panel position="bottom-right" style={{ bottom: bottomInset }}>
-      <Paper withBorder p={4}>
+      <Paper withBorder p={4} className={classes.cluster}>
         <Group gap={4} wrap="nowrap">
           <ControlButton label="Zoom in" onClick={() => void zoomIn()}>
             <IconPlus size={16} />

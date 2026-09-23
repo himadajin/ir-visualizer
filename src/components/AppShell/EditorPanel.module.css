@@ -4,18 +4,22 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: var(--app-surface);
+  box-shadow: var(--app-elevation);
 }
 
 .pill {
   position: fixed;
   z-index: 5;
+  box-shadow: var(--app-elevation);
 }
 
 .header {
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .brand {
+  color: var(--app-ink);
   white-space: nowrap;
   user-select: none;
 }
@@ -27,7 +31,9 @@
 
 /* Roughly eight lines of compiler output; a longer report scrolls (§6.3). */
 .footer {
-  border-top: 1px solid var(--mantine-color-default-border);
+  border-top: 1px solid var(--app-line);
+  color: var(--app-ink-muted);
+  font-family: var(--app-font-mono);
   line-height: 18px;
   max-height: calc(18px * 8);
   overflow-y: auto;
@@ -59,5 +65,5 @@
 }
 
 .resizeHandle:hover {
-  background-color: var(--mantine-color-default-border);
+  background-color: var(--app-line);
 }

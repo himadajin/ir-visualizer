@@ -19,10 +19,29 @@ interface IRModeDefinition {
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
   layoutOptions?: Record<string, string>; // ELK layout options, e.g. layer spacing
+  getNodePorts?: NodePortProvider; // fixed ports for the measured node box
   bundleOf?: (edge: GraphEdge) => string | undefined; // see "Bundles" below
   views?: IRViewDefinition[]; // optional alternative projections — see "Views" below
 }
 ```
+
+## Fixed-position node ports
+
+Modes and views may supply `getNodePorts(node, size)`, returning node-local port
+ids and `x`/`y` positions within the measured, quantized box. The callback is passed
+through `useIRWorkspace` and `useGraphData` to layout, with the same view-over-mode
+precedence as `layoutOptions`. Layout namespaces port ids using an injective
+encoding of `[nodeId, handleId]` and declares `FIXED_POS` ports. It contains no
+IR-specific port dispatch. Renderers share their own mode's port semantics with
+the callback so named handles and ELK endpoints agree.
+
+LLVM provides the callback for CFG successors and Use-Def operands. Other modes
+omit it. The default LLVM view inherits the mode callback. Content-only updates
+refresh rendered handles without moving nodes; every full layout, including Reset
+Layout, resolves the callback against the current graph and measured sizes.
+
+> Pinned by: `src/utils/__tests__/layout.ports.test.ts`,
+> `src/hooks/__tests__/useGraphData.test.ts`
 
 ## Parsing is asynchronous
 
@@ -126,6 +145,7 @@ interface IRViewDefinition {
   parse: (code: string) => Promise<IRParseResult>; // same reject-on-invalid rule as the mode's parse
   edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
   layoutOptions?: Record<string, string>; // defaults to the mode's layoutOptions
+  getNodePorts?: NodePortProvider; // defaults to the mode's getNodePorts
   bundleOf?: (edge: GraphEdge) => string | undefined; // defaults to the mode's bundleOf
 }
 ```
@@ -156,13 +176,13 @@ can be passed wherever layout behavior is needed:
 ```ts
 type IRLayoutBehavior = Pick<
   IRModeDefinition,
-  "edgeBuilder" | "layoutOptions" | "bundleOf"
+  "edgeBuilder" | "layoutOptions" | "getNodePorts" | "bundleOf"
 >;
 ```
 
 `useGraphData.updateGraph(graph, behavior)` takes `IRLayoutBehavior` rather than
 the full `IRModeDefinition`; a mode object satisfies it structurally, and the
-workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`/`bundleOf`.
+workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`/`getNodePorts`/`bundleOf`.
 
 `IREdgeBuilder` (`src/utils/layout.ts`) captures how a mode turns a `GraphEdge`
 into a React Flow edge:

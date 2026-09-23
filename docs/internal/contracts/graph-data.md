@@ -22,8 +22,8 @@ interface GraphEdge {
   target: string;
   label?: string;
   type?: string;
-  sourceHandle?: string; // SelectionDAG only
-  targetHandle?: string; // SelectionDAG only
+  sourceHandle?: string; // node-local source port id
+  targetHandle?: string; // node-local target port id
   isChainOrGlue?: boolean; // SelectionDAG only
   dashed?: boolean; // render with strokeDasharray (LLVM use-def phi edges)
   stroke?: MermaidEdgeStroke; // Mermaid only — specs/mermaid.md §5
@@ -36,10 +36,10 @@ interface GraphEdge {
 (`specs/graph-view.md` §3). A container may override that for its children — see
 Hierarchy. LLVM (both views) and SelectionDAG always emit `"TD"`.
 
-The SelectionDAG-only fields connect specific operand/type Handles instead of generic node
-boundaries. They are optional fields on the one shared interface rather than a
-mode-specific edge type — that is what lets `useGraphData` and `layout.ts` run a single
-`updateGraph`/`getLayoutedElements` path for every mode.
+`sourceHandle` and `targetHandle` name node-local handles in LLVM CFG, LLVM Use-Def,
+and SelectionDAG. A named handle must exist on its endpoint node. Layout declares
+the routed modes' ports through the registry's `getNodePorts`; the live router
+resolves their measured positions. `isChainOrGlue` is SelectionDAG-only.
 
 `dashed` is mode-agnostic: the standard edge factory (`createReactFlowEdge`) applies a dash
 pattern when it is set. The LLVM Use-Def view sets it on phi incoming-value edges

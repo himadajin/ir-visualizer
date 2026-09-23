@@ -651,17 +651,13 @@ describe("routeEdges — tie-breaking (contract: 'A fixed tie-break total order'
 });
 
 describe("routeEdges — unobstructed self-loops (contract: 'Self-loops (right-side preference)')", () => {
-  it("produces the documented six-point right-side loop shape, derived from the rect and not from sourcePoint/targetPoint", () => {
+  it("produces the documented six-point right-side loop shape, preserving the requested endpoints", () => {
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 100, height: 50 };
     const nodeMargin = 12; // contract default
     const selfLoopGap = 24; // contract default
     const laneX = rect.x + rect.width + selfLoopGap;
 
-    // Self-loops are synthesized from the node rect and are exempt from the
-    // exact-endpoints rule — sourcePoint/targetPoint are ignored. Use React
-    // Flow's real default (a centred handle), deliberately *not* the
-    // 75%-offset point, so this test actually pins that the loop shape comes
-    // from the rect rather than merely echoing back a pre-shaped request.
+    // The preferred right-side shape must preserve the actual handles.
     const centredBottom: Point = {
       x: rect.x + rect.width / 2,
       y: rect.y + rect.height,
@@ -682,20 +678,17 @@ describe("routeEdges — unobstructed self-loops (contract: 'Self-loops (right-s
 
     // The contract's six-point form, exact vertex table.
     const expected: Point[] = [
-      { x: rect.x + 0.75 * rect.width, y: rect.y + rect.height },
-      { x: rect.x + 0.75 * rect.width, y: rect.y + rect.height + nodeMargin },
+      { x: rect.x + 0.5 * rect.width, y: rect.y + rect.height },
+      { x: rect.x + 0.5 * rect.width, y: rect.y + rect.height + nodeMargin },
       { x: laneX, y: rect.y + rect.height + nodeMargin },
       { x: laneX, y: rect.y - nodeMargin },
-      { x: rect.x + 0.75 * rect.width, y: rect.y - nodeMargin },
-      { x: rect.x + 0.75 * rect.width, y: rect.y },
+      { x: rect.x + 0.5 * rect.width, y: rect.y - nodeMargin },
+      { x: rect.x + 0.5 * rect.width, y: rect.y },
     ];
     expect(points).toEqual(expected);
 
-    // The exemption in action: the loop does not start/end at the centred
-    // handle we supplied — it starts/ends at the 75%-offset points derived
-    // from rect.
-    expect(points[0]).not.toEqual(request.sourcePoint);
-    expect(points[points.length - 1]).not.toEqual(request.targetPoint);
+    expect(points[0]).toEqual(request.sourcePoint);
+    expect(points[points.length - 1]).toEqual(request.targetPoint);
 
     expect(isOrthogonalPolyline(points)).toBe(true);
   });
@@ -1695,7 +1688,7 @@ describe("routeEdges — quantization: integer coordinates (contract 'Integer co
   // integer — searched routes, self-loops and fallback routes alike, for any
   // finite input." Catches the whole class of no-quantization implementations,
   // and (via the self-loop half) one that quantizes rects and request points
-  // but forgets the 75%-of-width offset.
+  // but forgets to quantize self-loop endpoints.
 
   it("returns only integer coordinates for searched routes and self-loops across a sweep of fractional rects, handles and options", () => {
     const next = fractionStream(89);
@@ -2131,11 +2124,9 @@ describe("routeEdges — quantization: node rects are quantized by boundary (con
     ).toBe(false);
   });
 
-  it("derives a self-loop from the boundary-quantized rect on all four edges", () => {
-    // A self-loop reads the rect and nothing else, so it exposes all four
-    // quantized boundaries at once. Rect (100.4, 200.4, 39.4, 49.4) quantizes
-    // to x 100..140 and y 200..250, i.e. w = 40 and h = 50. Field-by-field
-    // rounding would give w = 39 and h = 49 and move four of the six vertices.
+  it("uses the boundary-quantized right edge for the self-loop lane", () => {
+    // Right boundary round(100.4 + 39.4) = 140, not 139. The lane must
+    // retain its clearance while endpoints follow the independently rounded handles.
     const rect: RouteNodeRect = {
       id: "A",
       x: 100.4,
@@ -2155,15 +2146,15 @@ describe("routeEdges — quantization: node rects are quantized by boundary (con
 
     const points = routeEdges([rect], [request]).get(request.id)!;
 
-    // stubX = round(100 + 0.75 * 40) = 130; laneX = 100 + 40 + 24 = 164;
+    // Requested x rounds to 120; laneX = 100 + 40 + 24 = 164;
     // the node's own edges are y = 200 and y = 250, margin 12 either side.
     expect(points).toEqual([
-      { x: 130, y: 250 },
-      { x: 130, y: 262 },
+      { x: 120, y: 250 },
+      { x: 120, y: 262 },
       { x: 164, y: 262 },
       { x: 164, y: 188 },
-      { x: 130, y: 188 },
-      { x: 130, y: 200 },
+      { x: 120, y: 188 },
+      { x: 120, y: 200 },
     ]);
   });
 });
@@ -2268,7 +2259,7 @@ describe("routeEdges — quantization: a rect that collapses to zero extent stil
 });
 
 describe("routeEdges — quantization: endpoints are exact on the quantized points (contract 'Endpoints are exact on the quantized points')", () => {
-  // "A routed (non-self-loop) polyline starts exactly at the quantized
+  // "Every routed polyline starts exactly at the quantized
   // `RouteRequest.sourcePoint` and ends exactly at the quantized
   // `RouteRequest.targetPoint` … the drawn endpoint may sit up to 0.5 px away
   // on each axis from the requested point."
@@ -2308,36 +2299,40 @@ describe("routeEdges — quantization: endpoints are exact on the quantized poin
     for (let i = 0; i < 60; i++) {
       const { nodes, requests, options } = fractionalScenario(next, i);
       const routes = routeEdges(nodes, requests, options);
-      const edge = requests[0]; // requests[1] is the self-loop, which is exempt
-      const points = routes.get(edge.id)!;
-      const last = points[points.length - 1];
+      for (const edge of requests) {
+        const points = routes.get(edge.id)!;
+        const last = points[points.length - 1];
 
-      const expectedFirst = {
-        x: q(edge.sourcePoint.x),
-        y: q(edge.sourcePoint.y),
-      };
-      const expectedLast = {
-        x: q(edge.targetPoint.x),
-        y: q(edge.targetPoint.y),
-      };
+        const expectedFirst = {
+          x: q(edge.sourcePoint.x),
+          y: q(edge.sourcePoint.y),
+        };
+        const expectedLast = {
+          x: q(edge.targetPoint.x),
+          y: q(edge.targetPoint.y),
+        };
 
-      if (points[0].x !== expectedFirst.x || points[0].y !== expectedFirst.y) {
-        failures.push(
-          `case ${i}: first point ${JSON.stringify(points[0])} !== ${JSON.stringify(expectedFirst)}`,
-        );
-      }
-      if (last.x !== expectedLast.x || last.y !== expectedLast.y) {
-        failures.push(
-          `case ${i}: last point ${JSON.stringify(last)} !== ${JSON.stringify(expectedLast)}`,
-        );
-      }
-      if (
-        Math.abs(points[0].x - edge.sourcePoint.x) > 0.5 ||
-        Math.abs(points[0].y - edge.sourcePoint.y) > 0.5 ||
-        Math.abs(last.x - edge.targetPoint.x) > 0.5 ||
-        Math.abs(last.y - edge.targetPoint.y) > 0.5
-      ) {
-        failures.push(`case ${i}: endpoint moved more than 0.5 px`);
+        if (
+          points[0].x !== expectedFirst.x ||
+          points[0].y !== expectedFirst.y
+        ) {
+          failures.push(
+            `case ${i}: first point ${JSON.stringify(points[0])} !== ${JSON.stringify(expectedFirst)}`,
+          );
+        }
+        if (last.x !== expectedLast.x || last.y !== expectedLast.y) {
+          failures.push(
+            `case ${i}: last point ${JSON.stringify(last)} !== ${JSON.stringify(expectedLast)}`,
+          );
+        }
+        if (
+          Math.abs(points[0].x - edge.sourcePoint.x) > 0.5 ||
+          Math.abs(points[0].y - edge.sourcePoint.y) > 0.5 ||
+          Math.abs(last.x - edge.targetPoint.x) > 0.5 ||
+          Math.abs(last.y - edge.targetPoint.y) > 0.5
+        ) {
+          failures.push(`case ${i}: endpoint moved more than 0.5 px`);
+        }
       }
     }
 
@@ -2392,12 +2387,12 @@ describe("routeEdges — quantization: options (contract 'Defaults' and 'Options
       )!;
       // laneX = x + w + round(selfLoopGap) = 0 + 100 + 24 = 124.
       expect(points).toEqual([
-        { x: 75, y: 50 },
-        { x: 75, y: 62 },
+        { x: 50, y: 50 },
+        { x: 50, y: 62 },
         { x: 124, y: 62 },
         { x: 124, y: -12 },
-        { x: 75, y: -12 },
-        { x: 75, y: 0 },
+        { x: 50, y: -12 },
+        { x: 50, y: 0 },
       ]);
     }
   });
@@ -2467,80 +2462,49 @@ describe("routeEdges — quantization: options (contract 'Defaults' and 'Options
   });
 });
 
-describe("routeEdges — quantization: the self-loop stub offset is rounded (contract 'Self-loops')", () => {
-  // "`stubX = round(x + 0.75w)` … three quarters of a width is fractional
-  // whenever the width is not a multiple of 4". Every self-loop fixture above
-  // this point uses a width that *is* a multiple of 4, where the offset is
-  // already an integer and the rounding is invisible.
-
-  it("rounds the 75%-of-width offset for widths that are not a multiple of 4", () => {
-    // The contract's own worked examples: w = 100 -> x + 75, w = 101 ->
-    // x + 75.75 -> x + 76, w = 102 -> x + 76.5 -> x + 77 (tie, rounds up),
-    // w = 103 -> x + 77.25 -> x + 77.
-    const expectedStubX: Record<number, number> = {
-      100: 75,
-      101: 76,
-      102: 77,
-      103: 77,
-    };
-
-    const failures: string[] = [];
+describe("routeEdges — quantization: self-loop endpoints (contract 'Self-loops')", () => {
+  it("keeps distinct requested endpoints when the node width changes", () => {
     for (const width of [100, 101, 102, 103]) {
       const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width, height: 50 };
       const request: RouteRequest = {
         id: "loop-A",
         source: "A",
         target: "A",
-        sourcePoint: { x: rect.width / 2, y: 50 },
-        targetPoint: { x: rect.width / 2, y: 0 },
+        sourcePoint: { x: 12.4, y: 50 },
+        targetPoint: { x: 81.7, y: 0 },
         sourceSide: "bottom",
         targetSide: "top",
       };
       const points = routeEdges([rect], [request]).get(request.id)!;
-      const stubX = expectedStubX[width];
-
-      if (points[0].x !== stubX || points[points.length - 1].x !== stubX) {
-        failures.push(
-          `w=${width}: expected stubX ${stubX}, got ${points[0].x} / ${points[points.length - 1].x}`,
-        );
-      }
-      if (!allCoordinatesAreIntegers(points)) {
-        failures.push(`w=${width}: non-integer coordinate`);
-      }
+      expect(points[0]).toEqual({ x: 12, y: 50 });
+      expect(points.at(-1)).toEqual({ x: 82, y: 0 });
+      expect(allCoordinatesAreIntegers(points)).toBe(true);
     }
-
-    expect(failures).toEqual([]);
   });
 
-  it("produces the full six-point table for the tie case w = 102", () => {
+  it("rounds endpoint ties toward positive infinity", () => {
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 102, height: 50 };
     const request: RouteRequest = {
       id: "loop-A",
       source: "A",
       target: "A",
-      sourcePoint: { x: 51, y: 50 },
-      targetPoint: { x: 51, y: 0 },
+      sourcePoint: { x: 26.5, y: 50 },
+      targetPoint: { x: 75.5, y: 0 },
       sourceSide: "bottom",
       targetSide: "top",
     };
-
-    const points = routeEdges([rect], [request]).get(request.id)!;
-
-    // stubX = round(0 + 76.5) = 77; laneX = 0 + 102 + 24 = 126.
-    expect(points).toEqual([
-      { x: 77, y: 50 },
-      { x: 77, y: 62 },
+    expect(routeEdges([rect], [request]).get(request.id)).toEqual([
+      { x: 27, y: 50 },
+      { x: 27, y: 62 },
       { x: 126, y: 62 },
       { x: 126, y: -12 },
-      { x: 77, y: -12 },
-      { x: 77, y: 0 },
+      { x: 76, y: -12 },
+      { x: 76, y: 0 },
     ]);
   });
 
-  it("normalizes the stub offset's -0, which only a negative x can produce", () => {
-    // The contract's own example: x = -1, w = 1 gives round(-1 + 0.75) =
-    // round(-0.25) = -0, the one case where rounding the sum and rounding only
-    // the 0.75w term differ — in the sign of zero. Both must come back as +0.
+  it("normalizes negative zero in requested self-loop endpoints", () => {
+    // round(-0.5) is -0; request quantization normalizes it to +0.
     const rect: RouteNodeRect = { id: "A", x: -1, y: 0, width: 1, height: 20 };
     const request: RouteRequest = {
       id: "loop-A",
@@ -2647,14 +2611,14 @@ describe("routeEdges — quantization: the self-loop duplicate collapse (contrac
       selfLoopGap: 1,
     }).get(request.id)!;
 
-    // stubX = round(0 + 1.5) = 2; laneX = 0 + 2 + 1 = 3.
+    // Requested x = 1; laneX = 0 + 2 + 1 = 3.
     expect(points).toEqual([
-      { x: 2, y: 20 },
-      { x: 2, y: 21 },
+      { x: 1, y: 20 },
+      { x: 1, y: 21 },
       { x: 3, y: 21 },
       { x: 3, y: -1 },
-      { x: 2, y: -1 },
-      { x: 2, y: 0 },
+      { x: 1, y: -1 },
+      { x: 1, y: 0 },
     ]);
   });
 });
@@ -2691,8 +2655,7 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
       id: "loop-A",
       source: "A",
       target: "A",
-      // Attachments come from the rect; these points define the region. A real
-      // caller passes the live handle positions, so this one does too.
+      // Real callers pass the live handle positions on the current node rect.
       sourcePoint: { x: rect.x + rect.width / 2, y: rect.y + rect.height },
       targetPoint: { x: rect.x + rect.width / 2, y: rect.y },
       sourceSide: "bottom",
@@ -2701,8 +2664,7 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
   }
 
   it("keeps every self-loop a loop across the clearance sweep, zero included", () => {
-    // The sweep of issue #96: widths across the `w <= 2` boundary where
-    // `round(0.75w) === w`, heights that quantize to zero and to a real
+    // The sweep of issue #96: small widths and heights that quantize to zero or a real
     // extent, both clearances at 0 and above, over origins that put the rect
     // on and off the lattice. Every case that failed before the floor had a
     // clearance of 0; none with both at 1 or more did.
@@ -2743,9 +2705,7 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
   });
 
   it("keeps nodeMargin clearance even when selfLoopGap is zero", () => {
-    // w = 2 is the boundary case — `round(0.75 * 2) = 2 = w`, so the unfloored
-    // lane would land exactly on the stub and the loop would run down, back up
-    // and down again. The nodeMargin now also floors the lane: right + 12 = 14.
+    // A zero lane gap must still respect nodeMargin: right + 12 = 14.
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 2, height: 20 };
     const points = routeEdges([rect], [loopRequest(rect)], {
       nodeMargin: 12,
@@ -2753,32 +2713,28 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
     }).get("loop-A")!;
 
     expect(points).toEqual([
-      { x: 2, y: 20 },
-      { x: 2, y: 32 },
+      { x: 1, y: 20 },
+      { x: 1, y: 32 },
       { x: 14, y: 32 },
       { x: 14, y: -12 },
-      { x: 2, y: -12 },
-      { x: 2, y: 0 },
+      { x: 1, y: -12 },
+      { x: 1, y: 0 },
     ]);
   });
 
   it("floors the vertical extent: a rect of no height at zero clearance still yields a loop, not a point", () => {
-    // Every one of the six vertices used to collapse onto `(0, 0)` here.
-    // `aboveY = 0`, `belowY = max(0 + 0 + 0, 0 + 1) = 1`, `laneX = max(0, 1)`,
-    // and the fold at the top edge takes the six to five.
+    // Coincident endpoints still require a non-empty, reversal-free cycle.
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 0, height: 0 };
     const points = routeEdges([rect], [loopRequest(rect)], {
       nodeMargin: 0,
       selfLoopGap: 0,
     }).get("loop-A")!;
 
-    expect(points).toEqual([
-      { x: 0, y: 0 },
-      { x: 0, y: 1 },
-      { x: 1, y: 1 },
-      { x: 1, y: 0 },
-      { x: 0, y: 0 },
-    ]);
+    expect(points[0]).toEqual({ x: 0, y: 0 });
+    expect(points.at(-1)).toEqual(points[0]);
+    expect(points.length).toBeGreaterThan(3);
+    expect(isOrthogonalPolyline(points)).toBe(true);
+    expect(hasImmediateReversal(points)).toBe(false);
   });
 
   it("does not move a loop that had room in the first place", () => {
@@ -2795,12 +2751,12 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
     const points = routeEdges([rect], [loopRequest(rect)]).get("loop-A")!;
 
     expect(points).toEqual([
-      { x: 175, y: 140 }, // stubX = 40 + 135
-      { x: 175, y: 152 }, // + nodeMargin 12
+      { x: 130, y: 140 }, // Requested x = 40 + 90
+      { x: 130, y: 152 }, // + nodeMargin 12
       { x: 244, y: 152 }, // laneX = 40 + 180 + 24
       { x: 244, y: 68 },
-      { x: 175, y: 68 },
-      { x: 175, y: 80 },
+      { x: 130, y: 68 },
+      { x: 130, y: 80 },
     ]);
   });
 

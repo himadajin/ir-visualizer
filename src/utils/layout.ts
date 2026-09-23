@@ -14,7 +14,6 @@ import type {
 } from "../types/graph";
 import { isContainerNode, isGraphDirection } from "../types/graph";
 import type { RoutedEdgeData } from "../components/Graph/RoutedEdge";
-import { getUseDefPorts } from "../components/Graph/LLVM/UseDef/useDefPorts";
 import {
   createReactFlowNode,
   createReactFlowEdge,
@@ -42,7 +41,7 @@ export interface IREdgeBuilder {
   buildReactFlowEdge(edge: GraphEdge): Edge;
 }
 
-/** LLVM: ELK-routed edges (specs/graph-view.md §4). */
+/** LLVM: live routed edges (specs/graph-view.md §4). */
 export const codeGraphEdgeBuilder: IREdgeBuilder = {
   buildReactFlowEdge: (edge) => createReactFlowEdge(edge, "routed"),
 };
@@ -66,6 +65,7 @@ export const selectionDAGEdgeBuilder: IREdgeBuilder = {
 
 export interface LayoutOptions {
   direction?: string;
+  getNodePorts?: NodePortProvider;
   edgeBuilder?: IREdgeBuilder;
   /** Per-mode ELK option overrides (contracts/ir-mode-registry.md). */
   layoutOptions?: Record<string, string>;
@@ -76,6 +76,18 @@ export interface NodeSize {
   width: number;
   height: number;
 }
+
+/** Fixed positions relative to a node's outer measured box. */
+export interface LayoutPort {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export type NodePortProvider = (
+  node: GraphNode,
+  size: NodeSize,
+) => readonly LayoutPort[];
 
 export type NodeSizeMap = ReadonlyMap<string, NodeSize>;
 
@@ -149,7 +161,7 @@ export const sizesCoverGraph = (
 
 /** ELK port ids are global, so node-local handle ids get namespaced. */
 const elkPortId = (nodeId: string, handleId: string) =>
-  `${nodeId}::${handleId}`;
+  JSON.stringify([nodeId, handleId]);
 
 interface Hierarchy {
   childrenOf: Map<string, GraphNode[]>;
@@ -211,6 +223,7 @@ const buildElkNode = (
   sizes: NodeSizeMap,
   childrenOf: Map<string, GraphNode[]>,
   parentElkDirection: ElkDirection,
+  getNodePorts?: NodePortProvider,
 ): ElkNode => {
   const size = sizes.get(node.id);
   if (size === undefined) {
@@ -219,18 +232,18 @@ const buildElkNode = (
   const { width, height } = toElkSize(size);
   const elkNode: ElkNode = { id: node.id, width, height };
 
-  if (node.nodeType === "llvm-useDefInstruction") {
-    const ports: ElkPort[] = getUseDefPorts(node.astData).map((port) => ({
+  const ports: ElkPort[] = (getNodePorts?.(node, { width, height }) ?? []).map(
+    (port) => ({
       id: elkPortId(node.id, port.id),
-      x: Math.min(Math.max(port.x ?? width / 2, 0), width),
-      y: port.side === "top" ? 0 : height,
+      x: port.x,
+      y: port.y,
       width: 0,
       height: 0,
-    }));
-    if (ports.length > 0) {
-      elkNode.ports = ports;
-      elkNode.layoutOptions = { "elk.portConstraints": "FIXED_POS" };
-    }
+    }),
+  );
+  if (ports.length > 0) {
+    elkNode.ports = ports;
+    elkNode.layoutOptions = { "elk.portConstraints": "FIXED_POS" };
   }
 
   const children = childrenOf.get(node.id) ?? [];
@@ -240,7 +253,7 @@ const buildElkNode = (
         ? toElkDirection(node.astData.direction)
         : parentElkDirection;
     elkNode.children = children.map((child) =>
-      buildElkNode(child, sizes, childrenOf, elkDirection),
+      buildElkNode(child, sizes, childrenOf, elkDirection, getNodePorts),
     );
     elkNode.layoutOptions = {
       ...elkNode.layoutOptions,
@@ -372,7 +385,13 @@ export const getLayoutedElements = async (
   const hierarchy = assertHierarchy(graph);
 
   const elkChildren = hierarchy.roots.map((node) =>
-    buildElkNode(node, sizes, hierarchy.childrenOf, elkDirection),
+    buildElkNode(
+      node,
+      sizes,
+      hierarchy.childrenOf,
+      elkDirection,
+      options.getNodePorts,
+    ),
   );
   const portIds = new Set<string>();
   for (const child of elkChildren) collectPortIds(child, portIds);

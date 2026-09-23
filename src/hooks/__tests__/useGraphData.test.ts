@@ -447,3 +447,40 @@ describe("useGraphData", () => {
     expect(result.current.edges).toHaveLength(0);
   });
 });
+
+it("keeps current CFG port identities across content edits and Reset Layout", async () => {
+  const { result } = renderHook(() => useGraphData());
+  const code = (value: number) => `define void @f() {
+entry:
+  switch i32 %v, label %entry [ i32 ${String(value)}, label %done ]
+done:
+  ret void
+}`;
+  const initial = (await llvmMode.parse(code(1))).graph;
+  await layoutGraph(result, initial, llvmMode);
+  const positions = result.current.nodes.map((node) => node.position);
+  const edited = (await llvmMode.parse(code(2))).graph;
+  act(() => result.current.updateGraph(edited, llvmMode));
+  expect(result.current.layoutPending).toBe(false);
+  expect(result.current.nodes.map((node) => node.position)).toEqual(positions);
+  expect(result.current.edges.map((edge) => edge.sourceHandle)).toContain(
+    "cfg:case:2",
+  );
+  expect(result.current.edges.map((edge) => edge.sourceHandle)).not.toContain(
+    "cfg:case:1",
+  );
+  await act(async () => {
+    await result.current.applyLayout(
+      new Map(
+        edited.nodes.map((node) => [node.id, { width: 300, height: 100 }]),
+      ),
+    );
+  });
+  expect(result.current.edges.map((edge) => edge.sourceHandle)).toEqual(
+    edited.edges.map((edge) => edge.sourceHandle),
+  );
+  expect(
+    result.current.edges.find((edge) => edge.source === edge.target)?.data
+      ?.isBackEdge,
+  ).toBe(true);
+});

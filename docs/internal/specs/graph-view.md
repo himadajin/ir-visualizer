@@ -91,11 +91,13 @@ DOM. The hook owns the measure pass that produces that map (§5).
   extra layer spacing). _(merging: observed, untested)_
 - Node boxes given to ELK are the **measured** sizes from §5, quantized to the same
   integer lattice the router uses (`contracts/edge-routing.md`, Input quantization —
-  a size is a rect at the origin). No estimated size is an ELK input. Use-Def
-  instruction nodes additionally declare `FIXED_POS` ports at operand text offsets
+  a size is a rect at the origin). No estimated size is an ELK input. LLVM CFG nodes declare successor-specific bottom `FIXED_POS` ports
+  (`specs/llvm-ir.md` §4.2). Use-Def instruction nodes declare ports at operand text offsets
   (`specs/llvm-use-def-view.md` §4); those offsets stay font-metric estimates, clamped
   to the measured width. The ports shape placement and decide which handle an edge
-  attaches to. _(ports: observed, untested)_
+  attaches to. Port definitions come from the mode registry
+  (`contracts/ir-mode-registry.md`, Fixed-position node ports).
+  _(Pinned by: `src/utils/__tests__/layout.ports.test.ts`.)_
 - **Spacing promise.** After a full layout, the gap between adjacent live node rects in
   the same layer or consecutive layers is **at least** the configured node spacing
   (`NODE_NODE_SPACING` / `NODE_NODE_BETWEEN_LAYERS` in `src/utils/spacing.ts`). ELK's
@@ -153,10 +155,12 @@ channel: `getLayoutedElements` stamps `bundleOf(edge)` onto the React Flow edge'
 (`contracts/edge-routing.md`). The router is never told what an IR is.
 
 **These rules are not yet held.** They are the target the router is being moved toward, and
-four things stand in the way: every in-edge of a node lands on one top-center handle (#87),
-CFG successors leave through one bottom-center handle (#67), unrelated routes coincide by
+three things stand in the way: in-edges can share a top-center handle (#87),
+unrelated routes coincide by
 accident on the shared search grid (#86), and same-value fan-out is not drawn as a trunk at
-all (#88). Until those land, an overlap in the rendered graph means nothing.
+all (#88). CFG successors now have separate departure ports (#67), including
+self-loops; this does not guarantee separation further along a route. Until those
+remaining changes land, an overlap in the rendered graph means nothing.
 
 - **Inputs** are React Flow's measured rects (`internals.positionAbsolute`,
   `measured.width` / `measured.height`) and the live handle positions. Because those track

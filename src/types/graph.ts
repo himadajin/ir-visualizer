@@ -76,10 +76,10 @@ export interface GraphEdge {
   target: string;
   label?: string;
   type?: string;
-  // SelectionDAG-only: edges connect specific operand/type Handles rather than
-  // generic node boundaries, and chain/glue dependency edges render dashed.
+  // Node-local port ids, shared by all modes.
   sourceHandle?: string;
   targetHandle?: string;
+  /** SelectionDAG chain/glue dependency edge. */
   isChainOrGlue?: boolean;
   /**
    * Render with a dash pattern (strokeDasharray) via the standard edge

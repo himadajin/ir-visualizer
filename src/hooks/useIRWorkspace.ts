@@ -57,6 +57,7 @@ export function useIRWorkspace() {
           updateGraph(result.graph, {
             edgeBuilder: activeView?.edgeBuilder ?? mode.edgeBuilder,
             layoutOptions: activeView?.layoutOptions ?? mode.layoutOptions,
+            getNodePorts: activeView?.getNodePorts ?? mode.getNodePorts,
           });
           setError(null);
           setDiagnostics(result.diagnostics ?? NO_DIAGNOSTICS);

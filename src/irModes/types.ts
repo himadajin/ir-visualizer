@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import type { NodeProps } from "@xyflow/react";
 import type { GraphData } from "../types/graph";
-import type { IREdgeBuilder } from "../utils/layout";
+import type { IREdgeBuilder, NodePortProvider } from "../utils/layout";
 import type { EditorLanguageId } from "./editorLanguages";
 
 /**
@@ -56,6 +56,8 @@ export interface IRModeDefinition {
   edgeBuilder: IREdgeBuilder;
   /** ELK layout option overrides, e.g. SelectionDAG's wider layer spacing. */
   layoutOptions?: Record<string, string>;
+  /** Fixed-position ports for the measured node box. */
+  getNodePorts?: NodePortProvider;
   /**
    * Optional alternative projections of the same text (e.g. LLVM's CFG vs
    * Use-Def). When present: >= 2 entries, views[0] is the default and must
@@ -77,6 +79,8 @@ export interface IRViewDefinition {
   edgeBuilder?: IREdgeBuilder;
   /** Defaults to the mode's layoutOptions. */
   layoutOptions?: Record<string, string>;
+  /** Fixed-position ports for the measured node box. */
+  getNodePorts?: NodePortProvider;
 }
 
 /**
@@ -86,5 +90,5 @@ export interface IRViewDefinition {
  */
 export type IRLayoutBehavior = Pick<
   IRModeDefinition,
-  "edgeBuilder" | "layoutOptions"
+  "edgeBuilder" | "layoutOptions" | "getNodePorts"
 >;

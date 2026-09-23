@@ -50,6 +50,49 @@ async function typeCode(page: Page, text: string) {
   }
 }
 
+/** Smoke check of the parser → handles → live router wiring, including a loop. */
+async function expectCFGDepartures(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const branches = [
+          ["7", "12", "true"],
+          ["7", "9", "false"],
+          ["12", "12", "true"],
+        ];
+        return branches.flatMap(([source, target, branch]) => {
+          const sourceId = `func:func:block:${source}`;
+          const edgeId = `edge:${sourceId}:func:func:block:${target}:${branch}`;
+          const node = document.querySelector<HTMLElement>(
+            `.react-flow__node[data-id="${sourceId}"]`,
+          );
+          const handle = node?.querySelector<HTMLElement>(
+            `[data-handleid="cfg:${branch}"]`,
+          );
+          const path = document.querySelector<SVGPathElement>(
+            `.react-flow__edge[data-id="${edgeId}"] .react-flow__edge-path`,
+          );
+          const matrix = path?.getScreenCTM();
+          if (!node || !handle || !path || !matrix)
+            return [`${edgeId}: not ready`];
+          const box = node.getBoundingClientRect();
+          const port = handle.getBoundingClientRect();
+          const x = port.x + port.width / 2;
+          const fraction = branch === "true" ? 1 / 3 : 2 / 3;
+          const start = path.getPointAtLength(0).matrixTransform(matrix);
+          const tolerance =
+            Math.max(Math.abs(matrix.a), Math.abs(matrix.d)) * 0.75 + 0.1;
+          return Math.abs((x - box.x) / box.width - fraction) < 0.001 &&
+            Math.abs(start.x - x) <= tolerance &&
+            Math.abs(start.y - box.bottom) <= tolerance
+            ? []
+            : [`${edgeId}: departure missed its port`];
+        });
+      }),
+    )
+    .toEqual([]);
+}
+
 /**
  * src/parser/__tests__/llvm/corpus/era-2x-hello-invoke.ll, inlined.
  * LLVM 2.x flavor: typed pointers, a function-pointer call type on the
@@ -197,7 +240,10 @@ test.describe("IR Visualizer smoke tests", () => {
     // routeEdges returns, not that RoutedEdge actually renders it.
     await page.goto("/");
     const edgePaths = page.locator(".react-flow__edge-path");
-    await expect(edgePaths.first()).toBeVisible();
+    // A straight vertical SVG path has a zero-width bounding box, so
+    // Playwright calls it hidden even though its stroke is painted.
+    await expect(edgePaths.first()).toHaveAttribute("d", /^M.+L/);
+    await expectCFGDepartures(page);
 
     const dValues = await edgePaths.evaluateAll((paths) =>
       paths.map((p) => p.getAttribute("d")),
@@ -243,6 +289,9 @@ test.describe("IR Visualizer smoke tests", () => {
 
     const box = await node.boundingBox();
     if (!box) throw new Error("node has no bounding box");
+    const initialTransform = await node.evaluate(
+      (element) => getComputedStyle(element).transform,
+    );
     // A real, slow, multi-step drag: React Flow's drag handling (d3-drag)
     // needs a mousedown, movement past its drag threshold, then mouseup —
     // a single jump can be missed entirely.
@@ -281,6 +330,10 @@ test.describe("IR Visualizer smoke tests", () => {
     }
     // At least the edges incident to the dragged node must have moved.
     expect(changed).toBeGreaterThan(0);
+    await expectCFGDepartures(page);
+    await page.getByRole("button", { name: "Reset layout" }).click();
+    await expect(node).toHaveCSS("transform", initialTransform);
+    await expectCFGDepartures(page);
   });
 
   test("renders a graph from LLVM 2.x era IR with invoke/unwind", async ({

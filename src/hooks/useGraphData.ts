@@ -89,6 +89,7 @@ export const useGraphData = () => {
       return getLayoutedElements(graph, sizes, {
         edgeBuilder: mode.edgeBuilder,
         layoutOptions: mode.layoutOptions,
+        getNodePorts: mode.getNodePorts,
       }).then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
         if (generation !== layoutGenerationRef.current) return;
         setNodes(layoutedNodes);

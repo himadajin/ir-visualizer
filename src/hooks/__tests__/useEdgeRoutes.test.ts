@@ -416,3 +416,56 @@ describe("clearance-aware route reuse (issue #92)", () => {
     ).toBe(keyOf(full));
   });
 });
+
+it("updates self-loop ports on a same-size edit, resize and drag", () => {
+  const rect = { id: "block", x: 0, y: 0, width: 180, height: 60 };
+  const requests: RouteRequest[] = [60, 120].map((x, index) => ({
+    id: `loop-${String(index)}`,
+    source: rect.id,
+    target: rect.id,
+    sourcePoint: { x, y: 60 },
+    targetPoint: { x: 90, y: 0 },
+    sourceSide: "bottom",
+    targetSide: "top",
+  }));
+  const original = fullPass([rect], requests);
+  const edited = requests.map((request, index) => ({
+    ...request,
+    sourcePoint: { x: index === 0 ? 45 : 135, y: 60 },
+  }));
+  const afterEdit = routePass(
+    passStateOf([rect], requests, original),
+    [rect],
+    edited,
+  );
+  expect(keyOf(afterEdit)).toEqual(keyOf(fullPass([rect], edited)));
+  expect(afterEdit.get("loop-0")![0]).toEqual({ x: 45, y: 60 });
+  expect(afterEdit.get("loop-1")![0]).toEqual({ x: 135, y: 60 });
+  const resized = { ...rect, width: 360, height: 100 };
+  const resizedRequests = edited.map((request) => ({
+    ...request,
+    sourcePoint: { x: request.sourcePoint.x * 2, y: 100 },
+    targetPoint: { x: 180, y: 0 },
+  }));
+  const afterResize = routePass(
+    passStateOf([rect], edited, afterEdit),
+    [resized],
+    resizedRequests,
+  );
+  expect(keyOf(afterResize)).toEqual(
+    keyOf(fullPass([resized], resizedRequests)),
+  );
+  const moved = moveNode([resized], resizedRequests, rect.id, 31, 47);
+  const afterDrag = routePass(
+    passStateOf([resized], resizedRequests, afterResize),
+    moved.rects,
+    moved.requests,
+  );
+  expect(keyOf(afterDrag)).toEqual(
+    keyOf(fullPass(moved.rects, moved.requests)),
+  );
+  for (const request of moved.requests) {
+    expect(afterDrag.get(request.id)![0]).toEqual(request.sourcePoint);
+    expect(afterDrag.get(request.id)!.at(-1)).toEqual(request.targetPoint);
+  }
+});

@@ -1,3 +1,4 @@
+import { llvmMode } from "../../irModes/llvmMode";
 import { describe, it, expect } from "vitest";
 import {
   getLayoutedElements,
@@ -267,7 +268,7 @@ describe("getLayoutedElements", () => {
       ],
     };
 
-    const { edges } = await layout(graph);
+    const { edges } = await layout(graph, llvmMode);
 
     // ELK's FIXED_POS operand port determines which handle the edge attaches
     // to; the router (src/utils/edgeRouter.ts) is what routes between the

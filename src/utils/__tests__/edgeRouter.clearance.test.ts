@@ -73,6 +73,40 @@ function points(nodes: RouteNodeRect[], request = loop, margin = 12, gap = 24) {
 }
 
 describe("node avoidance and clearance — issue #92", () => {
+  it("honors distinct self-loop ports on every pair of sides while avoiding neighbors", () => {
+    const nodes = [
+      node,
+      { id: "neighbor", x: 135, y: 0, width: 80, height: 50 },
+    ];
+    const point = (side: RouteSide, fraction: number): Point => {
+      switch (side) {
+        case "top":
+          return { x: 100 * fraction, y: 0 };
+        case "bottom":
+          return { x: 100 * fraction, y: 50 };
+        case "left":
+          return { x: 0, y: 50 * fraction };
+        case "right":
+          return { x: 100, y: 50 * fraction };
+      }
+    };
+    const sides: RouteSide[] = ["top", "right", "bottom", "left"];
+    for (const sourceSide of sides)
+      for (const targetSide of sides) {
+        const request = {
+          ...loop,
+          sourceSide,
+          targetSide,
+          sourcePoint: point(sourceSide, 0.2),
+          targetPoint: point(targetSide, 0.8),
+        };
+        const result = points(nodes, request);
+        expect(result[0]).toEqual(request.sourcePoint);
+        expect(result.at(-1)).toEqual(request.targetPoint);
+        expectClear(result, nodes, request);
+      }
+  });
+
   it.each([120, 135])(
     "detours a self-loop past a right neighbor at x=%i (interior or margin)",
     (x) => {
@@ -80,8 +114,8 @@ describe("node avoidance and clearance — issue #92", () => {
       const result = points(nodes);
       expect(result).not.toEqual(points([node]));
       expectClear(result, nodes, loop);
-      expect(result[0]).toEqual({ x: 75, y: 50 });
-      expect(result.at(-1)).toEqual({ x: 75, y: 0 });
+      expect(result[0]).toEqual({ x: 50, y: 50 });
+      expect(result.at(-1)).toEqual({ x: 50, y: 0 });
       expect(points([...nodes].reverse())).toEqual(result);
     },
   );
@@ -129,7 +163,7 @@ describe("node avoidance and clearance — issue #92", () => {
     expect(result[0]).toEqual(result.at(-1));
     expect(result.length).toBeGreaterThan(3);
     expect(
-      isRouteLocal(request, result, nodes[0], {
+      isRouteLocal(request, result, {
         nodeMargin: 0,
         selfLoopGap: 24,
       }),
@@ -138,12 +172,12 @@ describe("node avoidance and clearance — issue #92", () => {
 
   it("keeps the preferred right-side shape when it is clear", () => {
     expect(points([node])).toEqual([
-      { x: 75, y: 50 },
-      { x: 75, y: 62 },
+      { x: 50, y: 50 },
+      { x: 50, y: 62 },
       { x: 124, y: 62 },
       { x: 124, y: -12 },
-      { x: 75, y: -12 },
-      { x: 75, y: 0 },
+      { x: 50, y: -12 },
+      { x: 50, y: 0 },
     ]);
   });
 
@@ -164,7 +198,17 @@ describe("node avoidance and clearance — issue #92", () => {
       for (const width of [0, 0.3, 2, 100.6]) {
         for (const height of [0, 0.3, 50.6]) {
           const nodes = [{ ...node, x: -0.3, y: 0.3, width, height }];
-          expectClear(points(nodes, loop, margin, 0), nodes, loop, margin);
+          const request = {
+            ...loop,
+            sourcePoint: { x: nodes[0].x + width / 2, y: nodes[0].y + height },
+            targetPoint: { x: nodes[0].x + width / 2, y: nodes[0].y },
+          };
+          expectClear(
+            points(nodes, request, margin, 0),
+            nodes,
+            request,
+            margin,
+          );
         }
       }
     },
@@ -200,10 +244,10 @@ describe("node avoidance and clearance — issue #92", () => {
     ];
     const result = points(nodes);
     expectClear(result, nodes, loop);
-    expect(isRouteLocal(loop, result, node)).toBe(false);
+    expect(isRouteLocal(loop, result)).toBe(false);
   });
 
-  it("routes huge self-loop nodes whose fixed attachments lie outside the request region", () => {
+  it("retries globally when a wide self-loop node fills the local region", () => {
     const wide = { ...node, width: 2000 };
     const request = {
       ...loop,
@@ -212,8 +256,9 @@ describe("node avoidance and clearance — issue #92", () => {
     };
     const result = points([wide], request);
     expectClear(result, [wide], request);
-    expect(result[0].x).toBe(1500);
-    expect(isRouteLocal(request, result, wide)).toBe(false);
+    expect(result[0]).toEqual(request.sourcePoint);
+    expect(result.at(-1)).toEqual(request.targetPoint);
+    expect(isRouteLocal(request, result)).toBe(false);
   });
 
   it("keeps positive clearance on ordinary routes with every pair of endpoint sides", () => {
@@ -276,7 +321,7 @@ describe("node avoidance and clearance — issue #92", () => {
     const obstruction = { id: "thin", x: 49, y: 39, width: 2, height: 1 };
     const result = points([node, target, obstruction], request);
     expect(crosses(result[0], result[1], obstruction, 12)).toBe(true);
-    expect(isRouteLocal(request, result, node)).toBe(false);
+    expect(isRouteLocal(request, result)).toBe(false);
   });
 
   it("finds a non-empty clear cycle for coincident endpoints on non-obstacle frames", () => {
@@ -339,10 +384,10 @@ describe("node avoidance and clearance — issue #92", () => {
       { id: "wall", x: -1000, y: -1000, width: 2000, height: 2000 },
     ];
     const result = points(nodes);
-    expect(isRouteLocal(loop, result, node)).toBe(false);
+    expect(isRouteLocal(loop, result)).toBe(false);
     expect(points([...nodes].reverse())).toEqual(result);
-    expect(result[0]).toEqual({ x: 75, y: 50 });
-    expect(result.at(-1)).toEqual({ x: 75, y: 0 });
+    expect(result[0]).toEqual({ x: 50, y: 50 });
+    expect(result.at(-1)).toEqual({ x: 50, y: 0 });
     for (let i = 1; i < result.length; i++) {
       const a = result[i - 1],
         b = result[i];
@@ -461,7 +506,7 @@ it("agrees with independent unit-grid reachability on adversarial small layouts"
     const result = points(nodes, request, margin);
     const exists = hasUnitGridPath(nodes, request, margin);
     expect(
-      isRouteLocal(request, result, nodes[0], { nodeMargin: margin }),
+      isRouteLocal(request, result, { nodeMargin: margin }),
       `fixture ${fixture}`,
     ).toBe(exists);
     if (exists) {

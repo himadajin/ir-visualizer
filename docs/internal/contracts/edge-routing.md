@@ -80,11 +80,10 @@ export const routeRegionOf: (
 ) => RouteRegion;
 
 // Whether an existing result may be reused under the region rules. A false
-// answer is conservative; the source rect is needed for self-loop attachments.
+// answer is conservative; every route uses the requested attachments.
 export const isRouteLocal: (
   request: RouteRequest,
   points: Point[],
-  sourceRect: RouteNodeRect,
   options?: EdgeRouterOptions,
 ) => boolean;
 
@@ -132,9 +131,7 @@ them — and fractional inputs put fractions into the output: routes whose last 
 differ between two visually identical states, segments a fraction of a pixel long, and
 turning corners whose radius has collapsed to zero. Quantizing at the boundary removes that
 class of output _by construction_ rather than by cleaning it up afterwards: no route is
-rounded on its way out — the only rounding applied to a coordinate behind the boundary is
-the self-loop's 75 %-of-width offset, rounded where it is formed (see Self-loops) — and no
-geometric comparison needs a tolerance, because any two coordinates the router emits are
+rounded on its way out, and no geometric comparison needs a tolerance, because any two coordinates the router emits are
 either equal or a whole pixel apart.
 
 Rounding is `Math.round` throughout — ties go toward positive infinity (`0.5 → 1`,
@@ -158,14 +155,9 @@ ever negative zero.
   `source`, `target`, `sourceSide`, `targetSide`, `RouteNodeRect.id` and
   `RouteNodeRect.obstacle` pass through unchanged.
 
-For a caller that already passes integers, quantization is the identity **on the input**:
-every rect, point and option reaches the router unchanged, so the obstacle set and the
-search see exactly what they saw before. One behavioral change still reaches such a caller,
-and it is in self-loops (see Self-loops): the stub offset is now rounded, so a node whose
-integer width is not a multiple of 4 has its loop leave and re-enter at `round(x + 0.75w)`,
-up to half a pixel from where it did before — a quarter of a pixel for a width that is odd,
-half a pixel for one that is even but not a multiple of 4. A caller passing a clearance of
-`0` sees two more: the duplicate collapse, and the one-pixel floor below.
+For a caller that already passes integers, quantization is the identity on the
+input. Rects, points and options reach the search unchanged. Self-loops use the
+same requested endpoints as other edges.
 
 ### Degenerate input
 
@@ -196,8 +188,9 @@ valid answer left: a self-loop asked to leave its node, go around it and come ba
 distance at all doubles back on itself, and coincident request points with a `nodeMargin`
 of `0` require a non-empty cycle.
 Every shape the router **synthesizes** therefore keeps at least one pixel of room where the
-clearance it is given leaves none — the self-loop's lane against its stub and its vertical
-extent (see Self-loops), and the outward steps of the no-path fallback. Search also includes
+clearance it is given leaves none — the self-loop's lane against its stub
+(see Self-loops), and the outward steps of the no-path fallback. A collapsed
+self-loop span uses the search's non-empty cycle handling. Search also includes
 one-pixel room around its pushed endpoints to turn and close non-empty cycles. The floor
 is a maximum against the requested
 distance, so it binds only below a pixel: a shape that had room in the first place is not
@@ -271,8 +264,8 @@ know must reproduce the region test itself.
 
 Self-loops use the same region and retry policy. Their preferred right-side shape is
 accepted only when it fits inside the request's region and passes obstacle validation;
-otherwise their fixed bottom/top attachments are searched. If those attachments lie outside
-the request's region, search starts on the whole graph.
+otherwise the requested attachments and sides are searched, with the same whole-graph
+retry as ordinary edges.
 
 The grid includes room to turn at endpoints and outer boundary lines. Exhausting a sparse
 grid without that room is not evidence of geometric impossibility. Coincident endpoints
@@ -315,13 +308,11 @@ checks partial-pass equality, including a distant wall opening a formerly imposs
   step on the way out: every coordinate the router emits is a quantized rect boundary, a
   quantized request point or a quantized option, combined by sums, differences, min/max and
   multiplication by an integer (the fallback steps out along a `±1` direction sign), all of
-  which integers are closed under. The one value on that path that is not an integer — the
-  self-loop's 75 %-of-width offset, a multiplication by `0.75` — is rounded where it is
-  formed (see Self-loops below). Callers therefore never have to round router output, and no
+  which integers are closed under. Callers never have to round router output, and no
   returned coordinate is `-0`.
 - **≥ 2 points.** Every entry in the returned map has at least two points, however
   degenerate the rects, the requests and the clearances are.
-- **Endpoints are exact on the quantized points.** A routed (non-self-loop) polyline starts
+- **Endpoints are exact on the quantized points.** Every routed polyline, including a self-loop, starts
   exactly at the quantized `RouteRequest.sourcePoint` and ends exactly at the quantized
   `RouteRequest.targetPoint` — that is, at `(round(x), round(y))` of each, with `-0`
   normalized to `0`. The `nodeMargin`-pushed point is an interior bend (`points[1]` and the
@@ -330,8 +321,7 @@ checks partial-pass equality, including a distant wall opening a formerly imposs
   points gives up is absolute equality with the values it passed: the drawn endpoint may sit
   up to 0.5 px away on each axis from the requested point. That trade is deliberate — half a
   pixel at a handle is invisible, and it buys output with no sub-pixel geometry anywhere in
-  it. **Self-loops are exempt from this rule**: their attachments are derived from the node rect
-  (see below), rather than the requested handle positions.
+  it. Self-loops preserve both requested endpoints and their sides as well.
 - **Interior points are corners, except the two pushed points.** Every interior vertex of a
   routed polyline is either one of the two `nodeMargin`-pushed points above or a **corner**:
   a vertex whose arriving and leaving segments run along different axes. A run that
@@ -427,29 +417,35 @@ to.
 **Status: not held.** The router ignores `bundleId`; the guarantee and the unit tests that
 pin it land with #86. Search behavior is not the only thing in the way — two facts about
 the handles produce shared geometry whatever the search does, and neither is fixable here:
-every in-edge of a node ends at one top-center handle (#87) and CFG successors leave
-through one bottom-center handle (#67), so those routes share a tail or a stub before the
-router has any say. (#88, the distribution tree, is the other half of the picture — the
+in-edges can still end at one top-center handle (#87), so those routes share a
+tail before the router has any say. CFG successors have distinct departure ports (#67). (#88, the distribution tree, is the other half of the picture — the
 sharing this contract permits but does not yet produce.) Until #86, an edge overlap in the
 output is not a contract violation but unspecified behavior, so `docs/README.md`'s "code
 that violates a contract is a bug" does not apply to it.
 
 ## Self-loops (right-side preference)
 
-A self-loop (`source === target`) attaches to the bottom and top of its quantized node at
-`stubX = round(x + 0.75 * width)`. These attachments remain fixed while the route detours.
-The preferred shape leaves the bottom, runs right, goes up beside the node, then returns
-left to the top. Its lane is `max(right + selfLoopGap, right + nodeMargin, stubX + 1)`;
-its upper run is `top - nodeMargin`, and its lower run is
-`max(bottom + nodeMargin, upperRun + 1)`. Consecutive duplicate points are collapsed.
+A self-loop (`source === target`) uses the quantized source/target points and
+sides supplied by its caller, exactly like an ordinary edge. It never substitutes
+attachments derived from the node rectangle. This applies to LLVM CFG, Use-Def,
+and Mermaid alike.
 
-This preserves the ordinary six-point shape wherever it is safe and fits the local region. Every segment is validated
-against all obstacles, with only the own-endpoint margin exemptions above. If the shape is
-blocked, search may change its lane, number of corners, and side; right-side appearance
-never overrides clearance. A `selfLoopGap` smaller than `nodeMargin` cannot reduce clearance.
-Zero-sized nodes and zero margins still produce non-degenerate, reversal-free routes.
-An impossible self-loop uses the same final fallback policy as an ordinary edge, with these
-bottom/top attachments. The node's frame may have `obstacle: false`, just like any endpoint.
+For bottom-to-top requests, a preferred shape leaves the source, runs right,
+goes up beside the node, and returns to the target. The lane lies at least
+`selfLoopGap` and `nodeMargin` beyond the right edge, and at least one pixel to
+the right of both attachments. The two horizontal runs use the requested
+`nodeMargin`-pushed endpoints. The shortcut is used only when those runs have
+positive vertical separation, it fits inside the request region, and every
+segment satisfies obstacle and clearance checks. Other sides, coincident runs,
+and blocked shortcuts use the ordinary search and fallback policy.
+
+Right-side appearance never overrides endpoint identity or clearance. Zero-sized
+nodes and zero margins still produce non-degenerate, reversal-free routes. The
+node's frame may have `obstacle: false`, just like any endpoint.
+
+> Pinned by: `src/utils/__tests__/edgeRouter.test.ts`,
+> `src/utils/__tests__/edgeRouter.clearance.test.ts`,
+> `src/hooks/__tests__/useEdgeRoutes.test.ts`
 
 ## Where the routing pass runs
 

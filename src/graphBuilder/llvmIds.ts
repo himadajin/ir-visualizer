@@ -97,3 +97,7 @@ export const edgeId = (
   target: string,
   ...variant: string[]
 ): string => join("edge", source, target, ...variant.map(fragment));
+
+/** Node-local CFG port identity; targets never participate in this key. */
+export const cfgPortId = (...variant: string[]): string =>
+  join("cfg", ...variant.map(fragment));

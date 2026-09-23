@@ -362,6 +362,48 @@ that fixes the rest), so a concatenation of ids reads back unambiguously.
 > Pinned by: `src/graphBuilder/__tests__/llvm/invariants.test.ts`,
 > `src/graphBuilder/__tests__/llvm/useDefGraph.test.ts`
 
+### 4.2 CFG successor ports
+
+Every basic-block out-edge names one source handle. Handles identify successor
+occurrences, not destination blocks: true and false, multiple switch cases, and
+repeated opaque successors remain separate even when their targets coincide.
+
+| Terminator             | Source handles, in left-to-right order                 |
+| ---------------------- | ------------------------------------------------------ |
+| conditional `br`       | `cfg:true`, `cfg:false`                                |
+| unconditional `br`     | `cfg:br`                                               |
+| `ret` → synthetic exit | `cfg:ret`                                              |
+| `switch`               | `cfg:default`, then `cfg:case:<value>` in source order |
+| `invoke`               | `cfg:to`, `cfg:unwind`                                 |
+| opaque                 | `cfg:succ:<index>` in successor occurrence order       |
+
+Free-text fragments use §4.1's escaping. A repeated switch case value (accepted
+input, although not valid LLVM) adds `:occurrence:<n>` to each later occurrence's
+handle and edge variant, where `n` counts earlier cases with that value. This
+keeps handles and edges unique even when those cases target the same block.
+Handle ids are local to the source node; ELK namespaces them by node id using an
+injective pair encoding. Retargeting a branch, editing instructions, or reordering
+distinct switch cases does not change that branch's handle id. Opaque identities
+are positional because the parser supplies no more specific branch semantics.
+
+For `n` exits, exit `i` (zero-based) lies at `(i + 1) / (n + 1)` of the outer
+node width, on its bottom border. One exit is centered; no successors means no
+source handles. The target handle `cfg:in` stays at top center and the function-header edge keeps
+its ordinary centered source. Handles remain invisible (§7 of `graph-view.md`).
+ELK declares matching `FIXED_POS` ports from measured sizes; the live router uses
+the measured handles, including for self-loops. Editing a terminator refreshes
+handle measurements even when neither the topology nor the node size changes.
+Content-only edits preserve node positions; Reset Layout uses the current ports.
+
+This separates departures only: arrival separation (#87) and separation along
+the rest of the route (#86) remain independent work.
+
+> Pinned by: `src/graphBuilder/__tests__/llvm/successorPorts.test.ts`,
+> `src/components/Graph/LLVM/__tests__/LLVMBasicBlockNode.test.tsx`,
+> `src/utils/__tests__/layout.ports.test.ts`,
+> `src/hooks/__tests__/useGraphData.test.ts`,
+> `src/utils/__tests__/edgeRouter.clearance.test.ts`
+
 ## 5. Known limitations
 
 - `catchswitch`, `catchret`, `cleanupret`, `callbr`, and `indirectbr` are understood only

@@ -15,8 +15,8 @@ import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
  * are the only obstacles; each edge is searched with A* over a sparse Hanan
  * grid built from the rects near **it** — its region — and the result is a
  * rounded-corner-ready polyline. A routed edge begins and ends exactly at its
- * quantized handle positions; a self-loop uses bottom/top attachments derived from its node rect
- * and prefers a validated right-side shape.
+ * quantized handle positions, including self-loops. Bottom-to-top self-loops
+ * prefer a validated right-side shape.
  *
  * The region is why this router is stable and not merely deterministic: a route
  * is a function of the rects near it, so an unrelated node moving cannot flip it
@@ -293,22 +293,6 @@ const stubIsClear = (
         : rect,
     ),
   );
-
-/** Self-loop attachments are independent of the caller's handle positions. */
-const attachedRequest = (
-  request: RouteRequest,
-  rect: RouteNodeRect,
-): RouteRequest => {
-  if (request.source !== request.target) return request;
-  const x = quantize(rect.x + rect.width * 0.75);
-  return {
-    ...request,
-    sourcePoint: { x, y: rect.y + rect.height },
-    targetPoint: { x, y: rect.y },
-    sourceSide: "bottom",
-    targetSide: "top",
-  };
-};
 
 /**
  * "Is this point strictly inside an obstacle?" over a uniform spatial hash.
@@ -882,27 +866,33 @@ const fallbackPoints = (
 
 /** Preferred right-side shape. It is only returned after clearance validation. */
 const selfLoopPoints = (
+  request: RouteRequest,
   rect: RouteNodeRect,
   nodeMargin: number,
   selfLoopGap: number,
-): Point[] => {
-  const x = quantize(rect.x + rect.width * 0.75);
+): Point[] | null => {
+  if (request.sourceSide !== "bottom" || request.targetSide !== "top")
+    return null;
+  const start = pushOutward(
+    request.sourcePoint,
+    request.sourceSide,
+    nodeMargin,
+  );
+  const end = pushOutward(request.targetPoint, request.targetSide, nodeMargin);
+  // A collapsed vertical span needs the search's non-empty cycle handling.
+  if (start.y <= end.y) return null;
   const lane = Math.max(
     rect.x + rect.width + Math.max(selfLoopGap, nodeMargin),
-    x + MIN_CLEARANCE,
-  );
-  const above = rect.y - nodeMargin;
-  const below = Math.max(
-    rect.y + rect.height + nodeMargin,
-    above + MIN_CLEARANCE,
+    start.x + MIN_CLEARANCE,
+    end.x + MIN_CLEARANCE,
   );
   return dropDuplicates([
-    { x, y: rect.y + rect.height },
-    { x, y: below },
-    { x: lane, y: below },
-    { x: lane, y: above },
-    { x, y: above },
-    { x, y: rect.y },
+    clonePoint(request.sourcePoint),
+    start,
+    { x: lane, y: start.y },
+    { x: lane, y: end.y },
+    end,
+    clonePoint(request.targetPoint),
   ]);
 };
 
@@ -1000,27 +990,32 @@ export const routeEdges = (
       continue;
     }
 
-    const attached = attachedRequest(request, sourceRect);
     const start = pushOutward(
-      attached.sourcePoint,
-      attached.sourceSide,
+      request.sourcePoint,
+      request.sourceSide,
       nodeMargin,
     );
     const end = pushOutward(
-      attached.targetPoint,
-      attached.targetSide,
+      request.targetPoint,
+      request.targetSide,
       nodeMargin,
     );
     const region = routeRegionOf(request, options);
     const stubsClear =
-      stubIsClear(attached.sourcePoint, start, sourceRect, inflated) &&
-      stubIsClear(end, attached.targetPoint, targetRect, inflated);
+      stubIsClear(request.sourcePoint, start, sourceRect, inflated) &&
+      stubIsClear(end, request.targetPoint, targetRect, inflated);
 
     if (stubsClear && request.source === request.target) {
-      const preferred = selfLoopPoints(sourceRect, nodeMargin, selfLoopGap);
+      const preferred = selfLoopPoints(
+        request,
+        sourceRect,
+        nodeMargin,
+        selfLoopGap,
+      );
       // Keep the shortcut local: otherwise a remote rect could select a different
       // shape inside the region without invalidating the caller's cached route.
       const clear =
+        preferred !== null &&
         preferred.every((point) => containsPoint(region, point)) &&
         preferred.slice(1).every((point, i) => {
           if (i === 0)
@@ -1031,40 +1026,29 @@ export const routeEdges = (
             segmentIntersects(preferred[i], point, rect),
           );
         });
-      if (clear) {
+      if (clear && preferred !== null) {
         routes.set(request.id, preferred);
         continue;
       }
     }
 
-    // Self-loop attachments may lie outside a region derived from the caller's
-    // handle positions. In that case only the whole-graph search can serve them.
-    const fitsRegion = [
-      attached.sourcePoint,
-      attached.targetPoint,
-      start,
-      end,
-    ].every((point) => containsPoint(region, point));
     const grid = stubsClear
-      ? ((fitsRegion
-          ? routeOnGrid(
-              attached,
-              start,
-              end,
-              scopeOfRegion(inflated, region, globalScope.isBlocked),
-              bendPenalty,
-            )
-          : null) ??
-        routeOnGrid(attached, start, end, globalScope, bendPenalty))
+      ? (routeOnGrid(
+          request,
+          start,
+          end,
+          scopeOfRegion(inflated, region, globalScope.isBlocked),
+          bendPenalty,
+        ) ?? routeOnGrid(request, start, end, globalScope, bendPenalty))
       : null;
     routes.set(
       request.id,
       grid === null
-        ? fallbackPoints(attached, nodeMargin, selfLoopGap)
+        ? fallbackPoints(request, nodeMargin, selfLoopGap)
         : dropDuplicates([
-            clonePoint(attached.sourcePoint),
+            clonePoint(request.sourcePoint),
             ...grid,
-            clonePoint(attached.targetPoint),
+            clonePoint(request.targetPoint),
           ]),
     );
   }
@@ -1112,17 +1096,12 @@ export const routeRegionOf = (
 export const isRouteLocal = (
   request: RouteRequest,
   points: Point[],
-  sourceRect: RouteNodeRect,
   options: EdgeRouterOptions = {},
 ): boolean => {
   const region = routeRegionOf(request, options);
   if (!points.every((point) => containsPoint(region, point))) return false;
-  const attached = attachedRequest(
-    quantizeRequest(request),
-    quantizeRect(sourceRect),
-  );
   const fallback = fallbackPoints(
-    attached,
+    quantizeRequest(request),
     quantize(options.nodeMargin ?? DEFAULT_NODE_MARGIN),
     quantize(options.selfLoopGap ?? DEFAULT_SELF_LOOP_GAP),
   );

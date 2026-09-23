@@ -1,3 +1,4 @@
+import { getLLVMNodePorts } from "./llvmPorts";
 import { codeGraphEdgeBuilder } from "../utils/layout";
 import { USE_DEF_NODE_NODE_BETWEEN_LAYERS } from "../utils/spacing";
 import LLVMBasicBlockNode from "../components/Graph/LLVM/LLVMBasicBlockNode";
@@ -73,6 +74,7 @@ export const llvmMode = {
     llvmUseDefValue: LLVMUseDefValueNode,
   },
   edgeBuilder: codeGraphEdgeBuilder,
+  getNodePorts: getLLVMNodePorts,
   // views[0] shares parse/edgeBuilder with the top-level fields per the
   // registry contract ("Views"): it IS the default view.
   views: [

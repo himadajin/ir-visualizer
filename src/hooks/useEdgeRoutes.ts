@@ -307,9 +307,7 @@ const affectedRequests = (
     const points = previous.routes.get(request.id);
     if (points === undefined) return true;
     const region = routeRegionOf(request);
-    const sourceRect = previous.rects.get(request.source);
-    if (sourceRect === undefined || !isRouteLocal(request, points, sourceRect))
-      return true;
+    if (!isRouteLocal(request, points)) return true;
     return changedBoxes.some((box) => boxesOverlap(box, region));
   });
 };

@@ -1,13 +1,8 @@
 import type { NodeProps } from "@xyflow/react";
 import type { LLVMUseDefValueData } from "../../../../ast/llvmAST";
 import NodeShell from "../../common/NodeShell";
-import {
-  USE_DEF_ARGUMENT_BACKGROUND,
-  USE_DEF_ARGUMENT_BORDER_COLOR,
-  USE_DEF_EXTERNAL_BACKGROUND,
-  USE_DEF_EXTERNAL_BORDER_COLOR,
-  USE_DEF_VALUE_BORDER_RADIUS,
-} from "./useDefStyleConstants";
+import { USE_DEF_VALUE_BORDER_RADIUS } from "./useDefStyleConstants";
+import classes from "./useDef.module.css";
 
 /**
  * Value source node of the Use-Def view (specs/llvm-use-def-view.md §2.2):
@@ -25,14 +20,7 @@ const LLVMUseDefValueNode = ({ data }: NodeProps) => {
   return (
     <NodeShell
       borderRadius={`${USE_DEF_VALUE_BORDER_RADIUS}px`}
-      borderColor={
-        isArgument
-          ? USE_DEF_ARGUMENT_BORDER_COLOR
-          : USE_DEF_EXTERNAL_BORDER_COLOR
-      }
-      backgroundColor={
-        isArgument ? USE_DEF_ARGUMENT_BACKGROUND : USE_DEF_EXTERNAL_BACKGROUND
-      }
+      className={isArgument ? classes.argument : classes.external}
       wrap={false}
       style={{ whiteSpace: "pre", textAlign: "center" }}
     >

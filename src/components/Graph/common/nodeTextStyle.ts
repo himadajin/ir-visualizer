@@ -1,11 +1,14 @@
 /**
- * Single source of truth for the graph-node frame shared by every node
- * renderer (NodeShell-based LLVM/Mermaid/Use-Def nodes and SelectionDAGNode).
- * Change the constant, never a literal. The density and header-band design
- * are specified in specs/graph-view.md §5 and §6.6. Wrap bounds are CSS `ch`
- * clamps on the content, not pixel guesses handed to ELK.
+ * Single source of truth for the graph-node frame's lengths and font, shared
+ * by every node renderer (NodeShell-based LLVM/Mermaid/Use-Def nodes, the
+ * container frame, and SelectionDAGNode). Change the constant, never a
+ * literal. Paint lives in NodeShell.module.css (specs/graph-view.md §5, §7).
+ * Wrap bounds are CSS `ch` clamps on the content, not pixel guesses handed to
+ * ELK.
  */
-export const NODE_FONT_FAMILY = "monospace";
+
+/** `font-mono` (specs/graph-view.md §6.6), resolved from the theme's CSS. */
+export const NODE_FONT_FAMILY = "var(--app-font-mono)";
 export const NODE_FONT_SIZE = "12px";
 export const NODE_LINE_HEIGHT = "16px";
 
@@ -15,8 +18,8 @@ export const NODE_PADDING_X = 8;
 export const NODE_PADDING_Y = 6;
 /** Border width of a NodeShell node, px per side. */
 export const NODE_BORDER_WIDTH = 1;
-/** Default corner radius, px. Pill-shaped nodes override it. */
-export const NODE_BORDER_RADIUS = 2;
+/** Default corner radius, px: Mantine's `sm`. Pill-shaped nodes override it. */
+export const NODE_BORDER_RADIUS = 4;
 /** Corner radius for pill / terminal nodes, px (`specs/mermaid.md` §5). */
 export const NODE_BORDER_RADIUS_PILL = 20;
 
@@ -27,12 +30,6 @@ export const NODE_BORDER_RADIUS_PILL = 20;
 export const NODE_HEADER_HEIGHT = 20;
 /** Header band label font size, px. */
 export const NODE_HEADER_FONT_SIZE = 11;
-/** Header band fill. */
-export const NODE_HEADER_BACKGROUND = "#f6f8fa";
-/** Header band label color. */
-export const NODE_HEADER_TEXT_COLOR = "#57606a";
-/** Hairline under the header band. */
-export const NODE_HEADER_BORDER_COLOR = "#e0e3e7";
 
 /** CSS wrap bounds, in `ch` (specs/graph-view.md §5). */
 export const NODE_WRAP_MIN_CHARS_LLVM = 16;

@@ -1,0 +1,5 @@
+.label {
+  color: var(--app-ink-muted);
+  font-weight: 700;
+  text-align: center;
+}

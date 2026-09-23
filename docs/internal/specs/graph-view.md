@@ -330,14 +330,17 @@ and not a pile of overlapping origin nodes. Reset Layout skips this hide: the gr
 stays visible and ELK re-runs against the current measurements.
 
 **Wrapping.** Width clamps are CSS, in `ch`, not a font-metric pixel guess handed to ELK.
-`nodeTextStyle.ts` owns the frame (font 12 px / line height 16 px, paddings 8×6, border
-1 px, radius 2 px, header band 20 px) and the wrap bounds: Mermaid 10–30 ch, LLVM 16–80 ch,
+`nodeTextStyle.ts` owns the frame — every length and the font family (`font-mono` 12 px /
+line height 16 px, paddings 8×6, border 1 px, radius 4 px, header band 20 px) — for every
+node renderer, SelectionDAG included, and the wrap bounds: Mermaid 10–30 ch, LLVM 16–80 ch,
 Use-Def code 8–80 ch. SelectionDAG nodes shrink-wrap their table; they have no char clamp.
 Change the constant, never a literal.
 
 **HighlightedCode.** LLVM node bodies and the Use-Def instruction card render through
 `HighlightedCode.tsx`, which resets the user-agent block margin on Shiki's `<pre>` to `0`
-before mounting it — otherwise that margin is part of the measured box. (Inline mode, used
+before mounting it — otherwise that margin is part of the measured box — and makes Shiki's
+`<pre>`/`<code>` inherit the node's font family rather than the user agent's generic
+`monospace`, so code is set in the font the Use-Def port offsets are measured in. (Inline mode, used
 by SelectionDAG's `CodeFragment.tsx`, strips the `<pre>`/`<code>` tags entirely; Mermaid
 nodes render plain text and are unaffected.) Highlighting is async; the first layout uses
 the first complete measurement. A later size change from highlighting is a content-only
@@ -483,7 +486,7 @@ and Mantine's own components cannot drift apart.
 | `warn`        | `yellow.9`                | Recoverable parse diagnostics only (footer left rule) — never decorative        |
 | `error`       | `red.8`                   | Parse failure only (footer left rule) — never decorative                        |
 | `elevation`   | Mantine `shadow-sm`       | Floating chrome only: panel, pill, control cluster                              |
-| `font-mono`   | Mantine's monospace stack | The status footer (and, from #130, the graph nodes)                             |
+| `font-mono`   | Mantine's monospace stack | The status footer and the graph nodes (§7)                                      |
 
 - **No accent**: the theme's primary color is `gray` at shade 7, so every place Mantine
   would draw its primary color — the focus ring, a focused input's border, the selected
@@ -510,9 +513,64 @@ and Mantine's own components cannot drift apart.
   chrome, keyboard operability, and WCAG AA contrast for all chrome text (`ink` and
   `ink-muted` both exceed 4.5:1 on `surface`).
 
-Graph nodes keep their own grammar in `src/components/Graph/common/NodeShell.tsx`
-(`1px solid #777` border, `2px` radius, white surface, dense 12 px monospace, full-width
-header band); the shell chrome never borrows it — including the header band — because the
-editor panel is chrome around the canvas, not a node.
+Graph nodes speak the same language with their own grammar (§7). The shell chrome never
+borrows a node's header band, because the editor panel is chrome around the canvas, not a
+node.
 
 _(§6.6 as a whole: observed, untested — the tokens are enforced by review, not by tests.)_
+
+## 7. Node grammar
+
+Nodes are drawn from the same tokens as the chrome (§6.6), so the graph and the frame
+around it read as one system. The chrome's principle carries over with one difference: a
+node is neutral gray unless a color **encodes a fact about the IR** — basic-block
+membership, value kind, opName category. Nothing on a node is colored for decoration, and
+the parse-status colors (`ok`, `warn`, `error`) never appear on the graph.
+
+**Frame.** Every node renderer builds on one frame
+(`src/components/Graph/common/NodeShell.tsx`; the container frame `GraphGroupNode.tsx`
+and `SelectionDAGNode.tsx` reuse its styles):
+
+- a fully opaque `surface` fill, a 1 px `node-line` border, and Mantine's `sm` radius
+  (4 px); pill-shaped nodes (Mermaid terminals, the LLVM function header and exit, Use-Def
+  values) use a pill radius instead;
+- no elevation — `elevation` is reserved for floating chrome (§6.6), and a node lies on
+  the canvas;
+- `font-mono` at 12 px / 16 px, text in `ink`;
+- an optional **header band** carrying the node's name (block label, global name,
+  container title): full width, 20 px tall, a `node-header` fill over a `line` hairline,
+  the label semibold 11 px in `ink-muted`.
+
+**Tokens.** Two tokens are added to §6.6's for nodes. `node-line` is darker than the
+chrome's `line` because a node has no elevation to lift it: it reaches 3:1 against
+`canvas`, the floor for a non-text boundary.
+
+| Token         | Value    | Use                                     |
+| ------------- | -------- | --------------------------------------- |
+| `node-line`   | `gray.6` | Node and container borders, table rules |
+| `node-header` | `gray.0` | Header band fill                        |
+
+**Category tints.** Where a node encodes a category by color, the category is a Mantine
+hue and its fill is that hue at shade 2; text on a tint stays `ink`, so no hue has to
+reach text contrast (same rule as §6.6). The hue tables are per IR:
+Use-Def block badges (`specs/llvm-use-def-view.md` §4) and SelectionDAG opName categories
+(`specs/selectiondag.md` §4). `red` is never a category hue, so no node reads as an error.
+Two single-purpose marks follow the same restraint: a Use-Def value node's kind is a hue
+at shade 0 fill with shade 6 border, and a Use-Def terminator is set apart by an `ink`
+border — weight, not hue.
+
+**Shape.** Mermaid families differ by border style and radius, never by color
+(`specs/mermaid.md` §5).
+
+**Handles are invisible.** Every node component declares its `Handle`s at opacity 0; an
+edge ends on the node's border, and nothing marks the port. Handle ids and the points §4
+derives from them are part of the edge contract, not of the look.
+
+**Where the values live.** Lengths and the font family are TypeScript constants
+(`nodeTextStyle.ts`, and per-IR `*StyleConstants.ts`), because the Use-Def port offsets
+compute with them (§5). Paint — colors, weights — lives in each component's
+`*.module.css`, read from the `--app-*` variables in `src/theme.ts`; category hues are
+listed in TypeScript and rendered as `var(--mantine-color-<hue>-2)`.
+
+_(§7: observed, untested — visual, covered by the node Storybook stories; the category
+tables are pinned where each IR spec says.)_

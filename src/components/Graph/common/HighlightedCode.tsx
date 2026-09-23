@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { HIGHLIGHT_THEME, getHighlighter } from "../../../utils/highlighter";
+import classes from "./HighlightedCode.module.css";
 
 interface HighlightedCodeProps {
   code: string;
@@ -53,6 +54,7 @@ const HighlightedCode = ({
 
   return (
     <div
+      className={classes.code}
       style={{ display: inline ? "inline" : "block", ...style }}
       dangerouslySetInnerHTML={{ __html: html }}
     />

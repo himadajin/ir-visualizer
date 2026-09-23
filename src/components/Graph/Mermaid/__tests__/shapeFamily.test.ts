@@ -111,42 +111,48 @@ describe("mermaidFamilyPresentation", () => {
   it("gives process the default frame", () => {
     expect(mermaidFamilyPresentation("process")).toEqual({
       borderRadius: `${NODE_BORDER_RADIUS}px`,
-      border: `${NODE_BORDER_WIDTH}px solid #777`,
+      borderWidth: `${NODE_BORDER_WIDTH}px`,
+      borderStyle: "solid",
     });
   });
 
   it("gives decision a dashed border", () => {
     expect(mermaidFamilyPresentation("decision")).toEqual({
       borderRadius: `${NODE_BORDER_RADIUS}px`,
-      border: `2px dashed #777`,
+      borderWidth: "2px",
+      borderStyle: "dashed",
     });
   });
 
   it("gives terminal a pill radius", () => {
     expect(mermaidFamilyPresentation("terminal")).toEqual({
       borderRadius: `${NODE_BORDER_RADIUS_PILL}px`,
-      border: `${NODE_BORDER_WIDTH}px solid #777`,
+      borderWidth: `${NODE_BORDER_WIDTH}px`,
+      borderStyle: "solid",
     });
   });
 
   it("gives data/IO a dotted border", () => {
     expect(mermaidFamilyPresentation("data-io")).toEqual({
       borderRadius: `${NODE_BORDER_RADIUS}px`,
-      border: `${NODE_BORDER_WIDTH}px dotted #777`,
+      borderWidth: `${NODE_BORDER_WIDTH}px`,
+      borderStyle: "dotted",
     });
   });
 
   it("gives storage a thick solid border", () => {
     expect(mermaidFamilyPresentation("storage")).toEqual({
       borderRadius: `${NODE_BORDER_RADIUS}px`,
-      border: `2px solid #777`,
+      borderWidth: "2px",
+      borderStyle: "solid",
     });
   });
 
   it("gives subroutine a double border", () => {
     expect(mermaidFamilyPresentation("subroutine")).toEqual({
       borderRadius: `${NODE_BORDER_RADIUS}px`,
-      border: `3px double #777`,
+      borderWidth: "3px",
+      borderStyle: "double",
     });
   });
 });

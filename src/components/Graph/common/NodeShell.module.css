@@ -1,0 +1,21 @@
+/*
+ * Paint of the shared node frame (specs/graph-view.md §7). Lengths and the
+ * font family come from nodeTextStyle.ts, inline, so the Use-Def port
+ * offsets and the painted box read the same numbers. The frame has zero
+ * specificity, so a variant class (a border color, a fill) always wins
+ * regardless of stylesheet order.
+ */
+
+:where(.frame) {
+  border-color: var(--app-node-line);
+  background-color: var(--app-surface);
+  color: var(--app-ink);
+}
+
+.header {
+  border-bottom-style: solid;
+  border-bottom-color: var(--app-line);
+  background-color: var(--app-node-header);
+  color: var(--app-ink-muted);
+  font-weight: 600;
+}

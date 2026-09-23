@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { Handle, Position } from "@xyflow/react";
 import type { SelectionDAGNode as SelectionDAGNodeAST } from "../../../ast/selectionDAGAST";
@@ -7,86 +8,107 @@ import {
   formatSelectionDAGOperand,
 } from "../../../ast/selectionDAGAST";
 import CodeFragment from "../common/CodeFragment";
+import shellClasses from "../common/NodeShell.module.css";
+import {
+  NODE_BORDER_RADIUS,
+  NODE_BORDER_WIDTH,
+  NODE_FONT_FAMILY,
+  NODE_FONT_SIZE,
+  NODE_LINE_HEIGHT,
+} from "../common/nodeTextStyle";
+import classes from "./SelectionDAGNode.module.css";
 import { getSelectionDAGNodeColor } from "./selectionDAGNodeColor";
+import {
+  SELECTION_DAG_CELL_PADDING_X,
+  SELECTION_DAG_CELL_PADDING_Y,
+} from "./selectionDAGStyleConstants";
 
 // --- Style constants ---
 
-const BORDER_COLOR = "#050505";
-const BORDER = `1px solid ${BORDER_COLOR}`;
-const CELL_PADDING = "2px 2px";
+const RULE_WIDTH = `${NODE_BORDER_WIDTH}px`;
 
-const HANDLE_STYLE: React.CSSProperties = {
-  width: "4px",
-  height: "4px",
-  background: "#ffffff",
-  border: BORDER,
-  zIndex: 10,
-};
-
-/** Root container — replaces NodeShell */
-const ROOT_STYLE: React.CSSProperties = {
+/** Root container: the shared node frame around the table. */
+const ROOT_STYLE: CSSProperties = {
   display: "flex",
   flexDirection: "row",
   alignItems: "stretch",
-  border: BORDER,
-  borderRadius: "4px",
-  background: "#ffffff",
-  fontFamily: "monospace",
-  fontSize: "14px",
-  lineHeight: "20px",
+  borderWidth: RULE_WIDTH,
+  borderStyle: "solid",
+  borderRadius: `${NODE_BORDER_RADIUS}px`,
+  fontFamily: NODE_FONT_FAMILY,
+  fontSize: NODE_FONT_SIZE,
+  lineHeight: NODE_LINE_HEIGHT,
   whiteSpace: "nowrap",
   boxSizing: "border-box",
+  overflow: "hidden",
 };
 
-/** Left column: nodeId + source handle */
-const LEFT_COLUMN_BASE_STYLE: React.CSSProperties = {
+/** One table cell: operand, opName+details, type, or the node id. */
+const CELL_STYLE: CSSProperties = {
   position: "relative",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  borderTopLeftRadius: "4px",
-  borderBottomLeftRadius: "4px",
-  padding: CELL_PADDING,
+  padding: `${SELECTION_DAG_CELL_PADDING_Y}px ${SELECTION_DAG_CELL_PADDING_X}px`,
 };
 
+/** A row of operand or type cells, sharing the width equally. */
+const ROW_CELL_STYLE: CSSProperties = { ...CELL_STYLE, flex: 1 };
+
 /** Right column: operands / opName+details / types */
-const RIGHT_COLUMN_STYLE: React.CSSProperties = {
+const RIGHT_COLUMN_STYLE: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  borderLeft: BORDER,
+  borderLeftWidth: RULE_WIDTH,
+  borderLeftStyle: "solid",
   flex: 1,
   minWidth: 0,
 };
 
-/** Operands row (separated from content below by borderBottom) */
-const OPERANDS_ROW_STYLE: React.CSSProperties = {
+const ROW_STYLE: CSSProperties = {
   display: "flex",
   alignItems: "stretch",
   justifyContent: "center",
-  borderBottom: BORDER,
 };
 
-/** Main content area: opName + optional details */
-const MAIN_CONTENT_STYLE: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  padding: CELL_PADDING,
-  gap: "6px",
+/** Operands row (separated from content below by a bottom rule) */
+const OPERANDS_ROW_STYLE: CSSProperties = {
+  ...ROW_STYLE,
+  borderBottomWidth: RULE_WIDTH,
+  borderBottomStyle: "solid",
 };
 
-/** Types row (separated from content above by borderTop) */
-const TYPES_ROW_STYLE: React.CSSProperties = {
-  display: "flex",
-  alignItems: "stretch",
-  justifyContent: "center",
-  borderTop: BORDER,
+/** Types row (separated from content above by a top rule) */
+const TYPES_ROW_STYLE: CSSProperties = {
+  ...ROW_STYLE,
+  borderTopWidth: RULE_WIDTH,
+  borderTopStyle: "solid",
+};
+
+/** Left rule between neighbouring cells of a row. */
+const CELL_DIVIDER_STYLE: CSSProperties = {
+  borderLeftWidth: RULE_WIDTH,
+  borderLeftStyle: "solid",
+};
+
+/**
+ * Invisible handle (`specs/graph-view.md` §7). The operands row is the
+ * table's first row and the types row its last, so offsetting a handle by
+ * the border width from its cell puts the handle's outer side on the node's
+ * outer border — where React Flow ends a bezier edge.
+ */
+const HANDLE_STYLE: CSSProperties = {
+  opacity: 0,
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: "1px",
+  height: "1px",
 };
 
 // --- Sub-components ---
 
-const SelectionDAGOperandItem = ({
+const SelectionDAGOperandCell = ({
   node,
   index,
 }: {
@@ -97,18 +119,16 @@ const SelectionDAGOperandItem = ({
   if (!operand) return null;
 
   return (
-    <div style={{ position: "relative", padding: "2px 2px" }}>
+    <div
+      className={classes.rule}
+      style={{ ...ROW_CELL_STYLE, ...(index > 0 ? CELL_DIVIDER_STYLE : {}) }}
+    >
       {operand.kind === "node" && (
         <Handle
           type="target"
           position={Position.Top}
           id={`${node.nodeId}-operand-${index}`}
-          style={{
-            ...HANDLE_STYLE,
-            top: "-6px",
-            left: "50%",
-            transform: "translateX(-50%)",
-          }}
+          style={{ ...HANDLE_STYLE, top: `-${RULE_WIDTH}` }}
           isConnectable={false}
         />
       )}
@@ -117,7 +137,7 @@ const SelectionDAGOperandItem = ({
   );
 };
 
-const SelectionDAGTypeItem = ({
+const SelectionDAGTypeCell = ({
   node,
   index,
 }: {
@@ -128,18 +148,16 @@ const SelectionDAGTypeItem = ({
   if (!type) return null;
 
   return (
-    <div style={{ position: "relative", padding: "2px 2px" }}>
+    <div
+      className={classes.rule}
+      style={{ ...ROW_CELL_STYLE, ...(index > 0 ? CELL_DIVIDER_STYLE : {}) }}
+    >
       <CodeFragment code={type} language="llvm" />
       <Handle
         type="source"
         position={Position.Bottom}
         id={`${node.nodeId}-type-${index}`}
-        style={{
-          ...HANDLE_STYLE,
-          bottom: "-6px",
-          left: "50%",
-          transform: "translateX(-50%)",
-        }}
+        style={{ ...HANDLE_STYLE, bottom: `-${RULE_WIDTH}` }}
         isConnectable={false}
       />
     </div>
@@ -156,11 +174,11 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
   const detailsLabel = buildSelectionDAGDetailsLabel(node);
 
   return (
-    <div style={ROOT_STYLE}>
-      {/* Left column: nodeId */}
+    <div className={shellClasses.frame} style={ROOT_STYLE}>
+      {/* Left column: nodeId, tinted by opName category */}
       <div
         style={{
-          ...LEFT_COLUMN_BASE_STYLE,
+          ...CELL_STYLE,
           background: getSelectionDAGNodeColor(node.opName),
         }}
       >
@@ -168,29 +186,17 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
       </div>
 
       {/* Right column: operands, opName/details, types */}
-      <div style={RIGHT_COLUMN_STYLE}>
+      <div className={classes.rule} style={RIGHT_COLUMN_STYLE}>
         {operands.length > 0 && (
-          <div style={OPERANDS_ROW_STYLE}>
+          <div className={classes.rule} style={OPERANDS_ROW_STYLE}>
             {operands.map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: CELL_PADDING,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flex: 1,
-                  ...(i > 0 ? { borderLeft: BORDER } : {}),
-                }}
-              >
-                <SelectionDAGOperandItem node={node} index={i} />
-              </div>
+              <SelectionDAGOperandCell key={i} node={node} index={i} />
             ))}
           </div>
         )}
 
         {/* opName + details */}
-        <div style={MAIN_CONTENT_STYLE}>
+        <div style={CELL_STYLE}>
           <CodeFragment
             code={detailsLabel ? `${opNameLabel} ${detailsLabel}` : opNameLabel}
             language="llvm"
@@ -198,21 +204,9 @@ const SelectionDAGNode = ({ data }: NodeProps) => {
         </div>
 
         {/* types */}
-        <div style={TYPES_ROW_STYLE}>
+        <div className={classes.rule} style={TYPES_ROW_STYLE}>
           {node.types.map((_, i) => (
-            <div
-              key={i}
-              style={{
-                padding: CELL_PADDING,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flex: 1,
-                ...(i > 0 ? { borderLeft: BORDER } : {}),
-              }}
-            >
-              <SelectionDAGTypeItem node={node} index={i} />
-            </div>
+            <SelectionDAGTypeCell key={i} node={node} index={i} />
           ))}
         </div>
       </div>

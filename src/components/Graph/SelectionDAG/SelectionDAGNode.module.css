@@ -1,0 +1,5 @@
+/* Paint of SelectionDAGNode's table (specs/selectiondag.md §4). */
+
+.rule {
+  border-color: var(--app-node-line);
+}

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import LLVMUseDefInstructionNode from "./LLVMUseDefInstructionNode";
 import { NodeStoryCanvas } from "../../common/NodeStoryCanvas";
 import type { LLVMUseDefInstructionData } from "../../../../ast/llvmAST";
-import { USE_DEF_BADGE_PALETTE } from "./useDefStyleConstants";
+import { USE_DEF_BADGE_HUES } from "./useDefStyleConstants";
 
 interface StoryArgs {
   astData: LLVMUseDefInstructionData;
@@ -100,7 +100,7 @@ export const BadgePalette: Story = {
   },
   render: () => (
     <div style={{ display: "flex", flexWrap: "wrap" }}>
-      {USE_DEF_BADGE_PALETTE.map((_, blockIndex) => (
+      {USE_DEF_BADGE_HUES.map((_, blockIndex) => (
         <NodeStoryCanvas
           key={blockIndex}
           nodeType="llvmUseDefInstruction"

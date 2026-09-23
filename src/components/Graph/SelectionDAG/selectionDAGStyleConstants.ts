@@ -1,14 +1,9 @@
 /**
- * Single source of truth for SelectionDAGNode's box model. Shared by the
- * component itself (SelectionDAGNode.tsx) so cell padding is not restated
- * as a literal next to the styles.
+ * Lengths of SelectionDAGNode's table, on top of the shared node frame
+ * (`specs/graph-view.md` §5, §7: change the constant, never a literal).
  */
-export const SELECTION_DAG_BORDER_COLOR = "#050505";
-export const SELECTION_DAG_BORDER_WIDTH = 1;
-export const SELECTION_DAG_BORDER = `${SELECTION_DAG_BORDER_WIDTH}px solid ${SELECTION_DAG_BORDER_COLOR}`;
 
-// Cell padding (row/column wrappers) and item padding (individual
-// operand/type wrappers) are both "2px 2px" in the current design, applied
-// equally on both axes.
-export const SELECTION_DAG_CELL_PADDING = 2;
-export const SELECTION_DAG_ITEM_PADDING = 2;
+/** Horizontal padding of every table cell, px per side. */
+export const SELECTION_DAG_CELL_PADDING_X = 4;
+/** Vertical padding of every table cell, px per side. */
+export const SELECTION_DAG_CELL_PADDING_Y = 2;

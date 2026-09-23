@@ -1,55 +1,8 @@
 /**
- * Design tokens for the canvas-first shell (`specs/graph-view.md` §6.6).
- *
- * The shell chrome — editor panel, collapsed pill, canvas control cluster — is
- * deliberately QUIETER than the graph it frames: neutral grays, the app's
- * system sans-serif, light control borders, a barely-there elevation. The
- * graph nodes own the loud end of the visual range (monospace, dark borders,
- * corner chips), so the chrome must never compete with them; the nodes stay
- * the protagonists and the chrome recedes to the edges of the viewport.
- *
- * These constants are the only place shell colors/geometry are defined.
+ * The numbers the canvas-first shell's layout computes with
+ * (`specs/graph-view.md` §6). Its look comes from the Mantine theme
+ * (`src/theme.ts`, §6.6), not from here.
  */
-
-export const SHELL_COLORS = {
-  /** Full-viewport canvas background. */
-  ground: "#FAFAFA",
-  /** React Flow `<Background />` dot color. */
-  groundDots: "#D7DBDF",
-  /** Surface of panel / pill / control cluster. */
-  paper: "#FFFFFF",
-  /** Outer border of the floating surfaces (panel, pill, control cluster). */
-  line: "#999",
-  /** Resting border of an interactive control (select, button, toggle). */
-  control: "#d0d0d0",
-  /** Hovered control border. */
-  controlHover: "#999",
-  /** Focused control border. */
-  controlFocus: "#777",
-  ink: "#1F2328",
-  inkMuted: "#57606A",
-  /** Parse success only — never decorative. */
-  ok: "#1A7F37",
-  /** Parse failure only — never decorative. */
-  error: "#CF222E",
-  /** Recoverable parse diagnostics only — never decorative. */
-  warn: "#9A6700",
-} as const;
-
-/** Floating chrome only; graph nodes stay flat. Kept light on purpose. */
-export const SHELL_ELEVATION =
-  "0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)";
-
-export const SHELL_RADIUS = "4px";
-
-/** Hairline used inside a surface (header rule, footer rule, divider). */
-export const SHELL_HAIRLINE = "#ddd";
-
-/** Fill for hovered chrome controls and icon buttons. */
-export const SHELL_HOVER_FILL = "#f0f0f0";
-
-/** Fill for a selected chrome control (view toggle). */
-export const SHELL_SELECTED_FILL = "#e8e8e8";
 
 /** Inset of the floating editor panel from the viewport edges, in px. */
 export const PANEL_MARGIN = 16;
@@ -101,11 +54,3 @@ export function buildFitViewPadding(inset: ShellFitViewInset) {
     left: `${Math.max(inset.left, FIT_VIEW_BASE_PADDING)}px`,
   } as const;
 }
-
-/** Neutral 2px focus ring on every interactive piece of shell chrome. */
-export const focusRingSx = {
-  "&:focus-visible, &.Mui-focusVisible": {
-    outline: `2px solid ${SHELL_COLORS.inkMuted}`,
-    outlineOffset: "1px",
-  },
-} as const;

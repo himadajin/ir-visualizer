@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 import { Panel, useReactFlow, type FitViewOptions } from "@xyflow/react";
-import { Box, IconButton } from "@mui/material";
+import { ActionIcon, Divider, Group, Paper } from "@mantine/core";
 import {
-  SHELL_COLORS,
-  SHELL_ELEVATION,
-  SHELL_HAIRLINE,
-  SHELL_HOVER_FILL,
-  SHELL_RADIUS,
-  focusRingSx,
-} from "../AppShell/shellTokens";
+  IconMaximize,
+  IconMinus,
+  IconPlus,
+  IconRefresh,
+} from "@tabler/icons-react";
 
 export type FitViewPadding = NonNullable<FitViewOptions["padding"]>;
 
@@ -25,17 +23,6 @@ interface CanvasControlsProps {
   onResetLayout: () => void;
 }
 
-const iconSx = {
-  width: 16,
-  height: 16,
-  display: "block",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
 function ControlButton({
   label,
   onClick,
@@ -46,22 +33,15 @@ function ControlButton({
   children: ReactNode;
 }) {
   return (
-    <IconButton
+    <ActionIcon
+      variant="subtle"
+      color="gray"
       aria-label={label}
       title={label}
       onClick={onClick}
-      disableRipple
-      sx={{
-        width: 28,
-        height: 28,
-        borderRadius: SHELL_RADIUS,
-        color: SHELL_COLORS.ink,
-        "&:hover": { backgroundColor: SHELL_HOVER_FILL },
-        ...focusRingSx,
-      }}
     >
       {children}
-    </IconButton>
+    </ActionIcon>
   );
 }
 
@@ -88,55 +68,30 @@ export function CanvasControls({
     // whatever edge it rests against. Repositioning is instant on purpose — it
     // happens under the panel ⇄ pill morph, the shell's only animation (§6.6).
     <Panel position="bottom-right" style={{ bottom: bottomInset }}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 0.25,
-          padding: "3px",
-          backgroundColor: SHELL_COLORS.paper,
-          border: `1px solid ${SHELL_COLORS.line}`,
-          borderRadius: SHELL_RADIUS,
-          boxShadow: SHELL_ELEVATION,
-        }}
-      >
-        <ControlButton label="Zoom in" onClick={() => void zoomIn()}>
-          <Box component="svg" viewBox="0 0 16 16" sx={iconSx}>
-            <path d="M8 3.5v9M3.5 8h9" />
-          </Box>
-        </ControlButton>
+      <Paper withBorder p={4}>
+        <Group gap={4} wrap="nowrap">
+          <ControlButton label="Zoom in" onClick={() => void zoomIn()}>
+            <IconPlus size={16} />
+          </ControlButton>
 
-        <ControlButton label="Zoom out" onClick={() => void zoomOut()}>
-          <Box component="svg" viewBox="0 0 16 16" sx={iconSx}>
-            <path d="M3.5 8h9" />
-          </Box>
-        </ControlButton>
+          <ControlButton label="Zoom out" onClick={() => void zoomOut()}>
+            <IconMinus size={16} />
+          </ControlButton>
 
-        <ControlButton
-          label="Fit view"
-          onClick={() => void fitView({ padding: fitViewPadding })}
-        >
-          <Box component="svg" viewBox="0 0 16 16" sx={iconSx}>
-            <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" />
-          </Box>
-        </ControlButton>
+          <ControlButton
+            label="Fit view"
+            onClick={() => void fitView({ padding: fitViewPadding })}
+          >
+            <IconMaximize size={16} />
+          </ControlButton>
 
-        <Box
-          aria-hidden="true"
-          sx={{
-            width: "1px",
-            alignSelf: "stretch",
-            marginX: "3px",
-            backgroundColor: SHELL_HAIRLINE,
-          }}
-        />
+          <Divider orientation="vertical" />
 
-        <ControlButton label="Reset layout" onClick={onResetLayout}>
-          <Box component="svg" viewBox="0 0 16 16" sx={iconSx}>
-            <path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5V5h-2.5" />
-          </Box>
-        </ControlButton>
-      </Box>
+          <ControlButton label="Reset layout" onClick={onResetLayout}>
+            <IconRefresh size={16} />
+          </ControlButton>
+        </Group>
+      </Paper>
     </Panel>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMediaQuery, type SelectChangeEvent } from "@mui/material";
+import { useMediaQuery } from "@mantine/hooks";
 import { useReactFlow } from "@xyflow/react";
 import { CanvasShell } from "./components/AppShell/CanvasShell";
 import { EditorPanel } from "./components/AppShell/EditorPanel";
@@ -16,7 +16,6 @@ import {
 } from "./components/AppShell/shellTokens";
 import { useIRWorkspace } from "./hooks/useIRWorkspace";
 import { usePaneResize } from "./hooks/usePaneResize";
-import type { IRModeKey } from "./irModes";
 
 /** 60 vw cap on the editor panel (specs/graph-view.md §6.2). */
 const panelMaxWidth = (viewportWidth: number) =>
@@ -118,13 +117,6 @@ function App() {
     [setCode],
   );
 
-  const handleModeChange = useCallback(
-    (event: SelectChangeEvent) => {
-      changeMode(event.target.value as IRModeKey);
-    },
-    [changeMode],
-  );
-
   return (
     <>
       <CanvasShell
@@ -147,7 +139,7 @@ function App() {
         sheetHeight={sheetHeight}
         onResizeHandleMouseDown={onDragHandleMouseDown}
         mode={modeKey}
-        onModeChange={handleModeChange}
+        onModeChange={changeMode}
         views={views}
         activeViewKey={activeViewKey}
         onViewChange={changeView}

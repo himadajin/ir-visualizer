@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { EditorPanel } from "../EditorPanel";
-import { SHELL_COLORS } from "../shellTokens";
+import { MantineProvider } from "@mantine/core";
 import type { IRParseDiagnostic } from "../../../irModes/types";
 
 // Monaco needs a real editor host; the footer is what this file is about.
@@ -20,25 +20,27 @@ function renderPanel(
   overrides: Partial<Parameters<typeof EditorPanel>[0]> = {},
 ) {
   return render(
-    <EditorPanel
-      open
-      onOpenChange={vi.fn()}
-      narrow={false}
-      width={420}
-      sheetHeight={0}
-      onResizeHandleMouseDown={vi.fn()}
-      mode={"llvm-ir" as never}
-      onModeChange={vi.fn()}
-      code=""
-      language="llvm"
-      onCodeChange={vi.fn()}
-      onClear={vi.fn()}
-      error={null}
-      diagnostics={[]}
-      nodeCount={3}
-      edgeCount={2}
-      {...overrides}
-    />,
+    <MantineProvider>
+      <EditorPanel
+        open
+        onOpenChange={vi.fn()}
+        narrow={false}
+        width={420}
+        sheetHeight={0}
+        onResizeHandleMouseDown={vi.fn()}
+        mode={"llvm-ir" as never}
+        onModeChange={vi.fn()}
+        code=""
+        language="llvm"
+        onCodeChange={vi.fn()}
+        onClear={vi.fn()}
+        error={null}
+        diagnostics={[]}
+        nodeCount={3}
+        edgeCount={2}
+        {...overrides}
+      />
+    </MantineProvider>,
   );
 }
 
@@ -56,25 +58,23 @@ describe("EditorPanel status footer", () => {
     renderPanel();
 
     const status = screen.getByTestId("parse-status");
-    expect(status).toHaveTextContent("✓ parsed · 3 nodes · 2 edges");
+    expect(status).toHaveTextContent("parsed · 3 nodes · 2 edges");
     expect(status).not.toHaveTextContent("warning:");
     expect(status).not.toHaveTextContent("error:");
-    expect(status).toHaveStyle({ borderLeft: "" });
+    expect(status).toHaveAttribute("data-status", "ok");
   });
 
   it("keeps the success line and adds one warning line per diagnostic", () => {
     renderPanel({ diagnostics: [warning, { line: 9, message: "second" }] });
 
     const status = screen.getByTestId("parse-status");
-    expect(status).toHaveTextContent("✓ parsed · 3 nodes · 2 edges");
+    expect(status).toHaveTextContent("parsed · 3 nodes · 2 edges");
     expect(status).toHaveTextContent(`warning: line 5: ${warning.message}`);
     expect(status).toHaveTextContent("warning: line 9: second");
     // A diagnostic is not a failure: the word that answers "did it parse?"
     // must not appear (spec §6.3).
     expect(status).not.toHaveTextContent("error:");
-    expect(status).toHaveStyle({
-      borderLeft: `2px solid ${SHELL_COLORS.warn}`,
-    });
+    expect(status).toHaveAttribute("data-status", "warn");
   });
 
   it("shows a failure as an error and nothing else", () => {
@@ -84,10 +84,8 @@ describe("EditorPanel status footer", () => {
     expect(status).toHaveTextContent(
       "error: Line 4: block 'entry' has no terminator",
     );
-    expect(status).not.toHaveTextContent("✓ parsed");
-    expect(status).toHaveStyle({
-      borderLeft: `2px solid ${SHELL_COLORS.error}`,
-    });
+    expect(status).not.toHaveTextContent("parsed");
+    expect(status).toHaveAttribute("data-status", "error");
   });
 
   it("lets an error outrank diagnostics that arrived with it", () => {
@@ -98,8 +96,6 @@ describe("EditorPanel status footer", () => {
     const status = screen.getByTestId("parse-status");
     expect(status).toHaveTextContent("error: boom");
     expect(status).not.toHaveTextContent("warning:");
-    expect(status).toHaveStyle({
-      borderLeft: `2px solid ${SHELL_COLORS.error}`,
-    });
+    expect(status).toHaveAttribute("data-status", "error");
   });
 });

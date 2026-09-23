@@ -1,0 +1,63 @@
+.panel {
+  position: fixed;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pill {
+  position: fixed;
+  z-index: 5;
+}
+
+.header {
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.brand {
+  white-space: nowrap;
+  user-select: none;
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Roughly eight lines of compiler output; a longer report scrolls (§6.3). */
+.footer {
+  border-top: 1px solid var(--mantine-color-default-border);
+  line-height: 18px;
+  max-height: calc(18px * 8);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.footer[data-status="warn"] {
+  border-left: 2px solid var(--app-status-warn);
+}
+
+.footer[data-status="error"] {
+  border-left: 2px solid var(--app-status-error);
+}
+
+.check {
+  color: var(--app-status-ok);
+  vertical-align: -2px;
+  margin-right: 1ch;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+}
+
+.resizeHandle:hover {
+  background-color: var(--mantine-color-default-border);
+}

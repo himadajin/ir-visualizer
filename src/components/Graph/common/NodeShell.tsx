@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Handle, Position } from "@xyflow/react";
 import {
   NODE_BORDER_RADIUS,
   NODE_BORDER_WIDTH,
@@ -27,9 +26,6 @@ export interface NodeShellProps {
   className?: string;
   headerLabel?: string;
   style?: CSSProperties;
-  /** Omit for the centered handle; null/empty removes it. */
-  sourceHandles?: ReactNode;
-  targetHandles?: ReactNode;
   /**
    * CSS `ch` wrap on the content box (`specs/graph-view.md` §5). `false`
    * leaves the node shrink-wrapped (Use-Def cards). Default is the LLVM
@@ -79,8 +75,6 @@ const NodeShell = ({
   className,
   headerLabel,
   style,
-  sourceHandles,
-  targetHandles,
   wrap = DEFAULT_WRAP,
 }: NodeShellProps) => {
   const wrapStyle: CSSProperties =
@@ -125,41 +119,6 @@ const NodeShell = ({
       >
         {children}
       </div>
-
-      {targetHandles === undefined ? (
-        <Handle
-          type="target"
-          position={Position.Top}
-          style={{
-            opacity: 0,
-            top: 0,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "1px",
-            height: "1px",
-          }}
-          isConnectable={false}
-        />
-      ) : (
-        targetHandles
-      )}
-      {sourceHandles === undefined ? (
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          style={{
-            opacity: 0,
-            bottom: 0,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "1px",
-            height: "1px",
-          }}
-          isConnectable={false}
-        />
-      ) : (
-        sourceHandles
-      )}
     </div>
   );
 };

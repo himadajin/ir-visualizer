@@ -1,5 +1,4 @@
-import { llvmMode } from "../../irModes/llvmMode";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   getLayoutedElements,
   sizesCoverGraph,
@@ -9,6 +8,17 @@ import {
 } from "../layout";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
+import ELK from "elkjs/lib/elk.bundled.js";
+import type { ElkNode } from "elkjs/lib/elk-api";
+import { llvmMode } from "../../irModes/llvmMode";
+import {
+  prepareNodePorts,
+  arrivalHandleId,
+  portX,
+  elkPortId,
+} from "../nodePorts";
+import type { NodePortLayout } from "../../types/nodePorts";
+import { codeGraphEdgeBuilder } from "../layout";
 import { BACK_EDGE_COLOR, EDGE_MARKER } from "../converter";
 
 const BOX = { width: 120, height: 40 };
@@ -268,13 +278,28 @@ describe("getLayoutedElements", () => {
       ],
     };
 
-    const { edges } = await layout(graph, llvmMode);
-
-    // ELK's FIXED_POS operand port determines which handle the edge attaches
-    // to; the router (src/utils/edgeRouter.ts) is what routes between the
-    // live handle positions, not layout.ts.
-    expect(edges[0].targetHandle).toBe("u-1");
+    const nodePorts = llvmMode.nodePorts;
+    const prepared = prepareNodePorts(graph, codeGraphEdgeBuilder, nodePorts);
+    const sizes = new Map(
+      graph.nodes.map((n) => [
+        n.id,
+        {
+          width: Math.max(
+            BOX.width,
+            Math.ceil(prepared.layouts.get(n.id)?.minWidth ?? 0),
+          ),
+          height: BOX.height,
+        },
+      ]),
+    );
+    const { edges, nodes } = await getLayoutedElements(graph, sizes, {
+      nodePorts,
+    });
+    expect(edges[0].targetHandle).toBe(arrivalHandleId("e-def1-use1-1"));
     expect(edges[0].sourceHandle).toBe("def");
+    const ports = nodes.find((n) => n.id === "use1")!.data
+      .portLayout as NodePortLayout;
+    expect(ports.ports.find((p) => p.side === "top")!.relative).toBe(false);
   });
 
   it("places from the given sizes, not from an estimate", async () => {
@@ -634,4 +659,95 @@ describe("getLayoutedElements — nested nodes", () => {
     expect(edges[0].hidden).toBe(true);
     expect(edges[0].style?.stroke).not.toBe(BACK_EDGE_COLOR);
   });
+});
+
+describe("routed port geometry", () => {
+  it("keeps ELK ports and rendered arrivals aligned after compound resizing", async () => {
+    const graph: GraphData = {
+      nodes: [
+        { id: "G", label: "group", nodeType: "graph-group", astData: {} },
+        { id: "A", label: "wide child", parentId: "G" },
+        { id: "X", label: "X" },
+        { id: "Y", label: "Y" },
+      ],
+      edges: [
+        { id: "xg", source: "X", target: "G" },
+        { id: "yg", source: "Y", target: "G" },
+        { id: "ax", source: "A", target: "X" },
+      ],
+    };
+    const spy = vi.spyOn(ELK.prototype, "layout");
+    try {
+      const sizes = sizesOf(graph);
+      sizes.set("A", { width: 500, height: 40 });
+      const result = await getLayoutedElements(graph, sizes);
+      const output = (await spy.mock.results.at(-1)!.value) as ElkNode;
+      const elkNodes = new Map<string, ElkNode>();
+      const visit = (node: ElkNode) => {
+        elkNodes.set(node.id, node);
+        node.children?.forEach(visit);
+      };
+      visit(output);
+      expect(elkNodes.get("G")!.width).toBeGreaterThan(500);
+      for (const node of result.nodes) {
+        const layout = node.data.portLayout as NodePortLayout | undefined;
+        if (layout === undefined) continue;
+        const elk = elkNodes.get(node.id)!;
+        for (const port of layout.ports) {
+          const actual = elk.ports!.find(
+            (p) => p.id === elkPortId(node.id, port.id),
+          )!;
+          expect(actual.x).toBeCloseTo(portX(port, elk.width!), 5);
+          expect(actual.y).toBeCloseTo(
+            port.side === "top" ? 0 : elk.height!,
+            5,
+          );
+        }
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("preserves upward DAG order even when nodes are supplied in reverse", async () => {
+    const graph: GraphData = {
+      direction: "BT",
+      nodes: ["C", "B", "A"].map((id) => ({ id, label: id })),
+      edges: [
+        { id: "ab", source: "A", target: "B" },
+        { id: "bc", source: "B", target: "C" },
+      ],
+    };
+    const result = await layout(graph);
+    const y = new Map(result.nodes.map((n) => [n.id, n.position.y]));
+    expect(y.get("A")!).toBeGreaterThan(y.get("B")!);
+    expect(y.get("B")!).toBeGreaterThan(y.get("C")!);
+  });
+});
+
+it("keeps container dimensions stable across repeated Reset Layout passes", async () => {
+  const graph: GraphData = {
+    nodes: [
+      { id: "G", label: "G", nodeType: "graph-group", astData: {} },
+      { id: "A", label: "A", parentId: "G" },
+      { id: "B", label: "B", parentId: "G" },
+      { id: "X", label: "X" },
+    ],
+    edges: [
+      { id: "ab", source: "A", target: "B" },
+      { id: "xg", source: "X", target: "G" },
+    ],
+  };
+  const sizes = sizesOf(graph);
+  const first = await getLayoutedElements(graph, sizes);
+  const group = first.nodes.find((n) => n.id === "G")!;
+  sizes.set("G", {
+    width: group.style!.width as number,
+    height: group.style!.height as number,
+  });
+  const reset = await getLayoutedElements(graph, sizes);
+  expect(reset.nodes.find((n) => n.id === "G")!.style).toEqual(group.style);
+  expect(reset.nodes.map((n) => n.position)).toEqual(
+    first.nodes.map((n) => n.position),
+  );
 });

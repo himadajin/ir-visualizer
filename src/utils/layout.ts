@@ -1,8 +1,6 @@
 import type {
   ELK,
-  ElkExtendedEdge,
   ElkNode,
-  ElkPort,
   LayoutOptions as ElkLayoutOptions,
 } from "elkjs/lib/elk-api";
 import { type Node, type Edge } from "@xyflow/react";
@@ -14,6 +12,13 @@ import type {
 } from "../types/graph";
 import { isContainerNode, isGraphDirection } from "../types/graph";
 import type { RoutedEdgeData } from "../components/Graph/RoutedEdge";
+import type { NodePortLayout, NodePortPreferences } from "../types/nodePorts";
+import { prepareNodePorts } from "./nodePorts";
+import { elkPorts, layoutHierarchy } from "./elkHierarchyLayout";
+import {
+  NODE_HEADER_HEIGHT,
+  NODE_BORDER_WIDTH,
+} from "../components/Graph/common/nodeTextStyle";
 import {
   createReactFlowNode,
   createReactFlowEdge,
@@ -65,10 +70,10 @@ export const selectionDAGEdgeBuilder: IREdgeBuilder = {
 
 export interface LayoutOptions {
   direction?: string;
-  getNodePorts?: NodePortProvider;
   edgeBuilder?: IREdgeBuilder;
   /** Per-mode ELK option overrides (contracts/ir-mode-registry.md). */
   layoutOptions?: Record<string, string>;
+  nodePorts?: NodePortPreferences;
 }
 
 /** Measured (or test-supplied) box for one node, flow px. */
@@ -76,18 +81,6 @@ export interface NodeSize {
   width: number;
   height: number;
 }
-
-/** Fixed positions relative to a node's outer measured box. */
-export interface LayoutPort {
-  id: string;
-  x: number;
-  y: number;
-}
-
-export type NodePortProvider = (
-  node: GraphNode,
-  size: NodeSize,
-) => readonly LayoutPort[];
 
 export type NodeSizeMap = ReadonlyMap<string, NodeSize>;
 
@@ -120,7 +113,6 @@ export const toElkDirection = (direction: string | undefined): ElkDirection =>
 const DEFAULT_ELK_OPTIONS: ElkLayoutOptions = {
   "elk.algorithm": "layered",
   "elk.edgeRouting": "ORTHOGONAL",
-  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
   "elk.layered.spacing.nodeNodeBetweenLayers": String(NODE_NODE_BETWEEN_LAYERS),
   "elk.spacing.nodeNode": String(NODE_NODE_SPACING),
   "elk.spacing.edgeNode": String(EDGE_NODE_SPACING),
@@ -158,10 +150,6 @@ export const sizesCoverGraph = (
   }
   return true;
 };
-
-/** ELK port ids are global, so node-local handle ids get namespaced. */
-const elkPortId = (nodeId: string, handleId: string) =>
-  JSON.stringify([nodeId, handleId]);
 
 interface Hierarchy {
   childrenOf: Map<string, GraphNode[]>;
@@ -213,17 +201,12 @@ const assertHierarchy = (graph: GraphData): Hierarchy => {
   return { childrenOf, roots };
 };
 
-const collectPortIds = (elkNode: ElkNode, into: Set<string>): void => {
-  for (const port of elkNode.ports ?? []) into.add(port.id);
-  for (const child of elkNode.children ?? []) collectPortIds(child, into);
-};
-
 const buildElkNode = (
   node: GraphNode,
   sizes: NodeSizeMap,
   childrenOf: Map<string, GraphNode[]>,
   parentElkDirection: ElkDirection,
-  getNodePorts?: NodePortProvider,
+  portLayouts: ReadonlyMap<string, NodePortLayout>,
 ): ElkNode => {
   const size = sizes.get(node.id);
   if (size === undefined) {
@@ -232,17 +215,14 @@ const buildElkNode = (
   const { width, height } = toElkSize(size);
   const elkNode: ElkNode = { id: node.id, width, height };
 
-  const ports: ElkPort[] = (getNodePorts?.(node, { width, height }) ?? []).map(
-    (port) => ({
-      id: elkPortId(node.id, port.id),
-      x: port.x,
-      y: port.y,
-      width: 0,
-      height: 0,
-    }),
-  );
-  if (ports.length > 0) {
-    elkNode.ports = ports;
+  const portLayout = portLayouts.get(node.id);
+  if (portLayout !== undefined) {
+    if (width < Math.ceil(portLayout.minWidth)) {
+      throw new Error(
+        `getLayoutedElements: measured width for ${node.id} is smaller than its ports`,
+      );
+    }
+    elkNode.ports = elkPorts(node.id, portLayout, width, height);
     elkNode.layoutOptions = { "elk.portConstraints": "FIXED_POS" };
   }
 
@@ -253,15 +233,15 @@ const buildElkNode = (
         ? toElkDirection(node.astData.direction)
         : parentElkDirection;
     elkNode.children = children.map((child) =>
-      buildElkNode(child, sizes, childrenOf, elkDirection, getNodePorts),
+      buildElkNode(child, sizes, childrenOf, elkDirection, portLayouts),
     );
     elkNode.layoutOptions = {
       ...elkNode.layoutOptions,
       "elk.algorithm": "layered",
-      "elk.hierarchyHandling": "SEPARATE_CHILDREN",
       "elk.direction": elkDirection,
       "elk.nodeSize.constraints": "MINIMUM_SIZE",
-      "elk.padding": `[top=${String(height)},left=${String(CONTAINER_PADDING)},bottom=${String(CONTAINER_PADDING)},right=${String(CONTAINER_PADDING)}]`,
+      "elk.nodeSize.minimum": `(${String(width)},${String(height)})`,
+      "elk.padding": `[top=${String(NODE_HEADER_HEIGHT + 2 * NODE_BORDER_WIDTH)},left=${String(CONTAINER_PADDING)},bottom=${String(CONTAINER_PADDING)},right=${String(CONTAINER_PADDING)}]`,
     };
   }
   return elkNode;
@@ -310,36 +290,6 @@ const absoluteBox = (
   return { x, y, width: self?.width ?? 0, height: self?.height ?? 0 };
 };
 
-const buildElkEdge = (
-  edge: GraphEdge,
-  index: number,
-  portIds: Set<string>,
-): ElkExtendedEdge => {
-  const sourcePort =
-    edge.sourceHandle !== undefined
-      ? elkPortId(edge.source, edge.sourceHandle)
-      : undefined;
-  const targetPort =
-    edge.targetHandle !== undefined
-      ? elkPortId(edge.target, edge.targetHandle)
-      : undefined;
-  return {
-    // GraphEdge ids are not guaranteed unique across builders; ELK ids are
-    // positional and the result is zipped back by index.
-    id: `e${String(index)}`,
-    sources: [
-      sourcePort !== undefined && portIds.has(sourcePort)
-        ? sourcePort
-        : edge.source,
-    ],
-    targets: [
-      targetPort !== undefined && portIds.has(targetPort)
-        ? targetPort
-        : edge.target,
-    ],
-  };
-};
-
 /** Sets a routed edge's data and applies the back-edge accent styling. */
 const applyRoutedData = (rfEdge: Edge, data: RoutedEdgeData): Edge => {
   rfEdge.data = data;
@@ -383,6 +333,7 @@ export const getLayoutedElements = async (
   const direction = options.direction || graph.direction || "TD";
   const elkDirection = toElkDirection(direction);
   const hierarchy = assertHierarchy(graph);
+  const prepared = prepareNodePorts(graph, edgeBuilder, options.nodePorts);
 
   const elkChildren = hierarchy.roots.map((node) =>
     buildElkNode(
@@ -390,14 +341,12 @@ export const getLayoutedElements = async (
       sizes,
       hierarchy.childrenOf,
       elkDirection,
-      options.getNodePorts,
+      prepared.layouts,
     ),
   );
-  const portIds = new Set<string>();
-  for (const child of elkChildren) collectPortIds(child, portIds);
 
   const elk = await getElk();
-  const layouted = await elk.layout({
+  const elkGraph: ElkNode = {
     id: "root",
     layoutOptions: {
       ...DEFAULT_ELK_OPTIONS,
@@ -405,8 +354,13 @@ export const getLayoutedElements = async (
       ...options.layoutOptions,
     },
     children: elkChildren,
-    edges: graph.edges.map((edge, i) => buildElkEdge(edge, i, portIds)),
-  });
+  };
+  const layouted = await layoutHierarchy(
+    elk,
+    elkGraph,
+    prepared.edges,
+    prepared.layouts,
+  );
 
   const layoutById = new Map<string, PlacedBox>();
   flattenElk(layouted, undefined, layoutById);
@@ -419,6 +373,7 @@ export const getLayoutedElements = async (
       { x: layout?.x ?? 0, y: layout?.y ?? 0 },
       {
         parentId: node.parentId,
+        portLayout: prepared.layouts.get(node.id),
         ...(isGroup && layout !== undefined
           ? { width: layout.width, height: layout.height }
           : {}),
@@ -426,9 +381,8 @@ export const getLayoutedElements = async (
     );
   });
 
-  const edges: Edge[] = graph.edges.map((edge) => {
-    const rfEdge = edgeBuilder.buildReactFlowEdge(edge);
-    if (rfEdge.type !== "routed") return rfEdge;
+  const edges: Edge[] = prepared.edges.map((edge) => {
+    if (edge.type !== "routed") return edge;
 
     const source = absoluteBox(edge.source, layoutById);
     const target = absoluteBox(edge.target, layoutById);
@@ -441,8 +395,8 @@ export const getLayoutedElements = async (
         ? target.y >= source.y + source.height
         : target.y + target.height <= source.y);
 
-    return applyRoutedData(rfEdge, {
-      ...(rfEdge.data as RoutedEdgeData | undefined),
+    return applyRoutedData(edge, {
+      ...(edge.data as RoutedEdgeData | undefined),
       isBackEdge,
     });
   });

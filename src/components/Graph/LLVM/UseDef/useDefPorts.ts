@@ -1,3 +1,4 @@
+import type { NodePortPreference } from "../../../../types/nodePorts";
 import { getFontMetrics } from "../../../../utils/fontUtils";
 import type { LLVMUseDefInstructionData } from "../../../../ast/llvmAST";
 import {
@@ -18,22 +19,10 @@ import {
  * (specs/llvm-use-def-view.md §4): one target port per used name at that
  * operand's first occurrence in the monospace text, plus a source port under
  * the def name. Both the node component (React Flow `Handle` positions) and
- * the ELK layout (`FIXED_POS` ports) call this, so routed edges aim at the
- * exact pixel the handle actually sits on. The code line starts after the
- * inline block badge, so every port shifts right by the badge's width.
+ * the ELK layout use the shared resolved port layout. The registry calls this
+ * for preferences; arrival separation can move a target right. The code line
+ * starts after the inline block badge, so every port shifts by the badge width.
  */
-
-export interface UseDefPort {
-  /** React Flow handle id: `u-<name>` (target) or `def` (source). */
-  id: string;
-  /**
-   * Horizontal center of the port in px from the card's left edge, or null
-   * when the name cannot be located in the text (render at the card's
-   * horizontal center instead).
-   */
-  x: number | null;
-  side: "top" | "bottom";
-}
 
 /** First occurrence of `%name` (or `%"name"`) as a whole token. */
 export const findOperandToken = (
@@ -86,16 +75,14 @@ const tokenCenterX = (
 };
 
 /**
- * Every port the card exposes. A port exists for every use (and for the def
- * when present) even when its text position is unresolved — the edge's
- * `targetHandle`/`sourceHandle` reference must always resolve, or React Flow
- * drops the edge.
+ * One preference per used value and optional definition. Unresolved operands
+ * retain their identity and receive separate slots in the shared assignment.
  */
 export const getUseDefPorts = (
   data: LLVMUseDefInstructionData,
-): UseDefPort[] => {
+): NodePortPreference[] => {
   const textLeft = cardTextLeft(data.blockLabel);
-  const ports: UseDefPort[] = data.uses.map((name) => ({
+  const ports: NodePortPreference[] = data.uses.map((name) => ({
     id: `u-${name}`,
     x: tokenCenterX(data.text, name, textLeft),
     side: "top" as const,

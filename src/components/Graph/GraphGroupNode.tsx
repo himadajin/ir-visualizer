@@ -1,5 +1,4 @@
 import type { NodeProps } from "@xyflow/react";
-import { Handle, Position } from "@xyflow/react";
 import {
   NODE_BORDER_RADIUS,
   NODE_BORDER_WIDTH,
@@ -33,33 +32,6 @@ const GraphGroupNode = ({ data }: NodeProps) => {
       }}
     >
       <NodeHeader label={label} />
-
-      <Handle
-        type="target"
-        position={Position.Top}
-        style={{
-          opacity: 0,
-          top: 0,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "1px",
-          height: "1px",
-        }}
-        isConnectable={false}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={{
-          opacity: 0,
-          bottom: 0,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "1px",
-          height: "1px",
-        }}
-        isConnectable={false}
-      />
     </div>
   );
 };

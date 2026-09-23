@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useGraphData } from "../useGraphData";
-import { llvmMode, selectionDAGMode } from "../../irModes";
+import { llvmMode, selectionDAGMode, mermaidMode } from "../../irModes";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
 import type { IRLayoutBehavior } from "../../irModes/types";
@@ -477,10 +477,87 @@ done:
     );
   });
   expect(result.current.edges.map((edge) => edge.sourceHandle)).toEqual(
-    edited.edges.map((edge) => edge.sourceHandle),
+    edited.edges.map((edge) => edge.sourceHandle ?? "out"),
   );
   expect(
     result.current.edges.find((edge) => edge.source === edge.target)?.data
       ?.isBackEdge,
   ).toBe(true);
+});
+
+describe("arrival ports during graph updates", () => {
+  it("mounts all ports before measuring, waits for enough width, and refreshes a same-box assignment", async () => {
+    const { result } = renderHook(() => useGraphData());
+    const graph = twoNodeGraph();
+    graph.edges = Array.from({ length: 8 }, (_, i) => ({
+      id: `e${String(i)}`,
+      source: "n1",
+      target: "n2",
+    }));
+    act(() => result.current.updateGraph(graph, llvmMode));
+    const before = result.current.nodes.find((n) => n.id === "n2")!.data
+      .portLayout;
+    expect(before).toMatchObject({ minWidth: 216 });
+    expect(result.current.edges).toHaveLength(0);
+    await act(async () => {
+      await result.current.applyLayout(sizesOf(graph));
+    });
+    expect(result.current.layoutPending).toBe(true);
+    const sizes = new Map(
+      graph.nodes.map((n) => [n.id, { width: 240, height: 40 }]),
+    );
+    await act(async () => {
+      await result.current.applyLayout(sizes);
+    });
+    expect(result.current.edges).toHaveLength(8);
+    const positions = result.current.nodes.map((n) => n.position);
+    const edited = {
+      ...graph,
+      edges: graph.edges.map((e) => ({ ...e, id: `${e.id}-new` })),
+    };
+    act(() => result.current.updateGraph(edited, llvmMode));
+    expect(result.current.layoutPending).toBe(false);
+    expect(result.current.nodes.map((n) => n.position)).toEqual(positions);
+    const after = result.current.nodes.find((n) => n.id === "n2")!.data
+      .portLayout;
+    expect(after).not.toEqual(before);
+    for (const e of result.current.edges)
+      expect(e.targetHandle).toContain("-new");
+    await act(async () => {
+      await result.current.applyLayout(sizes);
+    });
+    expect(
+      result.current.nodes.find((n) => n.id === "n2")!.data.portLayout,
+    ).toEqual(after);
+  });
+});
+
+it("grows a fixed-size container when hidden arrivals become visible without changing topology", async () => {
+  const { result } = renderHook(() => useGraphData());
+  const graph: GraphData = {
+    nodes: [
+      { id: "G", label: "G", nodeType: "graph-group", astData: {} },
+      { id: "X", label: "X" },
+    ],
+    edges: Array.from({ length: 8 }, (_, i) => ({
+      id: String(i),
+      source: "X",
+      target: "G",
+      stroke: "invisible",
+    })),
+  };
+  await layoutGraph(result, graph, mermaidMode);
+  const positions = result.current.nodes.map((n) => n.position);
+  act(() =>
+    result.current.updateGraph(
+      { ...graph, edges: graph.edges.map((e) => ({ ...e, stroke: "normal" })) },
+      mermaidMode,
+    ),
+  );
+  expect(result.current.layoutPending).toBe(false);
+  expect(result.current.nodes.map((n) => n.position)).toEqual(positions);
+  expect(result.current.nodes.find((n) => n.id === "G")!.style!.width).toBe(
+    216,
+  );
+  expect(new Set(result.current.edges.map((e) => e.targetHandle)).size).toBe(8);
 });

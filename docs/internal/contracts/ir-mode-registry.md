@@ -19,29 +19,11 @@ interface IRModeDefinition {
   nodeTypes: Record<string, ComponentType<NodeProps>>; // this mode's React Flow node renderers
   edgeBuilder: IREdgeBuilder; // see below
   layoutOptions?: Record<string, string>; // ELK layout options, e.g. layer spacing
-  getNodePorts?: NodePortProvider; // fixed ports for the measured node box
+  nodePorts?: NodePortPreferences; // named source ports and operand positions; see Node port preferences
   bundleOf?: (edge: GraphEdge) => string | undefined; // see "Bundles" below
   views?: IRViewDefinition[]; // optional alternative projections — see "Views" below
 }
 ```
-
-## Fixed-position node ports
-
-Modes and views may supply `getNodePorts(node, size)`, returning node-local port
-ids and `x`/`y` positions within the measured, quantized box. The callback is passed
-through `useIRWorkspace` and `useGraphData` to layout, with the same view-over-mode
-precedence as `layoutOptions`. Layout namespaces port ids using an injective
-encoding of `[nodeId, handleId]` and declares `FIXED_POS` ports. It contains no
-IR-specific port dispatch. Renderers share their own mode's port semantics with
-the callback so named handles and ELK endpoints agree.
-
-LLVM provides the callback for CFG successors and Use-Def operands. Other modes
-omit it. The default LLVM view inherits the mode callback. Content-only updates
-refresh rendered handles without moving nodes; every full layout, including Reset
-Layout, resolves the callback against the current graph and measured sizes.
-
-> Pinned by: `src/utils/__tests__/layout.ports.test.ts`,
-> `src/hooks/__tests__/useGraphData.test.ts`
 
 ## Parsing is asynchronous
 
@@ -145,7 +127,7 @@ interface IRViewDefinition {
   parse: (code: string) => Promise<IRParseResult>; // same reject-on-invalid rule as the mode's parse
   edgeBuilder?: IREdgeBuilder; // defaults to the mode's edgeBuilder
   layoutOptions?: Record<string, string>; // defaults to the mode's layoutOptions
-  getNodePorts?: NodePortProvider; // defaults to the mode's getNodePorts
+  nodePorts?: NodePortPreferences; // named source ports and operand positions; see Node port preferences
   bundleOf?: (edge: GraphEdge) => string | undefined; // defaults to the mode's bundleOf
 }
 ```
@@ -153,7 +135,7 @@ interface IRViewDefinition {
 Rules:
 
 - `views` is optional. A mode without it has a single implicit view built from
-  its top-level `parse`/`edgeBuilder`/`layoutOptions`/`bundleOf`.
+  its top-level `parse`/`edgeBuilder`/`layoutOptions`/`nodePorts`/`bundleOf`.
 - When present, `views` has ≥ 2 entries and `views[0]` is the **default view**;
   it must behave identically to the mode's top-level fields (share the same
   function references — don't duplicate logic). When `parse` is an async adapter
@@ -176,13 +158,13 @@ can be passed wherever layout behavior is needed:
 ```ts
 type IRLayoutBehavior = Pick<
   IRModeDefinition,
-  "edgeBuilder" | "layoutOptions" | "getNodePorts" | "bundleOf"
+  "edgeBuilder" | "layoutOptions" | "nodePorts" | "bundleOf"
 >;
 ```
 
 `useGraphData.updateGraph(graph, behavior)` takes `IRLayoutBehavior` rather than
 the full `IRModeDefinition`; a mode object satisfies it structurally, and the
-workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`/`getNodePorts`/`bundleOf`.
+workspace passes the active view's resolved `edgeBuilder`/`layoutOptions`/`nodePorts`/`bundleOf`.
 
 `IREdgeBuilder` (`src/utils/layout.ts`) captures how a mode turns a `GraphEdge`
 into a React Flow edge:
@@ -287,3 +269,23 @@ Mermaid parse the entire input as one document and do fail on invalid input. See
 A skipped line is exactly the "recovered from rather than understood" case that
 `IRParseResult.diagnostics` exists for, so this difference is now reportable rather than
 structurally invisible. The mode does not report it yet.
+
+## Node port preferences
+
+`IRModeDefinition` and `IRViewDefinition` expose optional `nodePorts(node)`;
+view resolution and `IRLayoutBehavior` carry it alongside `edgeBuilder` and
+`layoutOptions`. It returns preferred named top/bottom ports or `undefined`. Top preferences are
+absolute operand text offsets; without top preferences, arrivals use uniform
+spacing. Bottom preferences are absolute definition offsets or relative fractions
+of the outer box width. Named sources keep their edge's semantic handle id.
+LLVM supplies CFG successor fractions and Use-Def operand/def text positions
+through `src/irModes/llvmPorts.ts`; views inherit this callback unless overridden. No per-IR branch belongs in layout or the
+shared node renderer.
+
+`prepareNodePorts` builds visible routed edges and their node port layouts before
+measurement. Each target gets a node-local id encoded from the edge id; semantic
+handles in `GraphData` stay unchanged. Prepared layouts travel in React Flow
+`Node.data.portLayout`, not in parser or graph-builder payloads. The shared node
+wrapper and ELK consume the same layout, with ELK declaring `FIXED_POS` ports
+from measured sizes. Port ids use an injective encoding of `["port", nodeId, handleId]`. See `specs/graph-view.md` §4 for ordering,
+minimum widths, content updates, and container resizing.

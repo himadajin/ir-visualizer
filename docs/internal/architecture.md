@@ -37,7 +37,7 @@ flowchart TD
 - Layout converts `GraphData` plus **measured** node sizes to React Flow nodes/edges.
   ELK never sees an estimate; spacing constants live in `src/utils/spacing.ts` and are
   shared with the live router. ELK computes **node placement only**. Nested graphs are
-  compound ELK nodes and React Flow parent nodes (`contracts/graph-data.md`).
+  laid out by ELK from the innermost container outward and rendered as React Flow parent nodes (`contracts/graph-data.md`).
 - Edge geometry is not part of the layout result. `src/hooks/useEdgeRoutes.ts` runs one
   routing pass per graph over React Flow's live measured node rects, calling
   `src/utils/edgeRouter.ts`, and publishes the resulting points per edge id through a

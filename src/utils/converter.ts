@@ -1,4 +1,5 @@
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
+import type { NodePortLayout } from "../types/nodePorts";
 import type { GraphNode, GraphEdge } from "../types/graph";
 
 /** Default edge stroke. Graph grammar, not shell chrome. */
@@ -101,6 +102,7 @@ export const createReactFlowNode = (
     parentId?: string;
     width?: number;
     height?: number;
+    portLayout?: NodePortLayout;
   },
 ): Node => {
   const isGroup = node.nodeType === "graph-group";
@@ -120,6 +122,7 @@ export const createReactFlowNode = (
       language: node.language,
       blockLabel: node.blockLabel,
       astData: node.astData,
+      ...(options?.portLayout ? { portLayout: options.portLayout } : {}),
       ...(isGroup ? { obstacle: false } : {}),
     },
     type: nodeTypeToReactFlowType(node.nodeType),

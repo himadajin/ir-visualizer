@@ -179,3 +179,77 @@ describe("arrival assignment", () => {
     expect(arrivalHandleId('a"b')).not.toBe(arrivalHandleId("ab"));
   });
 });
+
+describe("departures and bundle identity — #86", () => {
+  it("separates Mermaid fan-out before and after quantization", () => {
+    const prepared = prepareNodePorts(graph, mermaidGraphEdgeBuilder);
+    const a = prepared.layouts.get("A")!;
+    const ports = a.ports.filter((p) => p.side === "bottom");
+    expect(ports).toHaveLength(2);
+    expect(
+      new Set(
+        prepared.edges
+          .filter((e) => e.source === "A")
+          .map((e) => e.sourceHandle),
+      ).size,
+    ).toBe(2);
+    for (const offset of [-0.51, 0, 0.49, 0.51]) {
+      const xs = ports.map((p) => Math.round(offset + portX(p, a.minWidth)));
+      expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(24);
+    }
+    expect(
+      prepareNodePorts(
+        { ...graph, edges: [...graph.edges].reverse() },
+        mermaidGraphEdgeBuilder,
+      ).layouts.get("A"),
+    ).toEqual(a);
+  });
+
+  it("groups only matching defined bundle ids at one source port", () => {
+    const prepared = prepareNodePorts(
+      graph,
+      codeGraphEdgeBuilder,
+      undefined,
+      (edge) => (edge.source === "A" ? "" : undefined),
+    );
+    expect(
+      prepared.layouts.get("A")!.ports.filter((p) => p.side === "bottom"),
+    ).toHaveLength(1);
+    const edges = prepared.edges.filter((e) => e.source === "A");
+    expect(edges[0].sourceHandle).toBe(edges[1].sourceHandle);
+    expect(edges.every((e) => e.data?.bundleId === "")).toBe(true);
+    expect(
+      prepared.edges.find((e) => e.source === "B")!.data?.bundleId,
+    ).toBeUndefined();
+  });
+
+  it("resolves real Use-Def fan-out through the registry while CFG remains unbundled", async () => {
+    const view = llvmMode.views[1];
+    const { graph } = await view.parse(`define i32 @f(i32 %a) {
+      %v = add i32 %a, 1
+      %w = add i32 %a, %v
+      ret i32 %w
+    }`);
+    const prepared = prepareNodePorts(
+      graph,
+      codeGraphEdgeBuilder,
+      llvmMode.nodePorts,
+      view.bundleOf,
+    );
+    expect(prepared.edges.every((e) => e.data?.bundleId === e.source)).toBe(
+      true,
+    );
+    const fanout = prepared.edges.filter(
+      (e) => e.source === prepared.edges[0].source,
+    );
+    expect(fanout.length).toBeGreaterThan(1);
+    expect(new Set(fanout.map((e) => e.sourceHandle)).size).toBe(1);
+    expect(
+      prepareNodePorts(
+        graph,
+        codeGraphEdgeBuilder,
+        llvmMode.nodePorts,
+      ).edges.every((e) => e.data?.bundleId === undefined),
+    ).toBe(true);
+  });
+});

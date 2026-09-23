@@ -83,6 +83,7 @@ export const llvmMode = {
       key: "use-def",
       label: "Use-Def",
       parse: parseUseDef,
+      bundleOf: (edge) => edge.source,
       layoutOptions: {
         "elk.layered.spacing.nodeNodeBetweenLayers": String(
           USE_DEF_NODE_NODE_BETWEEN_LAYERS,

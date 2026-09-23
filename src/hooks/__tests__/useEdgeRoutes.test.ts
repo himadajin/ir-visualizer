@@ -469,3 +469,124 @@ it("updates self-loop ports on a same-size edit, resize and drag", () => {
     expect(afterDrag.get(request.id)!.at(-1)).toEqual(request.targetPoint);
   }
 });
+
+describe("reservation-aware reuse — #86", () => {
+  const rects: RouteNodeRect[] = [
+    { id: "s", x: 0, y: 0, width: 120, height: 40 },
+    { id: "t", x: 200, y: 180, width: 120, height: 40 },
+    { id: "far-s", x: 4000, y: 0, width: 120, height: 40 },
+    { id: "far-t", x: 4000, y: 180, width: 120, height: 40 },
+  ];
+  const requests: RouteRequest[] = [24, 48, 72].map((x, i) => ({
+    id: String(i),
+    source: "s",
+    target: "t",
+    sourcePoint: { x, y: 40 },
+    targetPoint: { x: 200 + x, y: 180 },
+    sourceSide: "bottom",
+    targetSide: "top",
+  }));
+  requests.push({
+    ...requests[0],
+    id: "far",
+    source: "far-s",
+    target: "far-t",
+    sourcePoint: { x: 4060, y: 40 },
+    targetPoint: { x: 4060, y: 180 },
+  });
+
+  it("reuses unchanged local routes, including a distant independent component", () => {
+    const before = routeEdges(rects, requests);
+    const unchanged = routePass(
+      passStateOf(rects, requests, before),
+      rects,
+      requests,
+    );
+    for (const r of requests)
+      expect(unchanged.get(r.id)).toBe(before.get(r.id));
+    const changed = requests.map((r) =>
+      r.id === "0" ? { ...r, sourcePoint: { x: 96, y: 40 } } : r,
+    );
+    const after = routePass(
+      passStateOf(rects, requests, before),
+      rects,
+      changed,
+    );
+    expect(keyOf(after)).toBe(keyOf(routeEdges(rects, changed)));
+    expect(after.get("far")).toBe(before.get("far"));
+  });
+
+  it("propagates lane changes when an earlier edge is deleted or its bundle changes", () => {
+    const before = routeEdges(rects, requests);
+    for (const changed of [
+      requests.slice(1),
+      requests.map((r) => (r.id !== "far" ? { ...r, bundleId: "same" } : r)),
+    ]) {
+      const after = routePass(
+        passStateOf(rects, requests, before),
+        rects,
+        changed,
+      );
+      expect(keyOf(after)).toBe(keyOf(routeEdges(rects, changed)));
+      expect(after.get("2")).not.toEqual(before.get("2"));
+    }
+  });
+
+  it("includes new later stubs and changes to obstacle flags in the reuse proof", () => {
+    const before = routeEdges(rects, requests);
+    const extra = {
+      ...requests[0],
+      id: "z",
+      sourcePoint: { x: 96, y: 40 },
+      targetPoint: { x: 296, y: 180 },
+    };
+    const changed = [...requests, extra];
+    expect(
+      keyOf(routePass(passStateOf(rects, requests, before), rects, changed)),
+    ).toBe(keyOf(routeEdges(rects, changed)));
+    const obstacle = {
+      id: "obstacle",
+      x: 130,
+      y: 50,
+      width: 30,
+      height: 60,
+      obstacle: false,
+    };
+    const previousRects = [...rects, obstacle];
+    const previousRoutes = routeEdges(previousRects, requests);
+    const nextRects = [...rects, { ...obstacle, obstacle: true }];
+    expect(
+      keyOf(
+        routePass(
+          passStateOf(previousRects, requests, previousRoutes),
+          nextRects,
+          requests,
+        ),
+      ),
+    ).toBe(keyOf(routeEdges(nextRects, requests)));
+  });
+});
+
+it("does not reuse a map produced with different router options", () => {
+  const rects: RouteNodeRect[] = [
+    { id: "a", x: 0, y: 0, width: 80, height: 40 },
+    { id: "b", x: 150, y: 180, width: 80, height: 40 },
+  ];
+  const requests: RouteRequest[] = [
+    {
+      id: "edge",
+      source: "a",
+      target: "b",
+      sourcePoint: { x: 40, y: 40 },
+      targetPoint: { x: 190, y: 180 },
+      sourceSide: "bottom",
+      targetSide: "top",
+    },
+  ];
+  const before = routeEdges(rects, requests, { nodeMargin: 0 });
+  const fresh = routeEdges(rects, requests);
+  expect(keyOf(before)).not.toBe(keyOf(fresh));
+  expect(
+    keyOf(routePass(passStateOf(rects, requests, before), rects, requests)),
+  ).toBe(keyOf(fresh));
+});

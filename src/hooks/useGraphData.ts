@@ -99,6 +99,7 @@ export const useGraphData = () => {
         edgeBuilder: mode.edgeBuilder,
         layoutOptions: mode.layoutOptions,
         nodePorts: mode.nodePorts,
+        bundleOf: mode.bundleOf,
       }).then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
         if (generation !== layoutGenerationRef.current) return;
         setNodes(layoutedNodes);
@@ -120,6 +121,7 @@ export const useGraphData = () => {
         graph,
         mode.edgeBuilder,
         mode.nodePorts,
+        mode.bundleOf,
       );
       currentRef.current = { graph, mode, signature, ports: prepared.layouts };
 

@@ -219,8 +219,12 @@ result on `data.bundleId`; `useEdgeRoutes` copies that onto `RouteRequest.bundle
 (`contracts/edge-routing.md`). The registry is therefore consulted at build time only —
 nothing on the render path asks a mode a question.
 
-**Status: declared here, not yet in `src/irModes/types.ts`.** The field and the Use-Def
-implementation land with #88; the router-side guarantee it feeds lands with #86.
+**Implemented with #86.** Bundle assignment is applied before port preparation
+and retained through layout, content updates, and live route requests. Only
+distribution-tree geometry and junction marks remain in #88.
+
+Pinned by: `src/utils/__tests__/nodePorts.test.ts`,
+`src/hooks/__tests__/useEdgeRoutes.test.ts`.
 
 ## What consumes the registry
 

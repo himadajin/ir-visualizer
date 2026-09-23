@@ -19,10 +19,8 @@ boundary.
 The router implementation and its test suite are written against this boundary. It is
 frozen — names and signature are reproduced here verbatim and must not be "improved".
 
-Two fields are fixed here ahead of a later payer so the boundary is decided once rather
-than reopened: `RouteRequest.bundleId` is not in `src/types/edgeRouting.ts` yet and lands
-with #86; `RouteNodeRect.obstacle` **is** in the source (default `true`). Everything else
-in the block is what the source declares today.
+The boundary includes `RouteRequest.bundleId` and `RouteNodeRect.obstacle`
+(default `true`). Bundle identity is supplied by the registry, never inferred by the router.
 
 ```ts
 // src/types/edgeRouting.ts
@@ -72,15 +70,15 @@ export const routeEdges: (
   options?: EdgeRouterOptions,
 ) => Map<string, Point[]>; // keyed by RouteRequest.id, >= 2 points, orthogonal
 
-// Locality made usable by a caller — see Per-edge regions, Narrowing a pass.
+// Locality made usable by a caller — see Per-edge regions, Reusing a pass.
 export const ROUTE_REGION_MARGIN: number; // 192
 export const routeRegionOf: (
   request: RouteRequest,
   options?: EdgeRouterOptions,
 ) => RouteRegion;
 
-// Whether an existing result may be reused under the region rules. A false
-// answer is conservative; every route uses the requested attachments.
+// Geometric prerequisite for reuse; reservation dependencies must also match.
+// A false answer is conservative; every route uses the requested attachments.
 export const isRouteLocal: (
   request: RouteRequest,
   points: Point[],
@@ -91,12 +89,24 @@ export const isRouteLocal: (
 // its input changed in the terms the router will actually see. Idempotent.
 export const quantizeRect: (rect: RouteNodeRect) => RouteNodeRect;
 export const quantizeRequest: (request: RouteRequest) => RouteRequest;
+
+export interface RoutePassState {
+  rects: ReadonlyMap<string, RouteNodeRect>;
+  requests: ReadonlyMap<string, RouteRequest>;
+  routes: ReadonlyMap<string, Point[]>;
+}
+export const routeEdgesWithReuse: (
+  nodes: RouteNodeRect[],
+  requests: RouteRequest[],
+  previous: RoutePassState,
+) => Map<string, Point[]>; // default options, same result as routeEdges
 ```
 
 `routeEdges` is a **pure function**: nothing here depends on React Flow or ELK, and no
 side effect crosses the boundary in either direction. Rects whose `obstacle` is not
-`false` are the only obstacles; there is no notion of edges, labels, or anything else
-blocking a route. A rect with `obstacle: false` still names an endpoint — missing-node
+`false` are the solid obstacles. Other bundles reserve directional lane bands:
+parallel runs are separated, while perpendicular crossings remain legal. Labels
+and markers do not participate in routing. A rect with `obstacle: false` still names an endpoint — missing-node
 and self-loop look it up like any other — but it is not inflated, does not contribute
 grid lines, and does not block. That is how a container frame can be an edge endpoint
 without sealing its interior (`contracts/graph-data.md`, Hierarchy). Routes are not
@@ -339,19 +349,15 @@ checks partial-pass equality, including a distant wall opening a formerly imposs
 - **Determinism.** Identical input rects and requests always produce byte-identical
   points, with no dependence on the iteration order of either the `nodes` array or the
   `requests` array — reordering either changes no individual route.
-- **Locality.** A route found on its own region (see Per-edge regions) is a function of the
-  obstacle rects intersecting that region and of its own request — of nothing else in the
-  input. Adding, removing, moving or resizing any other rect, including a non-obstacle
-  frame that is not an endpoint of this request, leaves that polyline byte-identical, so an
-  edge changes only when something near it changed. This is the guarantee that makes the router
-  _stable_ as well as deterministic: determinism says the same input gives the same output,
-  which a search over a graph-wide grid satisfies while still letting an unrelated node's
-  one-pixel move flip a route through the tie-break. Locality is what rules that out, and it
-  is a property of the pure function, not of a cache — no route is ever kept because it was
-  the previous answer. It is claimed for searched routes on the first rung and validated
-  self-loop shapes
-  inside the region. It is **not** claimed for whole-graph retries or final fallbacks: a
-  distant obstacle can open a route and replace a previously necessary fallback.
+- **Locality with route dependencies.** A region-local route depends on its request,
+  nearby obstacle rectangles, all other bundles' fixed endpoint stubs reaching the
+  region, and earlier requests' reserved segments reaching it (including their
+  12 px parallel clearance bands). Requests are processed in ascending edge-id
+  order, using JavaScript string comparison, independent of input array order.
+  A changed earlier route can therefore affect later routes transitively. A route
+  with unchanged dependencies remains byte-identical; a distant independent
+  component cannot perturb it. Whole-graph retries and final fallbacks must be
+  retried and do not carry this reuse guarantee.
 - **A fixed tie-break total order.** When multiple candidate paths are equally cheap, the
   router picks among them by, in order: (1) total cost (`length + bendPenalty * turns`),
   (2) number of bends, (3) the point sequence compared lexicographically by `(x, y)` — a
@@ -384,14 +390,11 @@ checks partial-pass equality, including a distant wall opening a formerly imposs
   "the last one wins": the last rect with a given id is the one routed against, and the
   last request with a given id is the one left in the returned map.
 
-Every guarantee above is a property of one polyline in isolation. How two of them may
-relate is the separate question below, and it is not yet answered by the implementation.
+The following guarantees describe relationships between polylines in the same pass.
 
 ## Bundles and separation
 
-Nothing above says whether two returned polylines may run along the same pixels. Today they
-may and do: every route is searched on the same grid, so unrelated edges coincide by
-accident. `specs/graph-view.md` §4 fixes what such an overlap is allowed to mean — shared
+Unrelated edges must remain distinguishable even when they use the same corridor. `specs/graph-view.md` §4 fixes what such an overlap is allowed to mean — shared
 geometry means one value carried by several edges — and this section is that rule in the
 router's own terms. `bundleId` is how the caller states it; the router never asks what an
 IR is.
@@ -414,14 +417,35 @@ nothing but its departure point, yet is correctly rendered. "Overlap iff same va
 reading given to the picture; "share only if same bundle" is what the router can be held
 to.
 
-**Status: not held.** The router ignores `bundleId`; the guarantee and the unit tests that
-pin it land with #86. CFG successors have distinct departure ports (#67), and
-visible routed edges have distinct target handles (#87; `specs/graph-view.md` §4),
-including after input quantization. These attachments do not prevent unrelated
-routes from sharing segments elsewhere. (#88, the distribution tree, is the other half of the picture — the
-sharing this contract permits but does not yet produce.) Until #86, an edge overlap in the
-output is not a contract violation but unspecified behavior, so `docs/README.md`'s "code
-that violates a contract is a bug" does not apply to it.
+Parallel segments from different bundles whose projections overlap by positive
+length stay at least `EDGE_LANE_GAP = 12` flow pixels apart, including stubs and
+self-loops. Perpendicular point crossings and isolated endpoint contacts are allowed.
+Candidate lanes and detours respect node clearance; congestion does not authorize
+reducing the lane gap. The request-id order chooses which route reserves a lane
+first; within each search the cost/bends/point-sequence tie-break above applies.
+If this allocation leaves an otherwise routable edge without a lane, the router
+repairs the assignment by promoting that edge ahead of its earlier blockers.
+Candidate orders are visited deterministically (failed-edge order, then blocker
+order); an already visited order is never retried. Repaired passes carry global
+route dependencies and are recomputed rather than reused as local searches.
+All requests' fixed stubs are reserved before any route is selected, so an earlier
+route cannot consume a later request's attachment corridor.
+
+**Geometrically impossible inputs.** Fixed stubs that already violate separation,
+blocked attachments, or insufficient free space can make all constraints impossible.
+The deterministic fallback keeps edges visible, preserving the unconditional shape
+and attachment guarantees; separation and obstacle clearance are conditional in
+these cases. A test claiming this exception must establish the obstruction, not
+merely recognize a fallback shape. The default LLVM CFG must satisfy separation
+without exceptions. A search failure alone is not evidence of impossibility.
+
+CFG and Mermaid assign separate departure points to non-bundled edges. Use-Def
+supplies bundle ids from its registry entry, permitting its shared departure stub.
+Distribution trees and junction marks remain #88; this change does not force
+same-bundle routes to share any additional geometry.
+
+Pinned by: `src/utils/__tests__/edgeRouter.separation.test.ts`,
+`src/utils/__tests__/nodePorts.test.ts`, `src/hooks/__tests__/useEdgeRoutes.test.ts`.
 
 ## Self-loops (right-side preference)
 
@@ -458,37 +482,22 @@ React context; `RoutedEdge` looks up its own entry by edge id and never calls th
 itself. **There is one routing path**, during a drag as much as at rest — no incident-only
 mode, and no catch-up pass when a drag stops.
 
-### Narrowing a pass
+### Reusing a pass
 
-A caller that holds the previous pass's input and output may route a **subset** of the
-requests and reuse the rest. Locality is what makes that a pure optimization rather than a
-second answer: an edge whose region nothing near has changed would be re-routed to the
-polyline the caller already holds, so computing it and keeping it are indistinguishable.
-`routeRegionOf(request)` exports the region rule so the caller asks the router where an edge
-looks rather than reimplementing the box.
+`routeEdgesWithReuse(nodes, requests, previous)` uses the same routing engine and
+fixed request order as `routeEdges`; it accepts the previous quantized rectangles,
+requests, and routes. It returns exactly the full-pass result, reusing a local
+polyline only when its request, endpoint rectangles, nearby obstacles, and local
+reservation segments are unchanged. Both the old and new reservation sets are
+compared: deletion, movement, bundle changes, and transitive route changes count.
+The returned map also carries the deterministic reuse eligibility of the pass;
+copying it into a plain map or supplying a result produced with explicit router
+options conservatively disables reuse. Repaired passes are
+never reused from their final geometry alone. The complete request set is always supplied. Routing an isolated affected subset
+is invalid because it would omit occupied lanes.
 
-The subset must be a superset of what can actually change, which takes three clauses — the
-third is the one that is easy to miss:
+`useEdgeRoutes` performs this operation once per animation frame with changed
+geometry. Whole-graph and fallback answers are retried. There is no incident-only
+drag path and no catch-up pass after dropping a node.
 
-1. a request that is **new, or whose own record changed** (either point, either side, either
-   endpoint id) — its region moved with it;
-2. a request whose region a changed rect reaches **in either its old or its new position** —
-   the space a node vacates matters as much as the space it takes, and an edge that was
-   detouring around it must be allowed to straighten;
-3. a request whose **previous polyline has a point outside its own region**, or equals its
-   final fallback. Neither can be reused on the strength of Locality. `isRouteLocal`
-   implements this conservative check: a shape coinciding with the deterministic fallback
-   is re-routed even if it happened to be found by search. This avoids adding hidden mutable
-   routing state or changing the points-map return type.
-
-A narrowed pass still passes the **complete** `nodes` array: a route must avoid every
-obstacle whether or not that obstacle moved.
-
-This is not a licence to keep a stale route. What the old drag-time split did — route only
-the edges incident to the dragged node, then a full pass on drop — is not an instance of this
-rule: the edges it left out were routing around a rect the dragged node had already vacated,
-which is clause 2, and the "full pass on drag stop" was the moment they all caught up at once.
-`src/hooks/useEdgeRoutes.ts` implements the rule, and
-`src/hooks/__tests__/useEdgeRoutes.test.ts` pins the only property that matters: a narrowed
-pass equals the full pass entry for entry. See `specs/graph-view.md` §4 for the frame budget
-that makes the narrowing worth having.
+Pinned by: `src/hooks/__tests__/useEdgeRoutes.test.ts`.

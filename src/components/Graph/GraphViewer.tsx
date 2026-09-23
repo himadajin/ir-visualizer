@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
-  useNodesInitialized,
   useReactFlow,
   useStoreApi,
   type Node,
@@ -13,6 +12,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import RoutedEdge from "./RoutedEdge";
+import { withNodePorts } from "./common/withNodePorts";
 
 import CodeNode from "./CodeNode";
 import GraphGroupNode from "./GraphGroupNode";
@@ -66,19 +66,37 @@ const collectMeasuredSizes = (
 const InitialFit = ({
   padding,
   layoutPending,
+  nodes,
 }: {
   padding: FitViewPadding;
   layoutPending: boolean;
+  nodes: Node[];
 }) => {
-  const nodesInitialized = useNodesInitialized();
+  const store = useStoreApi();
   const { fitView } = useReactFlow();
   const hasFitted = useRef(false);
   useEffect(() => {
-    if (!hasFitted.current && nodesInitialized && !layoutPending) {
+    if (layoutPending || nodes.length === 0 || hasFitted.current) return;
+    const tryFit = () => {
+      if (hasFitted.current) return;
+      const lookup = store.getState().nodeLookup;
+      if (
+        !nodes.every((node) => {
+          const internal = lookup.get(node.id);
+          return (
+            internal?.internals.userNode === node &&
+            (internal.measured.width ?? 0) > 0 &&
+            (internal.measured.height ?? 0) > 0
+          );
+        })
+      )
+        return;
       hasFitted.current = true;
       void fitView({ padding, duration: 0 });
-    }
-  }, [nodesInitialized, layoutPending, fitView, padding]);
+    };
+    tryFit();
+    return store.subscribe(tryFit);
+  }, [nodes, layoutPending, fitView, padding, store]);
   return null;
 };
 
@@ -137,9 +155,16 @@ const MeasureAndLayout = ({
 // nodeType); graphGroup is the generic container. Every other renderer
 // comes from the IR mode registry, so this component never needs to know
 // about a specific IR.
-const nodeTypes = IR_MODE_LIST.reduce(
+const registeredNodeTypes = IR_MODE_LIST.reduce(
   (acc, mode) => ({ ...acc, ...mode.nodeTypes }),
   { codeNode: CodeNode, graphGroup: GraphGroupNode },
+);
+
+const nodeTypes = Object.fromEntries(
+  Object.entries(registeredNodeTypes).map(([key, Component]) => [
+    key,
+    withNodePorts(Component),
+  ]),
 );
 
 interface GraphViewerProps {
@@ -228,7 +253,11 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
           // fit actually contain the graph (specs/graph-view.md §6.1).
           minZoom={0.1}
         >
-          <InitialFit padding={fitViewPadding} layoutPending={layoutPending} />
+          <InitialFit
+            padding={fitViewPadding}
+            layoutPending={layoutPending}
+            nodes={nodes}
+          />
           <MeasureAndLayout
             layoutPending={layoutPending}
             nodeIds={nodeIds}

@@ -76,7 +76,8 @@ export interface GraphEdge {
   target: string;
   label?: string;
   type?: string;
-  // Node-local port ids, shared by all modes.
+  // Semantic handles (CFG successors, Use-Def and SelectionDAG). Routed
+  // edges receive separate per-edge arrival handles during render preparation.
   sourceHandle?: string;
   targetHandle?: string;
   /** SelectionDAG chain/glue dependency edge. */

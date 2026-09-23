@@ -74,7 +74,7 @@ export const llvmMode = {
     llvmUseDefValue: LLVMUseDefValueNode,
   },
   edgeBuilder: codeGraphEdgeBuilder,
-  getNodePorts: getLLVMNodePorts,
+  nodePorts: getLLVMNodePorts,
   // views[0] shares parse/edgeBuilder with the top-level fields per the
   // registry contract ("Views"): it IS the default view.
   views: [

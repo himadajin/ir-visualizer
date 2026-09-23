@@ -415,10 +415,10 @@ reading given to the picture; "share only if same bundle" is what the router can
 to.
 
 **Status: not held.** The router ignores `bundleId`; the guarantee and the unit tests that
-pin it land with #86. Search behavior is not the only thing in the way — two facts about
-the handles produce shared geometry whatever the search does, and neither is fixable here:
-in-edges can still end at one top-center handle (#87), so those routes share a
-tail before the router has any say. CFG successors have distinct departure ports (#67). (#88, the distribution tree, is the other half of the picture — the
+pin it land with #86. CFG successors have distinct departure ports (#67), and
+visible routed edges have distinct target handles (#87; `specs/graph-view.md` §4),
+including after input quantization. These attachments do not prevent unrelated
+routes from sharing segments elsewhere. (#88, the distribution tree, is the other half of the picture — the
 sharing this contract permits but does not yet produce.) Until #86, an edge overlap in the
 output is not a contract violation but unspecified behavior, so `docs/README.md`'s "code
 that violates a contract is a bug" does not apply to it.

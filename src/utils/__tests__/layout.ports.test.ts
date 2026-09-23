@@ -4,6 +4,7 @@ import { getLayoutedElements } from "../layout";
 import { llvmMode } from "../../irModes/llvmMode";
 import { parseLLVM } from "../../parser/llvm";
 import type { GraphData } from "../../types/graph";
+import { arrivalHandleId, elkPortId } from "../nodePorts";
 
 const { layout } = vi.hoisted(() => ({
   layout: vi.fn(async (graph: ElkNode) => graph),
@@ -32,42 +33,41 @@ done:
     const entry = elk.children!.find(
       (node) => node.id === "func:f:block:entry",
     )!;
-    expect(entry.layoutOptions).toEqual({ "elk.portConstraints": "FIXED_POS" });
+    expect(entry.layoutOptions).toMatchObject({
+      "elk.portConstraints": "FIXED_POS",
+    });
     expect(entry.ports!.map(({ x, y }) => ({ x, y }))).toEqual([
-      { x: 120, y: 0 },
+      { x: 80, y: 0 },
+      { x: 160, y: 0 },
       { x: 60, y: 80 },
       { x: 120, y: 80 },
       { x: 180, y: 80 },
     ]);
     const done = elk.children!.find((node) => node.id === "func:f:block:done")!;
     expect(done.ports!.map(({ x, y }) => ({ x, y }))).toEqual([
-      { x: 120, y: 0 },
+      { x: 80, y: 0 },
+      { x: 160, y: 0 },
       { x: 120, y: 80 },
     ]);
-    const byNode = new Map(elk.children!.map((node) => [node.id, node]));
     graph.edges.forEach((edge, index) => {
-      const source =
-        edge.sourceHandle === undefined
-          ? edge.source
-          : byNode
-              .get(edge.source)!
-              .ports!.find(
-                (port) => JSON.parse(port.id)[1] === edge.sourceHandle,
-              )!.id;
-      const target =
-        edge.targetHandle === undefined
-          ? edge.target
-          : byNode
-              .get(edge.target)!
-              .ports!.find(
-                (port) => JSON.parse(port.id)[1] === edge.targetHandle,
-              )!.id;
+      const source = elkPortId(edge.source, edge.sourceHandle ?? "out");
+      const target = elkPortId(edge.target, arrivalHandleId(edge.id));
       expect(elk.edges![index]).toMatchObject({
         sources: [source],
         targets: [target],
       });
-      expect(result.edges[index].sourceHandle).toBe(edge.sourceHandle);
-      expect(result.edges[index].targetHandle).toBe(edge.targetHandle);
+      expect(result.edges[index].sourceHandle).toBe(edge.sourceHandle ?? "out");
+      expect(result.edges[index].targetHandle).toBe(arrivalHandleId(edge.id));
+      expect(
+        elk.children!.find((node) => node.id === edge.source)!.ports,
+      ).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: source })]),
+      );
+      expect(
+        elk.children!.find((node) => node.id === edge.target)!.ports,
+      ).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: target })]),
+      );
     });
     expect(
       result.edges.find((edge) => edge.source === edge.target)?.data
@@ -87,8 +87,13 @@ done:
     const elk = layout.mock.calls[0][0];
     const ids = elk
       .children!.flatMap((node) => node.ports ?? [])
-      .map((port) => JSON.parse(port.id)[1]);
-    expect(ids).toEqual(expect.arrayContaining(["u-a", "u-v", "def"]));
+      .map((port) => (JSON.parse(port.id) as string[])[2]);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        ...graph.edges.map((edge) => arrivalHandleId(edge.id)),
+        "def",
+      ]),
+    );
     expect(
       elk
         .children!.filter((node) => node.ports)
@@ -118,8 +123,12 @@ done:
       graph,
       new Map(graph.nodes.map((node) => [node.id, { width: 100, height: 40 }])),
       {
-        getNodePorts: (node) => [
-          { id: node.id === "a" ? "b::c" : "c", x: 50, y: 0 },
+        nodePorts: (node) => [
+          {
+            id: node.id === "a" ? "b::c" : "c",
+            x: 50,
+            side: node.id === "a" ? "bottom" : "top",
+          },
         ],
       },
     );

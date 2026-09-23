@@ -72,18 +72,22 @@ DOM. The hook owns the measure pass that produces that map (§5).
 - Rank direction: explicit option → `GraphData.direction` → `"TD"`. The five
   `GraphDirection` values map to ELK `elk.direction` as `TD`/`TB` → `DOWN`,
   `BT` → `UP`, `LR` → `RIGHT`, `RL` → `LEFT`. Any other value is `DOWN`.
-- Nested graphs (`contracts/graph-data.md`, Hierarchy) are laid out as ELK compound nodes.
-  The root keeps `elk.hierarchyHandling: INCLUDE_CHILDREN`. Each container with children
-  is laid out as its own layered graph (`elk.hierarchyHandling: SEPARATE_CHILDREN`) so a
-  container can have a different rank direction from its parent. An empty container is a
-  leaf as far as ELK is concerned and uses its measured chrome as its size. When a
-  container carries `astData.direction`, that value is set as `elk.direction` on that
-  compound node; when it is omitted, layout copies the parent's resolved direction onto
-  the node. Container size is an ELK **output**: children plus `CONTAINER_PADDING` on the
-  sides and bottom plus the measured header height as top padding. The measured chrome is
-  a `MINIMUM_SIZE` so a title wider than the children is not clipped. React Flow nodes
-  receive `parentId`, parent-relative coordinates, and `extent: parent` after this pass;
-  container nodes also receive the ELK width/height so the frame matches the packed box.
+- Nested graphs (`contracts/graph-data.md`, Hierarchy) are laid out from the
+  innermost container outward. Each container's children use its resolved rank
+  direction; omitted directions inherit the parent's. Once its children are
+  placed, the resulting container box is a fixed-size node in its parent's
+  layout. This makes port positions known before the parent layout and avoids
+  ELK resizing or relocating compound ports. Cross-hierarchy edges order the
+  containing siblings at their common parent; the live router still connects
+  the actual endpoint handles. Edges between a frame and its descendants do
+  not constrain their relative placement.
+- Container size is an ELK output: children plus `CONTAINER_PADDING` on the sides
+  and bottom plus the fixed header-band height and frame borders as top padding
+  (`NODE_HEADER_HEIGHT + 2 * NODE_BORDER_WIDTH`), with measured
+  chrome/arrival width as the minimum. Reset Layout never reuses the full
+  container height as header padding, so repeated resets do not enlarge it. An empty container uses measured chrome.
+  React Flow receives `parentId`, parent-relative coordinates, `extent: parent`,
+  and the computed container width/height.
 - `elk.edgeRouting: ORTHOGONAL` stays set, because ELK consults edge routing when ordering
   nodes within a layer and it therefore improves **placement**. The route points ELK
   produces are **discarded**: they are not stored on the React Flow edges.
@@ -91,13 +95,10 @@ DOM. The hook owns the measure pass that produces that map (§5).
   extra layer spacing). _(merging: observed, untested)_
 - Node boxes given to ELK are the **measured** sizes from §5, quantized to the same
   integer lattice the router uses (`contracts/edge-routing.md`, Input quantization —
-  a size is a rect at the origin). No estimated size is an ELK input. LLVM CFG nodes declare successor-specific bottom `FIXED_POS` ports
-  (`specs/llvm-ir.md` §4.2). Use-Def instruction nodes declare ports at operand text offsets
-  (`specs/llvm-use-def-view.md` §4); those offsets stay font-metric estimates, clamped
-  to the measured width. The ports shape placement and decide which handle an edge
-  attaches to. Port definitions come from the mode registry
-  (`contracts/ir-mode-registry.md`, Fixed-position node ports).
-  _(Pinned by: `src/utils/__tests__/layout.ports.test.ts`.)_
+  a size is a rect at the origin). No estimated size is an ELK input. All
+  routed nodes declare the same ports used by their rendered handles (§4). All nodes use
+  `FIXED_POS`; container ports are computed from their completed child layout. Use-Def operand preferences
+  remain font-metric estimates, resolved with the separation rule below.
 - **Spacing promise.** After a full layout, the gap between adjacent live node rects in
   the same layer or consecutive layers is **at least** the configured node spacing
   (`NODE_NODE_SPACING` / `NODE_NODE_BETWEEN_LAYERS` in `src/utils/spacing.ts`). ELK's
@@ -109,6 +110,11 @@ DOM. The hook owns the measure pass that produces that map (§5).
   counterparts) are derived from `NODE_MARGIN` so they cannot drift from the clearance
   the router actually keeps, even though ELK's own routes are discarded. Lane width for
   non-bundle separation is not in that module yet — it lands with #86.
+- For an `UP` layered graph, fixed top arrivals/bottom departures must not make
+  ELK interpret every node as feedback and invert the requested ranking. Its
+  children are ordered topologically (stable id tie-break; break cycles at the
+  smallest remaining id) and use `MODEL_ORDER` cycle breaking. Nested directions
+  apply this rule independently. Pinned by: `src/utils/__tests__/layout.test.ts`.
 - The layout is also where the structural back-edge flag is decided (§4).
 
 > Pinned by: `src/utils/__tests__/layout.test.ts`,
@@ -155,12 +161,44 @@ channel: `getLayoutedElements` stamps `bundleOf(edge)` onto the React Flow edge'
 (`contracts/edge-routing.md`). The router is never told what an IR is.
 
 **These rules are not yet held.** They are the target the router is being moved toward, and
-three things stand in the way: in-edges can share a top-center handle (#87),
-unrelated routes coincide by
-accident on the shared search grid (#86), and same-value fan-out is not drawn as a trunk at
-all (#88). CFG successors now have separate departure ports (#67), including
-self-loops; this does not guarantee separation further along a route. Until those
-remaining changes land, an overlap in the rendered graph means nothing.
+two things stand in the way: unrelated routes coincide by accident on the shared
+search grid (#86), and same-value fan-out is not drawn as a trunk at all (#88).
+CFG successors have separate departure ports (#67), including self-loops, and
+routed edges have separate arrivals (#87). These attachments do not guarantee
+separation further along a route. Until the remaining changes land, an overlap
+in the rendered graph means nothing.
+
+**Arrival points.** Every visible `routed` edge has its own target handle on the
+node's top edge, including parallel edges, self-loops, and edges into containers.
+Hidden Mermaid links reserve no arrival slot; SelectionDAG keeps its operand beziers.
+Existing terminal marker kinds (including no marker) are preserved.
+
+- Generic arrivals run left-to-right in source-id, then edge-id order (code-unit
+  lexical order), at fractions `(i + 1) / (count + 1)` of the node width. Dragging
+  never reorders them. One arrival is centered.
+- Use-Def arrivals prefer the operand's first text occurrence, ordered by that
+  position; unresolved operands follow resolved operands in stable edge order.
+  Each position is rounded up and moved right only as needed to keep the first
+  arrival at least 24 px from the left border and subsequent arrivals at least
+  24 px apart. The node reserves another 24 px after the last arrival. A missing
+  text position takes the next available slot, never a shared center fallback.
+- The minimum gap is `ARRIVAL_GAP = 24` flow px, sufficient for the current arrow,
+  circle, and cross markers, including thick Mermaid strokes. Generic node
+  minimum width is `(count + 1) * ARRIVAL_GAP`. Nodes grow to satisfy this minimum;
+  text wrapping limits continue to apply to content. This also keeps arrivals
+  distinct after the router's integer quantization. Node overlap introduced by
+  dragging and crossings from other routes are not a promise of marker visibility.
+- Port identities and preferences are prepared before the hidden measure mount,
+  passed as rendering data, and used by both ELK and React Flow. Content-only
+  updates refresh them and remeasure handles even when the node box did not
+  change. Reset Layout uses the same assignment. Mode-specific preferences come
+  from the IR mode registry; generic layout and rendering contain no IR cases.
+- Separation here concerns the target attachments and terminal markers. Shared
+  segments elsewhere remain the scope of #86; CFG departures follow `llvm-ir.md` §4.2.
+
+> Pinned by: `src/utils/__tests__/nodePorts.test.ts`,
+> `src/utils/__tests__/layout.test.ts`, `src/hooks/__tests__/useGraphData.test.ts`,
+> `src/components/Graph/common/__tests__/withNodePorts.test.tsx`.
 
 - **Inputs** are React Flow's measured rects (`internals.positionAbsolute`,
   `measured.width` / `measured.height`) and the live handle positions. Because those track
@@ -329,6 +367,10 @@ measured after the nodes were mounted, quantized to the router's integer lattice
    `applyLayout`. `getLayoutedElements` runs ELK on the quantized sizes and commits
    positions, parent membership, and container sizes. Edges appear with that commit. A
    result whose generation is stale is discarded, as in §2.
+
+The initial viewport fit waits until React Flow's store has adopted the committed
+positioned nodes and measured them, so it cannot fit the hidden origin boxes.
+Pinned by: `e2e/smoke.spec.ts` (dragging a laid-out node).
 
 Until step 3 commits, **no positioned graph is shown** — not an estimate-based preview,
 and not a pile of overlapping origin nodes. Reset Layout skips this hide: the graph

@@ -118,16 +118,18 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   orthogonal router (`specs/graph-view.md` §4), not from ELK, and a loop-carried
   phi edge — whose source ends up at or below its target — is flagged and styled
   as a back edge from the final layout geometry without any special casing here.
-- **Per-operand ports**: an instruction card exposes one target `Handle`
-  (id `u-<name>`) per entry in `uses`, horizontally positioned at the first
-  occurrence of `%name` in the monospace text (measured with `getFontMetrics` char
-  width, shifted right by the inline badge's width plus its gap), on the card's top
-  edge; and a source
-  `Handle` under the `def` name on the bottom edge. A name that cannot be
-  located in the text falls back to the default centered handle. The layout
-  declares the same offsets as ELK `FIXED_POS` ports so routed edges aim at the
-  exact operand slot — a phi's incoming edges visibly land on their own
-  `[ %v, %bb ]` operands. _(observed, untested — visual)_
+- **Per-operand ports**: each distinct used value retains its semantic
+  `GraphEdge.targetHandle` (`u-<name>`). The registry supplies the preferred
+  position at its first text occurrence, estimated with font metrics and the
+  badge offset. The shared arrival assignment (`graph-view.md` §4) gives each
+  rendered edge a unique handle, preserves operand order, and shifts arrivals
+  right when needed for marker separation. Missing text positions receive
+  separate slots after the located operands. The card grows to contain them.
+  The defining name keeps its bottom `def` source port. ELK and the node use the
+  same resolved positions. Repeated uses of one value still produce one edge;
+  this does not change PHI value aggregation (§3.1).
+  Pinned by: `src/utils/__tests__/nodePorts.test.ts`,
+  `src/utils/__tests__/layout.test.ts`.
 - Instruction nodes render as single-row code cards in the shared node frame
   (`specs/graph-view.md` §7): a block badge chip showing
   `blockLabel` sits inline to the **left** of the code line, tinted by

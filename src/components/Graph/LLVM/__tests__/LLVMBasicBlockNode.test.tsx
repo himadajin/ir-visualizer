@@ -4,6 +4,10 @@ import { render } from "@testing-library/react";
 import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import LLVMBasicBlockNode from "../LLVMBasicBlockNode";
 import type { LLVMBasicBlock } from "../../../../ast/llvmAST";
+import { withNodePorts } from "../../common/withNodePorts";
+import { prepareNodePorts, arrivalHandleId } from "../../../../utils/nodePorts";
+import { llvmMode } from "../../../../irModes/llvmMode";
+import { getCFGSuccessors } from "../../../../graphBuilder/llvmCFGSuccessors";
 
 const { updateNodeInternals } = vi.hoisted(() => ({
   updateNodeInternals: vi.fn(),
@@ -48,16 +52,41 @@ const block: LLVMBasicBlock = {
     ],
   },
 };
-const view = (astData = block) => (
-  <ReactFlowProvider>
-    <LLVMBasicBlockNode {...props} data={{ astData }} />
-  </ReactFlowProvider>
-);
+const PortNode = withNodePorts(LLVMBasicBlockNode);
+const view = (astData = block) => {
+  const prepared = prepareNodePorts(
+    {
+      nodes: [
+        { id: "block", label: "entry", nodeType: "llvm-basicBlock", astData },
+        { id: "header", label: "f" },
+      ],
+      edges: [
+        { id: "entry", source: "header", target: "block" },
+        ...getCFGSuccessors(astData.terminator).map(({ id }) => ({
+          id,
+          source: "block",
+          target: "block",
+          sourceHandle: id,
+        })),
+      ],
+    },
+    llvmMode.edgeBuilder,
+    llvmMode.nodePorts,
+  );
+  return (
+    <ReactFlowProvider>
+      <PortNode
+        {...props}
+        data={{ astData, portLayout: prepared.layouts.get("block") }}
+      />
+    </ReactFlowProvider>
+  );
+};
 
 beforeEach(() => updateNodeInternals.mockClear());
 
 describe("CFG handles", () => {
-  it("renders only the named departures in source order and one centered target", () => {
+  it("renders named departures in source order and distinct targets for each input", () => {
     const { container } = render(view());
     const handles = [
       ...container.querySelectorAll<HTMLElement>(".react-flow__handle.source"),
@@ -68,17 +97,24 @@ describe("CFG handles", () => {
       "cfg:case:2",
     ]);
     expect(handles.map((handle) => handle.style.left)).toEqual([
-      "calc(25% - 0.5px)",
-      "calc(50% + 0px)",
-      "calc(75% + 0.5px)",
+      "25%",
+      "50%",
+      "75%",
     ]);
     expect(handles.every((handle) => handle.style.opacity === "0")).toBe(true);
     const targets = container.querySelectorAll<HTMLElement>(
       ".react-flow__handle.target",
     );
-    expect(targets).toHaveLength(1);
-    expect(targets[0].dataset.handleid).toBe("cfg:in");
-    expect(targets[0].style.left).toBe("50%");
+    expect(targets).toHaveLength(4);
+    expect([...targets].map((handle) => handle.dataset.handleid)).toEqual(
+      ["cfg:case:1", "cfg:case:2", "cfg:default", "entry"].map(arrivalHandleId),
+    );
+    expect([...targets].map((handle) => handle.style.left)).toEqual([
+      "20%",
+      "40%",
+      "60%",
+      "80%",
+    ]);
   });
 
   it("remeasures a same-size reorder or renamed port without moving the node", () => {

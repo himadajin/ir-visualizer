@@ -1,6 +1,7 @@
-import type { ComponentType } from "react";
+import { useMemo, type ComponentType } from "react";
 import { ReactFlow, ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { withNodePorts } from "./withNodePorts";
 
 interface NodeStoryCanvasProps {
   nodeType: string;
@@ -26,6 +27,10 @@ export function NodeStoryCanvas({
   height = 240,
   data,
 }: NodeStoryCanvasProps) {
+  const nodeTypes = useMemo(
+    () => ({ [nodeType]: withNodePorts(component) }),
+    [nodeType, component],
+  );
   const nodes = [
     {
       id: "preview",
@@ -41,7 +46,7 @@ export function NodeStoryCanvas({
         <ReactFlow
           nodes={nodes}
           edges={[]}
-          nodeTypes={{ [nodeType]: component }}
+          nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.3 }}
           panOnDrag={false}

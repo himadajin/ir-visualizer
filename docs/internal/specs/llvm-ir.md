@@ -382,21 +382,22 @@ input, although not valid LLVM) adds `:occurrence:<n>` to each later occurrence'
 handle and edge variant, where `n` counts earlier cases with that value. This
 keeps handles and edges unique even when those cases target the same block.
 Handle ids are local to the source node; ELK namespaces them by node id using an
-injective pair encoding. Retargeting a branch, editing instructions, or reordering
+injective tuple encoding. Retargeting a branch, editing instructions, or reordering
 distinct switch cases does not change that branch's handle id. Opaque identities
 are positional because the parser supplies no more specific branch semantics.
 
 For `n` exits, exit `i` (zero-based) lies at `(i + 1) / (n + 1)` of the outer
 node width, on its bottom border. One exit is centered; no successors means no
-source handles. The target handle `cfg:in` stays at top center and the function-header edge keeps
-its ordinary centered source. Handles remain invisible (§7 of `graph-view.md`).
+source handles. Each incoming edge gets its own top arrival handle under
+`graph-view.md` §4; the graph's semantic `cfg:in` is replaced only in rendering
+data. The function-header edge keeps its ordinary centered source. Handles remain invisible (§7 of `graph-view.md`).
 ELK declares matching `FIXED_POS` ports from measured sizes; the live router uses
 the measured handles, including for self-loops. Editing a terminator refreshes
 handle measurements even when neither the topology nor the node size changes.
 Content-only edits preserve node positions; Reset Layout uses the current ports.
 
-This separates departures only: arrival separation (#87) and separation along
-the rest of the route (#86) remain independent work.
+Departure spacing and arrival spacing are independent. Separation along the
+rest of the route remains the scope of #86.
 
 > Pinned by: `src/graphBuilder/__tests__/llvm/successorPorts.test.ts`,
 > `src/components/Graph/LLVM/__tests__/LLVMBasicBlockNode.test.tsx`,

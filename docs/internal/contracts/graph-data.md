@@ -37,8 +37,9 @@ interface GraphEdge {
 Hierarchy. LLVM (both views) and SelectionDAG always emit `"TD"`.
 
 `sourceHandle` and `targetHandle` name node-local handles in LLVM CFG, LLVM Use-Def,
-and SelectionDAG. A named handle must exist on its endpoint node. Layout declares
-the routed modes' ports through the registry's `getNodePorts`; the live router
+and SelectionDAG. Named sources must exist on their endpoint node; routed targets
+are mapped to per-edge arrival handles during render preparation. Layout declares
+the routed modes' ports through the registry's `nodePorts`; the live router
 resolves their measured positions. `isChainOrGlue` is SelectionDAG-only.
 
 `dashed` is mode-agnostic: the standard edge factory (`createReactFlowEdge`) applies a dash
@@ -151,3 +152,10 @@ without adding a renderer.
   still the full union — TypeScript cannot narrow on a value it only sees at runtime. Such
   call sites cast through `unknown` (`node.astData as unknown as SelectionDAGNode`): an
   explicit, visible cast at the one place that generically doesn't know the type.
+
+## Rendered arrival handles
+
+`GraphEdge.targetHandle` identifies an IR operand or semantic target when present. The rendering
+pipeline assigns a separate handle to each visible routed edge without changing
+`GraphData` or its edge count. Port geometry and minimum width live only in
+React Flow `Node.data.portLayout` (see `ir-mode-registry.md`, Node port preferences).

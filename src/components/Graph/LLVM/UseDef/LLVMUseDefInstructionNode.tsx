@@ -1,10 +1,8 @@
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { type NodeProps } from "@xyflow/react";
 import type { LLVMUseDefInstructionData } from "../../../../ast/llvmAST";
 import NodeShell from "../../common/NodeShell";
 import HighlightedCode from "../../common/HighlightedCode";
-import { getUseDefPorts } from "./useDefPorts";
 import {
-  NODE_BORDER_WIDTH,
   NODE_FONT_FAMILY,
   NODE_WRAP_MAX_CHARS_USE_DEF,
 } from "../../common/nodeTextStyle";
@@ -29,7 +27,6 @@ import classes from "./useDef.module.css";
  */
 const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
   const instruction = data.astData as LLVMUseDefInstructionData;
-  const ports = getUseDefPorts(instruction);
   const hue =
     USE_DEF_BADGE_HUES[
       ((instruction.blockIndex % USE_DEF_BADGE_HUES.length) +
@@ -73,32 +70,6 @@ const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
           }}
         />
       </div>
-      {/* Per-operand ports (specs/llvm-use-def-view.md §4). Port x is
-          measured from the card's outer edge; absolute `left` is relative to
-          the padding box, hence the border correction. */}
-      {ports.map((port) => (
-        <Handle
-          key={port.id}
-          id={port.id}
-          type={port.side === "top" ? "target" : "source"}
-          position={port.side === "top" ? Position.Top : Position.Bottom}
-          isConnectable={false}
-          style={{
-            opacity: 0,
-            ...(port.side === "top" ? { top: 0 } : { bottom: 0 }),
-            left:
-              port.x === null
-                ? "50%"
-                : `${String(port.x - NODE_BORDER_WIDTH)}px`,
-            transform:
-              port.side === "top"
-                ? "translate(-50%, -50%)"
-                : "translate(-50%, 50%)",
-            width: "1px",
-            height: "1px",
-          }}
-        />
-      ))}
     </NodeShell>
   );
 };

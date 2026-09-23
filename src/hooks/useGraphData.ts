@@ -5,7 +5,7 @@ import {
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
-import type { GraphData, GraphNode, GraphEdge } from "../types/graph";
+import type { GraphData, GraphNode } from "../types/graph";
 import { isContainerNode } from "../types/graph";
 import type { IRLayoutBehavior } from "../irModes/types";
 import {
@@ -14,6 +14,7 @@ import {
   sizesCoverGraph,
   type NodeSizeMap,
 } from "../utils/layout";
+import { prepareNodePorts } from "../utils/nodePorts";
 import { createReactFlowNode } from "../utils/converter";
 
 export type { NodeSize, NodeSizeMap } from "../utils/layout";
@@ -70,6 +71,7 @@ export const useGraphData = () => {
     graph: GraphData;
     mode: IRLayoutBehavior;
     signature: string;
+    ports: ReturnType<typeof prepareNodePorts>["layouts"];
   } | null>(null);
   const layoutPendingRef = useRef(false);
   // ELK layout is async (specs/graph-view.md §2): each full layout gets a
@@ -80,7 +82,14 @@ export const useGraphData = () => {
   const applyLayout = useCallback(
     (sizes: NodeSizeMap) => {
       const current = currentRef.current;
-      if (!current || !sizesCoverGraph(current.graph, sizes)) {
+      if (
+        !current ||
+        !sizesCoverGraph(current.graph, sizes) ||
+        [...current.ports].some(
+          ([id, ports]) =>
+            (sizes.get(id)?.width ?? 0) < Math.ceil(ports.minWidth),
+        )
+      ) {
         return Promise.resolve();
       }
       const generation = ++layoutGenerationRef.current;
@@ -89,7 +98,7 @@ export const useGraphData = () => {
       return getLayoutedElements(graph, sizes, {
         edgeBuilder: mode.edgeBuilder,
         layoutOptions: mode.layoutOptions,
-        getNodePorts: mode.getNodePorts,
+        nodePorts: mode.nodePorts,
       }).then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
         if (generation !== layoutGenerationRef.current) return;
         setNodes(layoutedNodes);
@@ -107,7 +116,12 @@ export const useGraphData = () => {
   const updateGraph = useCallback(
     (graph: GraphData, mode: IRLayoutBehavior) => {
       const signature = getTopologySignature(graph);
-      currentRef.current = { graph, mode, signature };
+      const prepared = prepareNodePorts(
+        graph,
+        mode.edgeBuilder,
+        mode.nodePorts,
+      );
+      currentRef.current = { graph, mode, signature, ports: prepared.layouts };
 
       const isTopologyEqual = signature === lastSignatureRef.current;
 
@@ -132,19 +146,23 @@ export const useGraphData = () => {
           const prevHeight = previous?.style?.height;
           return createReactFlowNode(node, existingPos, {
             parentId: node.parentId,
+            portLayout: prepared.layouts.get(node.id),
             ...(typeof prevWidth === "number" && typeof prevHeight === "number"
-              ? { width: prevWidth, height: prevHeight }
+              ? {
+                  width: Math.max(
+                    prevWidth,
+                    Math.ceil(prepared.layouts.get(node.id)?.minWidth ?? 0),
+                  ),
+                  height: prevHeight,
+                }
               : {}),
           });
         });
         setNodes(newNodes);
         nodesRef.current = newNodes;
 
-        const newEdges = graph.edges.map((edge: GraphEdge) =>
-          inheritBackEdgeFlag(
-            mode.edgeBuilder.buildReactFlowEdge(edge),
-            previousEdgeMap.get(edge.id),
-          ),
+        const newEdges = prepared.edges.map((edge) =>
+          inheritBackEdgeFlag(edge, previousEdgeMap.get(edge.id)),
         );
         setEdges(newEdges);
         edgesRef.current = newEdges;
@@ -156,7 +174,14 @@ export const useGraphData = () => {
         layoutPendingRef.current = true;
         setLayoutPending(true);
         const measuring = graph.nodes.map((node: GraphNode) =>
-          createReactFlowNode(node, { x: 0, y: 0 }, { hidden: true }),
+          createReactFlowNode(
+            node,
+            { x: 0, y: 0 },
+            {
+              hidden: true,
+              portLayout: prepared.layouts.get(node.id),
+            },
+          ),
         );
         setNodes(measuring);
         nodesRef.current = measuring;

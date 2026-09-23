@@ -12,6 +12,9 @@ export const NODE_MARGIN = 12;
 /** Distance from a node's right edge to its self-loop lane, px. */
 export const SELF_LOOP_GAP = 24;
 
+/** Target-marker clearance and outer inset, including thick Mermaid arrows. */
+export const ARRIVAL_GAP = 24;
+
 /**
  * Inset from a container's border to its children, px — left, right, and
  * bottom. Top padding is the measured header height (`specs/graph-view.md` §3).

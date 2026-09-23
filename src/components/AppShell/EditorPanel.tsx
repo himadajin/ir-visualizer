@@ -10,7 +10,7 @@ import {
   Text,
   Transition,
 } from "@mantine/core";
-import { IconArrowBarToLeft, IconCheck } from "@tabler/icons-react";
+import { IconArrowBarToLeft, IconCheck, IconEraser } from "@tabler/icons-react";
 import { CodeEditor } from "../Editor/CodeEditor";
 import { IR_MODE_LIST, type IRModeKey } from "../../irModes";
 import type { IRParseDiagnostic, IRViewDefinition } from "../../irModes/types";
@@ -86,8 +86,9 @@ interface EditorPanelProps {
  * status footer. In narrow mode (§6.5) the very same contents are anchored to
  * the bottom edge as a sheet instead; only the geometry changes.
  *
- * The chrome uses Mantine's default theme (§6.6). The only monospace here is
- * the status footer, which is compiler output.
+ * Its look comes from the theme and the `--app-*` tokens (§6.6). The only
+ * monospace here besides the editor is the status footer, which is compiler
+ * output.
  */
 export function EditorPanel({
   open,
@@ -121,10 +122,9 @@ export function EditorPanel({
       <Transition mounted={!open} {...morph(narrow)}>
         {(transitionStyles) => (
           <Button
-            variant="default"
             // The pill is the only way back to the editor on a touch screen, so
             // narrow mode sizes it up until the hit target clears ~40 px.
-            size={narrow ? "md" : "xs"}
+            size={narrow ? "md" : undefined}
             onClick={() => onOpenChange(true)}
             title="Expand panel"
             className={classes.pill}
@@ -170,15 +170,14 @@ export function EditorPanel({
               }),
             }}
           >
-            <Group gap="xs" px="xs" py={6} className={classes.header}>
-              <Text size="sm" fw={500} className={classes.brand}>
+            <Group gap={6} px={8} py={6} className={classes.header}>
+              <Text fz={13} fw={600} className={classes.brand}>
                 IR Visualizer
               </Text>
 
               <Select
                 aria-label="IR mode"
-                size="xs"
-                w={130}
+                w={120}
                 data={modeOptions}
                 value={mode}
                 allowDeselect={false}
@@ -189,7 +188,6 @@ export function EditorPanel({
 
               {views && (
                 <SegmentedControl
-                  size="xs"
                   data={views.map((view) => ({
                     value: view.key,
                     label: view.label,
@@ -199,20 +197,21 @@ export function EditorPanel({
                 />
               )}
 
-              <Button variant="default" size="xs" onClick={onClear}>
-                Clear
-              </Button>
+              {/* One unit, so a wrapping header never strands the collapse
+                  button on a row of its own. */}
+              <Group gap={6} ml="auto" wrap="nowrap">
+                <ActionIcon aria-label="Clear" title="Clear" onClick={onClear}>
+                  <IconEraser size={16} />
+                </ActionIcon>
 
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                ml="auto"
-                aria-label="Collapse panel"
-                title="Collapse panel"
-                onClick={() => onOpenChange(false)}
-              >
-                <IconArrowBarToLeft size={16} />
-              </ActionIcon>
+                <ActionIcon
+                  aria-label="Collapse panel"
+                  title="Collapse panel"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <IconArrowBarToLeft size={16} />
+                </ActionIcon>
+              </Group>
             </Group>
 
             <Box className={classes.editor}>
@@ -225,7 +224,6 @@ export function EditorPanel({
 
             <Text
               component="div"
-              ff="monospace"
               size="xs"
               px="xs"
               py={6}

@@ -265,7 +265,7 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   and whatever markers the edge already has; it does not replace an open, circle, or
   cross marker with a closed arrow. An edge that is not painted (Mermaid `invisible`)
   does not take the accent. This accent is graph grammar, not shell chrome (§6.6: the
-  chrome's only non-default colors are the parse-status ones).
+  chrome's only non-gray colors are the parse-status ones).
 - **Hidden routed edges:** a routed edge with `hidden: true` is omitted from the routing
   pass and is not drawn. Mermaid invisible links use this (`specs/mermaid.md` §5); they
   remain in `GraphData` so ELK ranking still sees them.
@@ -372,15 +372,19 @@ controls remain available as overlays.
 A single overlay card at the **top-left**, inset from the viewport edges, holding everything
 that is not the canvas.
 
-- **Header**, left to right: the brand title ("IR Visualizer", small sans-serif, ~13 px),
-  the **mode selector**, the **view toggle**, a **Clear** action, and a **collapse** button.
+- **Header**, left to right: the brand title ("IR Visualizer", semibold, in `ink`),
+  the **mode selector**, the **view toggle**, then, pushed to the right edge, a **Clear**
+  action and a **collapse** button, both icon-only (accessible names "Clear" and "Collapse
+  panel"). At the initial 420 px panel width the header is a single row, even with the view
+  toggle present. It may wrap only below that — as the panel approaches its 280 px minimum,
+  or on a phone-width narrow-mode sheet — and Clear and collapse then wrap together.
 - **Mode selector** lists the registry modes in `IR_MODES` insertion order
   (LLVM-IR, SelectionDAG, Mermaid).
 - **View toggle**: when the active mode defines `views`, a `SegmentedControl` next to the
   mode selector lists them in registry order (LLVM-IR: CFG, Use-Def) with the active view
   selected; it is absent for single-view modes. It lives in the panel header, not in the
   canvas control cluster: it selects what is projected, not how the viewport is framed.
-- **Clear** empties the editor (the subsequent parse of the empty string follows §1: e.g.
+- **Clear** (an eraser icon) empties the editor (the subsequent parse of the empty string follows §1: e.g.
   an empty module is valid LLVM-IR, but empty Mermaid input is a parse error).
 - **Body / Editor**: Monaco with Shiki `github-light` highlighting; the language follows
   `mode.editorLanguage` (`llvm` for LLVM-IR and SelectionDAG, `mermaid` for Mermaid). The
@@ -419,8 +423,8 @@ parse status is reported; there is no snackbar over the graph.
 
 The `warning:` prefix is deliberately not `error:`, so that "did this input parse?" stays
 answerable by looking for a single word. Color only restates what the words say: all footer
-text, prefixes included, is in the default text color, and the status colors mark only the
-left rule and the check icon (§6.6).
+text, prefixes included, is in `ink-muted`, and the status colors mark only the left rule and
+the check icon (§6.6).
 
 > Pinned by: `e2e/smoke.spec.ts` (a parse error reaches the footer),
 > `src/components/AppShell/__tests__/EditorPanel.test.tsx` (the three footer states and the
@@ -453,34 +457,62 @@ drag-resizer is wide-mode-only. _(observed, untested)_
 
 ### 6.6 Visual grammar
 
-The shell chrome — editor panel, collapsed pill, canvas control cluster — is built with
-Mantine and uses **Mantine's default theme**. The theme is created once in
-`src/theme.ts`; component-specific layout lives in `*.module.css` next to each component,
-and `src/components/AppShell/shellTokens.ts` holds only the numbers the layout computes
-with (panel margin and width bounds, the narrow-mode media query, the sheet ratio, the
-fit-view padding, the motion duration). The chrome carries no visual decisions of its own
-beyond the overrides below; its visual language is designed separately (#129).
+The shell chrome — editor panel, collapsed pill, canvas control cluster — is a quiet frame
+around the canvas: neutral grays, system type, thin lines, and a single soft elevation. The
+graph is the subject, so the chrome carries no accent color: wherever it shows a non-gray
+color, that color reports parse status.
 
-- **Color scheme**: fixed to light (`defaultColorScheme="light"`). Monaco (`github-light`)
-  and the graph nodes assume a light ground; there is no dark mode.
-- **Parse-status colors**: `ok`, `warn` and `error` map to Mantine `green`, `yellow` and
-  `red`. They report parse status and are never decorative. They mark only non-text
-  elements — the footer's left rule and the success check icon — at shades that reach
-  3:1 against white (`green.8`, `yellow.9`, `red.8`); footer text stays in the default
-  text color, because no default `green` or `yellow` shade reaches the 4.5:1 that text
-  needs.
-- **Canvas ground**: the full-viewport canvas background is `gray.0` and the
-  `<Background />` dots are `gray.4`.
+The language is implemented in one place. `src/theme.ts` holds the Mantine theme (primary
+color, radius, component defaults) and the tokens below as CSS variables (`--app-<token>`;
+the three status tokens are `--app-status-<token>`), which the `*.module.css` files next to
+each component read.
+`src/components/AppShell/shellTokens.ts` holds only the numbers the layout computes with
+(panel margin and width bounds, the narrow-mode media query, the sheet ratio, the fit-view
+padding, the motion duration). Every token value is a Mantine palette color, so the chrome
+and Mantine's own components cannot drift apart.
+
+| Token         | Value                     | Use                                                                             |
+| ------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `ink`         | `gray.9`                  | Primary text; Mantine's text color (`theme.black`)                              |
+| `ink-muted`   | `gray.7`                  | Secondary text: the status footer                                               |
+| `line`        | `gray.3`                  | Borders of floating surfaces, internal dividers; Mantine's default border color |
+| `surface`     | `white`                   | Panel, pill, and control-cluster surface                                        |
+| `canvas`      | `gray.0`                  | The full-viewport canvas ground                                                 |
+| `canvas-dots` | `gray.4`                  | The `<Background />` dots                                                       |
+| `ok`          | `green.8`                 | Parse success only (check icon) — never decorative                              |
+| `warn`        | `yellow.9`                | Recoverable parse diagnostics only (footer left rule) — never decorative        |
+| `error`       | `red.8`                   | Parse failure only (footer left rule) — never decorative                        |
+| `elevation`   | Mantine `shadow-sm`       | Floating chrome only: panel, pill, control cluster                              |
+| `font-mono`   | Mantine's monospace stack | The status footer (and, from #130, the graph nodes)                             |
+
+- **No accent**: the theme's primary color is `gray` at shade 7, so every place Mantine
+  would draw its primary color — the focus ring, a focused input's border, the selected
+  option in a dropdown — is neutral. `ok`, `warn` and `error` are the only non-gray colors,
+  and they mark only non-text elements, at shades that reach 3:1 against white; no default
+  `green` or `yellow` shade reaches the 4.5:1 that text needs, so text is always `ink` or
+  `ink-muted`. The muted purple on back edges (§4) is graph grammar, not a chrome token.
+- **Surfaces**: every surface is fully opaque (no translucency, no backdrop blur), bordered
+  in `line`, rounded at Mantine's `sm` radius, and raised with `elevation`. The narrow-mode
+  sheet rounds only its top corners (§6.5).
+- **Typography**: no webfonts. The chrome uses Mantine's system sans-serif stack; monospace
+  (`font-mono`) is reserved for the status footer, the editor, and the graph nodes.
+- **Density**: controls are compact. Inputs, the view toggle, and buttons use Mantine's `xs`
+  size, and icon-only buttons are borderless `subtle` gray `ActionIcon`s — the surface around
+  them already has a border — that signal hover by fill and focus by the ring. The pill is
+  the one exception: in narrow mode it grows to `md` so its touch target clears ~40 px.
 - **Motion**: exactly one animation — the panel ⇄ pill morph, a Mantine `Transition`
   (`pop`, 180 ms, ease-out, growing out of the corner the surface is anchored to) on
   enter only, with an animated `fitView` recenter of the same duration. Both are disabled
   under `prefers-reduced-motion` (`respectReducedMotion` in the theme).
-- **Accessibility floor**: keyboard operability of all interactive chrome, and WCAG AA
-  contrast for status-footer text.
+- **Color scheme**: fixed to light (`defaultColorScheme="light"`). Monaco (`github-light`)
+  and the graph nodes assume a light ground; there is no dark mode.
+- **Accessibility floor**: a 2 px focus-visible ring (primary `gray.7`) on all interactive
+  chrome, keyboard operability, and WCAG AA contrast for all chrome text (`ink` and
+  `ink-muted` both exceed 4.5:1 on `surface`).
 
 Graph nodes keep their own grammar in `src/components/Graph/common/NodeShell.tsx`
 (`1px solid #777` border, `2px` radius, white surface, dense 12 px monospace, full-width
 header band); the shell chrome never borrows it — including the header band — because the
 editor panel is chrome around the canvas, not a node.
 
-_(§6.6 as a whole: observed, untested — enforced by review, not by tests.)_
+_(§6.6 as a whole: observed, untested — the tokens are enforced by review, not by tests.)_

@@ -343,3 +343,76 @@ describe("routePass — a narrowed pass equals a full pass", () => {
     );
   });
 });
+
+describe("clearance-aware route reuse (issue #92)", () => {
+  const loopNode: RouteNodeRect = {
+    id: "a",
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 50,
+  };
+  const loop: RouteRequest = {
+    id: "loop",
+    source: "a",
+    target: "a",
+    sourcePoint: { x: 50, y: 50 },
+    targetPoint: { x: 50, y: 0 },
+    sourceSide: "bottom",
+    targetSide: "top",
+  };
+
+  it("updates a self-loop when a neighbor enters, leaves, or is removed from its corridor", () => {
+    let rects = [
+      loopNode,
+      { id: "neighbor", x: 400, y: 0, width: 80, height: 50 },
+    ];
+    let routes: ReadonlyMap<string, Point[]> = routeEdges(rects, [loop]);
+    const original = routes.get(loop.id);
+    for (const x of [135, 120, 135, 400]) {
+      const next = [loopNode, { ...rects[1], x }];
+      const narrowed = routePass(passStateOf(rects, [loop], routes), next, [
+        loop,
+      ]);
+      expect(keyOf(narrowed)).toBe(keyOf(routeEdges(next, [loop])));
+      if (x === 120 || x === 135)
+        expect(narrowed.get(loop.id)).not.toEqual(original);
+      else expect(narrowed.get(loop.id)).toEqual(original);
+      rects = next;
+      routes = narrowed;
+    }
+    expect(
+      keyOf(routePass(passStateOf(rects, [loop], routes), [loopNode], [loop])),
+    ).toBe(keyOf(routeEdges([loopNode], [loop])));
+  });
+
+  it("retries an in-region fallback when a distant enclosing wall opens", () => {
+    const target = { ...loopNode, id: "b", x: 300 };
+    const request = {
+      ...loop,
+      id: "edge",
+      target: "b",
+      targetPoint: { x: 350, y: 0 },
+    };
+    const rects: RouteNodeRect[] = [
+      loopNode,
+      target,
+      { id: "divider", x: 140, y: -1000, width: 20, height: 2000 },
+      { id: "left", x: -1010, y: -1010, width: 20, height: 2020 },
+      { id: "right", x: 1000, y: -1010, width: 20, height: 2020 },
+      { id: "bottom", x: -1010, y: 1000, width: 2030, height: 20 },
+      { id: "top", x: -1010, y: -1010, width: 2030, height: 20 },
+    ];
+    const before = routeEdges(rects, [request]);
+    // The divider joins all sides of the enclosure: no path exists. Moving the
+    // distant top wall opens a corridor while leaving the request region alone.
+    const next = rects.map((rect) =>
+      rect.id === "top" ? { ...rect, y: -1200 } : rect,
+    );
+    const full = routeEdges(next, [request]);
+    expect(full.get(request.id)).not.toEqual(before.get(request.id));
+    expect(
+      keyOf(routePass(passStateOf(rects, [request], before), next, [request])),
+    ).toBe(keyOf(full));
+  });
+});

@@ -79,6 +79,15 @@ export const routeRegionOf: (
   options?: EdgeRouterOptions,
 ) => RouteRegion;
 
+// Whether an existing result may be reused under the region rules. A false
+// answer is conservative; the source rect is needed for self-loop attachments.
+export const isRouteLocal: (
+  request: RouteRequest,
+  points: Point[],
+  sourceRect: RouteNodeRect,
+  options?: EdgeRouterOptions,
+) => boolean;
+
 // The input-quantization step (Input quantization), so a caller can ask whether
 // its input changed in the terms the router will actually see. Idempotent.
 export const quantizeRect: (rect: RouteNodeRect) => RouteNodeRect;
@@ -98,11 +107,11 @@ once, not an obstacle in the search.
 
 ### Defaults
 
-| option        | default | meaning                                                                                                                                                           |
-| ------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nodeMargin`  | `12`    | clearance kept around every node rect, px — rounded (see below). The number is `NODE_MARGIN` in `src/utils/spacing.ts`, the same module ELK's node spacing reads. |
-| `bendPenalty` | `30`    | price of one bend, in px of path length — a cost, never a coordinate                                                                                              |
-| `selfLoopGap` | `24`    | distance from a node's right edge to its self-loop lane, px — rounded. `SELF_LOOP_GAP` in the same module.                                                        |
+| option        | default | meaning                                                                                                                                                               |
+| ------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nodeMargin`  | `12`    | clearance kept around every obstacle rect, px — rounded (see below). The number is `NODE_MARGIN` in `src/utils/spacing.ts`, the same module ELK's node spacing reads. |
+| `bendPenalty` | `30`    | price of one bend, in px of path length — a cost, never a coordinate                                                                                                  |
+| `selfLoopGap` | `24`    | preferred self-loop lane gap, floored at `nodeMargin`, px — rounded. `SELF_LOOP_GAP` in the same module.                                                              |
 
 `nodeMargin` and `selfLoopGap` are distances that end up added to coordinates, so they are
 quantized like every other input. That is what makes the integer guarantee below
@@ -184,18 +193,19 @@ guard of its own.
 **A clearance of zero is floored at one pixel where a shape is synthesized.** A `nodeMargin`
 or a `selfLoopGap` of `0` asks for geometry with no room in it. Taken literally there is no
 valid answer left: a self-loop asked to leave its node, go around it and come back across no
-distance at all doubles back on itself, and a routed edge whose two request points quantize
-to the same point with a `nodeMargin` of `0` has nothing but that one point to return twice.
+distance at all doubles back on itself, and coincident request points with a `nodeMargin`
+of `0` require a non-empty cycle.
 Every shape the router **synthesizes** therefore keeps at least one pixel of room where the
 clearance it is given leaves none — the self-loop's lane against its stub and its vertical
-extent (see Self-loops), and the outward steps of the no-path fallback, which is also what
-an otherwise empty route falls back to. The floor is a maximum against the requested
+extent (see Self-loops), and the outward steps of the no-path fallback. Search also includes
+one-pixel room around its pushed endpoints to turn and close non-empty cycles. The floor
+is a maximum against the requested
 distance, so it binds only below a pixel: a shape that had room in the first place is not
-moved, and no output changes anywhere for a `nodeMargin` and a `selfLoopGap` of `1` or more.
-Every guarantee below is therefore unconditional — it holds for any options, zero and
-fractional alike.
+moved solely by this floor. Independently, a self-loop lane must keep at least `nodeMargin`.
+The shape guarantees hold for zero and fractional options too; clearance has only the
+geometrically-unroutable exception below.
 
-The floor applies to synthesis only, not to the obstacle set: a `nodeMargin` of `0` still
+The floor never applies to the obstacle set: a `nodeMargin` of `0` still
 inflates nothing and still blocks nothing (see the collapsed-rect case above), because there
 the zero is a meaningful answer rather than an impossible one. The corner it addresses is
 not a product of quantization either — an exactly-zero option reaches it with no rounding
@@ -206,8 +216,9 @@ ordinary input.
 
 ## Per-edge regions
 
-A routed request is searched on a grid built from **its own region**, never from the whole
-graph. The region of a request is the axis-aligned bounding box of the four points that
+A routed request is first searched on a grid built from **its own region**, with a
+whole-graph retry only when necessary. The region of a request is the axis-aligned bounding
+box of the four points that
 define it — the quantized `sourcePoint` and `targetPoint`, and the two `nodeMargin`-pushed
 points derived from them — inflated by `ROUTE_REGION_MARGIN` (**192 px**) on every side. The
 margin is a module constant (`src/utils/edgeRouter.ts`), not an option: no caller has a reason
@@ -244,29 +255,59 @@ were before, and they lie inside the region by construction.
 
 The route a search returns is the cheapest one **on that grid**, under the tie-break order
 below. It is not promised to be the cheapest orthogonal path in the plane — it was not before
-either, since the grid has only ever held rect boundaries — and one consequence of the region
-is worth stating plainly: a detour that would have to leave the region to be found is not
+either — and one consequence of the region is worth stating plainly: a detour that would
+have to leave the region to be found is not
 found, and the request falls to the retry below.
 
 **A request whose region offers no path is retried once, on the whole graph.** The ladder is
 exactly two rungs — the region, then every rect — and the second one exists so that this
 change cannot make an edge less routable than it was: any request that had a path before still
-has the same one available. Only a request that fails on _both_ rungs reaches the no-path
-fallback, which is what makes "no path" mean geometrically unroutable input. A request routed
+has the same one available. A request reaches the no-path fallback only when a mandatory
+stub is obstructed or
+_both_ search rungs fail; these are geometrically unroutable inputs. A request routed
 on the second rung is a function of every rect in the graph, and the Locality guarantee below
 is not claimed for it; the router does not report which rung it used, so a caller that needs to
 know must reproduce the region test itself.
 
-Self-loops and the fallback shape need no region: a self-loop is synthesized from its own
-node's rect (see Self-loops) and the fallback from the request alone (it does no obstacle
-avoidance at all), so both are already functions of strictly less than the region's rects.
+Self-loops use the same region and retry policy. Their preferred right-side shape is
+accepted only when it fits inside the request's region and passes obstacle validation;
+otherwise their fixed bottom/top attachments are searched. If those attachments lie outside
+the request's region, search starts on the whole graph.
+
+The grid includes room to turn at endpoints and outer boundary lines. Exhausting a sparse
+grid without that room is not evidence of geometric impossibility. Coincident endpoints
+must find a non-empty route, rather than treating a zero-length search as success.
+The endpoint side directions still prohibit reversing at departure/arrival when the
+corresponding stub has zero length. Distinct attachments whose pushed points coincide may
+connect directly through that point when their stubs satisfy these direction constraints.
+
+Pinned by `src/utils/__tests__/edgeRouter.clearance.test.ts`: an independent dense unit-grid
+reachability oracle checks sparse-search success and genuine impossibility on small layouts;
+adversarial fixtures cover self-loops, endpoint stubs, collapsed rects, zero margins,
+container frames, and the measured default LLVM CFG. `src/hooks/__tests__/useEdgeRoutes.test.ts`
+checks partial-pass equality, including a distant wall opening a formerly impossible route.
 
 ## Guarantees callers may rely on
+
+- **Node avoidance and clearance.** Every segment avoids the strict interior of every
+  quantized obstacle rect (`obstacle !== false`) and its `nodeMargin` inflation. Only the
+  source and target stubs may enter their respective endpoint's inflated margin; they must
+  still avoid that endpoint's actual interior and every other obstacle's inflated interior.
+  This applies to ordinary routes and self-loops, including zero clearance and degenerate
+  rects. Non-obstacle container frames remain traversable. This is a guarantee about returned
+  polylines, not stroke widths, markers, labels, or corner rounding.
+- **One exception: geometrically unroutable input.** If the fixed attachments/stubs or the
+  free space make a route satisfying these constraints impossible, return the deterministic
+  final fallback. Overlapping nodes, an obstructed stub, or an enclosed endpoint can cause
+  this even when the raw node interiors do not overlap. The fallback alone may violate node
+  avoidance and clearance; integer coordinates, exact attachments, orthogonality, at least
+  two points, determinism, and no immediate reversal still hold. Tests must establish that
+  exception fixtures are impossible, rather than skip arbitrary fallback-shaped answers.
 
 - **Orthogonality.** Every returned polyline is axis-aligned: consecutive points always
   share exactly one coordinate — never both, so no two consecutive points are identical.
   This holds at any clearance: two request points that quantize to the same point with a
-  `nodeMargin` of `0` come back as the fallback's loop around that point, not as the point
+  `nodeMargin` of `0` come back as a non-empty route around that point, not as the point
   twice.
 - **Integer coordinates.** Every `x` and every `y` of every point in every returned
   polyline is an integer — searched routes, self-loops and fallback routes alike, for any
@@ -289,8 +330,8 @@ avoidance at all), so both are already functions of strictly less than the regio
   points gives up is absolute equality with the values it passed: the drawn endpoint may sit
   up to 0.5 px away on each axis from the requested point. That trade is deliberate — half a
   pixel at a handle is invisible, and it buys output with no sub-pixel geometry anywhere in
-  it. **Self-loops are exempt from this rule**: they are synthesized from the node rect alone
-  (see below), so `sourcePoint`/`targetPoint` play no part in their shape at all.
+  it. **Self-loops are exempt from this rule**: their attachments are derived from the node rect
+  (see below), rather than the requested handle positions.
 - **Interior points are corners, except the two pushed points.** Every interior vertex of a
   routed polyline is either one of the two `nodeMargin`-pushed points above or a **corner**:
   a vertex whose arriving and leaving segments run along different axes. A run that
@@ -304,9 +345,7 @@ avoidance at all), so both are already functions of strictly less than the regio
   edge does not change the edge's geometry. Binding on searched and self-loop polylines at
   any clearance; the fallback shape places its vertices by construction (see the ladder named
   in the opening paragraph) and may leave collinear ones among them. The router emits that
-  shape for an edge it can find no path for, and for one whose search collapses to a single
-  point — which is what two request points quantizing together with a `nodeMargin` of `0`
-  does.
+  shape only for geometrically unroutable input.
 - **Determinism.** Identical input rects and requests always produce byte-identical
   points, with no dependence on the iteration order of either the `nodes` array or the
   `requests` array — reordering either changes no individual route.
@@ -319,9 +358,10 @@ avoidance at all), so both are already functions of strictly less than the regio
   which a search over a graph-wide grid satisfies while still letting an unrelated node's
   one-pixel move flip a route through the tie-break. Locality is what rules that out, and it
   is a property of the pure function, not of a cache — no route is ever kept because it was
-  the previous answer. It is claimed for searched routes on the first rung, for self-loops and
-  for fallbacks; it is **not** claimed for a route that fell through to the whole-graph retry,
-  which is by definition a function of every obstacle rect.
+  the previous answer. It is claimed for searched routes on the first rung and validated
+  self-loop shapes
+  inside the region. It is **not** claimed for whole-graph retries or final fallbacks: a
+  distant obstacle can open a route and replace a previously necessary fallback.
 - **A fixed tie-break total order.** When multiple candidate paths are equally cheap, the
   router picks among them by, in order: (1) total cost (`length + bendPenalty * turns`),
   (2) number of bends, (3) the point sequence compared lexicographically by `(x, y)` — a
@@ -394,71 +434,22 @@ sharing this contract permits but does not yet produce.) Until #86, an edge over
 output is not a contract violation but unspecified behavior, so `docs/README.md`'s "code
 that violates a contract is a bug" does not apply to it.
 
-## Self-loops (right side, six points)
+## Self-loops (right-side preference)
 
-A self-loop request (`source === target`) is synthesized rather than searched. For a node
-rect `(x, y, w, h)` — the **quantized** rect, so `x`, `y`, `w` and `h` are integers — the
-polyline runs through these six points in this order, subject to the collapse described
-below, with
+A self-loop (`source === target`) attaches to the bottom and top of its quantized node at
+`stubX = round(x + 0.75 * width)`. These attachments remain fixed while the route detours.
+The preferred shape leaves the bottom, runs right, goes up beside the node, then returns
+left to the top. Its lane is `max(right + selfLoopGap, right + nodeMargin, stubX + 1)`;
+its upper run is `top - nodeMargin`, and its lower run is
+`max(bottom + nodeMargin, upperRun + 1)`. Consecutive duplicate points are collapsed.
 
-- `stubX = round(x + 0.75w)`, the offset along the bottom and top edges where the loop
-  leaves and re-enters,
-- `laneX = max(x + w + selfLoopGap, stubX + 1)`, the vertical lane to the right of the node,
-- `aboveY = y - nodeMargin` and `belowY = max(y + h + nodeMargin, aboveY + 1)`, the two
-  horizontal runs that pass the node:
-
-| #   | point             |                            |
-| --- | ----------------- | -------------------------- |
-| 0   | `(stubX, y + h)`  | leaves the **bottom** edge |
-| 1   | `(stubX, belowY)` | steps clear of the node    |
-| 2   | `(laneX, belowY)` | runs **right** to the lane |
-| 3   | `(laneX, aboveY)` | runs **up** past the node  |
-| 4   | `(stubX, aboveY)` | comes back **left**        |
-| 5   | `(stubX, y)`      | re-enters the **top** edge |
-
-The two maxima are the one-pixel floor of "A clearance of zero is floored at one pixel"
-above, and they are what keeps this shape a loop at any clearance. Without the first, a
-`selfLoopGap` of `0` on a rect that quantizes to `w ≤ 2` puts the lane exactly on the stub
-(`round(0.75w) === w` for `w ∈ {0, 1, 2}`) and the loop runs down, back up and down again —
-an immediate reversal. Without the second, a `nodeMargin` of `0` on a rect that quantizes to
-`h = 0` collapses all six points onto one. Both bind only where the requested clearance is
-worth less than a pixel: with `selfLoopGap ≥ 1` the lane already clears the stub, since
-`stubX ≤ x + w`, and with `nodeMargin ≥ 1` or `h ≥ 1` the extent is already at least a pixel
-tall. The default `12`/`24` loop of a real node rect is exactly the unfloored shape.
-
-Neither maximum needs rounding of its own — `x`, `y`, `w`, `h`, `nodeMargin` and
-`selfLoopGap` are all integers by the time they are formed, `stubX` is rounded, and a
-maximum of integers is an integer. `stubX` is the only non-integer
-value that can reach the output: three quarters of a width is fractional whenever the width
-is not a multiple of 4, so the sum is rounded there and the integer guarantee holds for
-self-loops too. For example `w = 100` gives `stubX = x + 75`, `w = 101` gives
-`x + 75.75 → x + 76`, and `w = 102` gives `x + 76.5 → x + 77` (ties round up). `w = 103`
-gives `x + 77.25 → x + 77`. Because `x` is an integer, rounding the
-sum and rounding only the `0.75w` term give the same result once `-0` is normalized (they
-differ only in the sign of zero, e.g. `x = -1, w = 1`).
-
-**Consecutive duplicate vertices are collapsed.** The table gives the shape; what is
-returned is that shape with every pair of identical consecutive points folded into one. This
-is required behavior, not an incidental detail, and it is the same duplicate collapse that
-searched and fallback routes already pass through — self-loops are no longer the exception.
-It is load-bearing because `nodeMargin` can round to zero and, unlike the room `laneX` and
-`belowY` are given, is not floored where it appears on its own: a `nodeMargin` in
-`[-0.5, 0.5)` puts point 1 on point 0 whenever `h ≥ 1`, and puts point 4 on point 5 always. The other fold the table used
-to admit is gone — `laneX > stubX` by construction now, so 1 and 2, and 3 and 4, are never
-identical. Two identical consecutive points share both coordinates rather than exactly one,
-so leaving them in the output would break Orthogonality.
-
-A self-loop therefore returns six points whenever `nodeMargin` is `1` or more, and, when it
-rounds to `0`, four for a rect that quantizes to `h ≥ 1` or five for one that quantizes to
-`h = 0`, where the floored `belowY` keeps points 0 and 1 apart. Every one of those
-shapes is a loop: orthogonal, at least two points, no immediate reversal, every interior
-vertex a corner. That is the whole point of flooring the room rather than bounding the
-domain, and it is why the collapse is a fold of _identical_ points and not of collinear
-ones.
-
-The side is the **right** side, always — not chosen per node and not derived from free
-space. Points 1 and 4 are load-bearing, not decoration: without them the first/last
-horizontal run would sit exactly on the node's own bottom/top border.
+This preserves the ordinary six-point shape wherever it is safe and fits the local region. Every segment is validated
+against all obstacles, with only the own-endpoint margin exemptions above. If the shape is
+blocked, search may change its lane, number of corners, and side; right-side appearance
+never overrides clearance. A `selfLoopGap` smaller than `nodeMargin` cannot reduce clearance.
+Zero-sized nodes and zero margins still produce non-degenerate, reversal-free routes.
+An impossible self-loop uses the same final fallback policy as an ordinary edge, with these
+bottom/top attachments. The node's frame may have `obstacle: false`, just like any endpoint.
 
 ## Where the routing pass runs
 
@@ -488,9 +479,11 @@ third is the one that is easy to miss:
 2. a request whose region a changed rect reaches **in either its old or its new position** —
    the space a node vacates matters as much as the space it takes, and an edge that was
    detouring around it must be allowed to straighten;
-3. a request whose **previous polyline has a point outside its own region** — that is the
-   observable signature of the whole-graph retry above, and Locality is explicitly not
-   claimed for those routes, so they are re-routed unconditionally.
+3. a request whose **previous polyline has a point outside its own region**, or equals its
+   final fallback. Neither can be reused on the strength of Locality. `isRouteLocal`
+   implements this conservative check: a shape coinciding with the deterministic fallback
+   is re-routed even if it happened to be found by search. This avoids adding hidden mutable
+   routing state or changing the points-map return type.
 
 A narrowed pass still passes the **complete** `nodes` array: a route must avoid every
 obstacle whether or not that obstacle moved.

@@ -15,8 +15,8 @@ import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
  * are the only obstacles; each edge is searched with A* over a sparse Hanan
  * grid built from the rects near **it** — its region — and the result is a
  * rounded-corner-ready polyline. A routed edge begins and ends exactly at its
- * quantized handle positions; a self-loop is synthesized from its node's rect
- * alone and is exempt from that rule.
+ * quantized handle positions; a self-loop uses bottom/top attachments derived from its node rect
+ * and prefers a validated right-side shape.
  *
  * The region is why this router is stable and not merely deterministic: a route
  * is a function of the rects near it, so an unrelated node moving cannot flip it
@@ -28,7 +28,7 @@ import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
 export const DEFAULT_NODE_MARGIN = NODE_MARGIN;
 /** Price of one bend, expressed in px of path length (`length + bendPenalty * turns`). */
 export const DEFAULT_BEND_PENALTY = 30;
-/** Distance from a node's right edge to its self-loop lane, px. */
+/** Preferred self-loop lane gap, floored at nodeMargin for clearance, px. */
 export const DEFAULT_SELF_LOOP_GAP = SELF_LOOP_GAP;
 
 /**
@@ -58,7 +58,7 @@ export const ROUTE_REGION_MARGIN = 192;
  * makes that guarantee — and orthogonality, and `>= 2` points — hold for every
  * input rather than only for callers that pass a clearance of at least a pixel.
  *
- * Applied at synthesis only, never to the obstacle set: a `nodeMargin` of `0`
+ * Applied to shape/search room only, never to the obstacle set: a `nodeMargin` of `0`
  * genuinely means "inflate nothing", and the search is entitled to that answer.
  */
 const MIN_CLEARANCE = 1;
@@ -250,6 +250,66 @@ interface InflatedRect {
   maxY: number;
 }
 
+/** Strict-interior intersection, including a zero-length endpoint check. */
+const segmentIntersects = (a: Point, b: Point, rect: InflatedRect): boolean =>
+  a.x === b.x
+    ? a.x > rect.minX &&
+      a.x < rect.maxX &&
+      Math.max(a.y, b.y) > rect.minY &&
+      Math.min(a.y, b.y) < rect.maxY
+    : a.y > rect.minY &&
+      a.y < rect.maxY &&
+      Math.max(a.x, b.x) > rect.minX &&
+      Math.min(a.x, b.x) < rect.maxX;
+
+const containsPoint = (region: RouteRegion, point: Point): boolean =>
+  point.x >= region.minX &&
+  point.x <= region.maxX &&
+  point.y >= region.minY &&
+  point.y <= region.maxY;
+
+/**
+ * A stub may cross its own margin, never its own interior or another margin.
+ * Checking the whole segment matters: a midpoint can miss a thin obstruction.
+ */
+const stubIsClear = (
+  a: Point,
+  b: Point,
+  owner: RouteNodeRect,
+  inflated: InflatedRect[],
+): boolean =>
+  !inflated.some((rect) =>
+    segmentIntersects(
+      a,
+      b,
+      rect.id === owner.id
+        ? {
+            id: owner.id,
+            minX: owner.x,
+            minY: owner.y,
+            maxX: owner.x + owner.width,
+            maxY: owner.y + owner.height,
+          }
+        : rect,
+    ),
+  );
+
+/** Self-loop attachments are independent of the caller's handle positions. */
+const attachedRequest = (
+  request: RouteRequest,
+  rect: RouteNodeRect,
+): RouteRequest => {
+  if (request.source !== request.target) return request;
+  const x = quantize(rect.x + rect.width * 0.75);
+  return {
+    ...request,
+    sourcePoint: { x, y: rect.y + rect.height },
+    targetPoint: { x, y: rect.y },
+    sourceSide: "bottom",
+    targetSide: "top",
+  };
+};
+
 /**
  * "Is this point strictly inside an obstacle?" over a uniform spatial hash.
  * Built once per `routeEdges` call rather than once per edge, which is what
@@ -273,16 +333,10 @@ const buildObstacleIndex = (rects: InflatedRect[]) => {
       }
     }
   }
-  return (
-    x: number,
-    y: number,
-    exemptA: string | null,
-    exemptB: string | null,
-  ): boolean => {
+  return (x: number, y: number): boolean => {
     const bucket = buckets.get(cellOf(x) * CELL_KEY_STRIDE + cellOf(y));
     if (bucket === undefined) return false;
     for (const rect of bucket) {
-      if (rect.id === exemptA || rect.id === exemptB) continue;
       if (x > rect.minX && x < rect.maxX && y > rect.minY && y < rect.maxY) {
         return true;
       }
@@ -309,12 +363,7 @@ interface Label {
 }
 
 /** "Is this point strictly inside an obstacle the route must respect?" */
-type IsBlocked = (
-  x: number,
-  y: number,
-  exemptA: string | null,
-  exemptB: string | null,
-) => boolean;
+type IsBlocked = (x: number, y: number) => boolean;
 
 /**
  * Everything one search may see: the candidate grid lines and the obstacles.
@@ -328,6 +377,7 @@ interface SearchScope {
   gridXs: number[];
   gridYs: number[];
   isBlocked: IsBlocked;
+  region?: RouteRegion;
 }
 
 /**
@@ -391,8 +441,8 @@ const scopeOfRegion = (
   region: RouteRegion,
   isBlocked: IsBlocked,
 ): SearchScope => {
-  const gridXs: number[] = [];
-  const gridYs: number[] = [];
+  const gridXs: number[] = [region.minX, region.maxX];
+  const gridYs: number[] = [region.minY, region.maxY];
   for (const rect of inflated) {
     if (!intersectsRegion(rect, region)) continue;
     if (rect.minX >= region.minX && rect.minX <= region.maxX) {
@@ -408,7 +458,7 @@ const scopeOfRegion = (
       gridYs.push(rect.maxY);
     }
   }
-  return { gridXs, gridYs, isBlocked };
+  return { gridXs, gridYs, isBlocked, region };
 };
 
 /**
@@ -502,20 +552,40 @@ const routeOnGrid = (
   // Candidate lines: every inflated rect edge in scope, plus this edge's
   // endpoints. The pushed points are included as well so that they are always
   // grid vertices, even for a handle that does not sit on its node's boundary.
-  const xs = sortedUnique([
-    ...scope.gridXs,
-    request.sourcePoint.x,
-    request.targetPoint.x,
-    start.x,
-    end.x,
-  ]);
-  const ys = sortedUnique([
-    ...scope.gridYs,
-    request.sourcePoint.y,
-    request.targetPoint.y,
-    start.y,
-    end.y,
-  ]);
+  const xs = sortedUnique(
+    [
+      ...scope.gridXs,
+      request.sourcePoint.x,
+      request.targetPoint.x,
+      start.x - 1,
+      start.x,
+      start.x + 1,
+      end.x - 1,
+      end.x,
+      end.x + 1,
+    ].filter(
+      (x) =>
+        scope.region === undefined ||
+        (x >= scope.region.minX && x <= scope.region.maxX),
+    ),
+  );
+  const ys = sortedUnique(
+    [
+      ...scope.gridYs,
+      request.sourcePoint.y,
+      request.targetPoint.y,
+      start.y - 1,
+      start.y,
+      start.y + 1,
+      end.y - 1,
+      end.y,
+      end.y + 1,
+    ].filter(
+      (y) =>
+        scope.region === undefined ||
+        (y >= scope.region.minY && y <= scope.region.maxY),
+    ),
+  );
   const xIndex = new Map(xs.map((value, index) => [value, index]));
   const yIndex = new Map(ys.map((value, index) => [value, index]));
 
@@ -565,8 +635,15 @@ const routeOnGrid = (
     );
   };
 
+  // Keep the initial state separate from revisiting the same vertex/direction:
+  // coincident endpoints may need a real cycle whose arrival direction equals
+  // its departure direction. The zero-cost initial label must not prune it.
   const stateKey = (label: Label): number =>
-    label.goal ? -1 : (label.yi * width + label.xi) * 4 + label.dir;
+    label.goal
+      ? -1
+      : label.parent === null
+        ? -2
+        : (label.yi * width + label.xi) * 4 + label.dir;
 
   const best = new Map<number, Label>();
   const queue = createQueue(compare);
@@ -603,6 +680,9 @@ const routeOnGrid = (
     if (
       label.xi === endXi &&
       label.yi === endYi &&
+      (label.parent !== null ||
+        request.sourcePoint.x !== request.targetPoint.x ||
+        request.sourcePoint.y !== request.targetPoint.y) &&
       label.dir !== reverseDir(arrivalDir)
     ) {
       const turned = label.dir !== arrivalDir;
@@ -619,8 +699,6 @@ const routeOnGrid = (
 
     const x = xs[label.xi];
     const y = ys[label.yi];
-    const labelAtStart = label.xi === startXi && label.yi === startYi;
-    const labelAtEnd = label.xi === endXi && label.yi === endYi;
     for (let dir = 0; dir < 4; dir++) {
       if (dir === reverseDir(label.dir)) continue; // doubling back is never optimal
       const nextXi = label.xi + DIR_DX[dir];
@@ -630,21 +708,9 @@ const routeOnGrid = (
       }
       const nextX = xs[nextXi];
       const nextY = ys[nextYi];
-      // The obstacle exemption is per endpoint. The source node's rect is
-      // exempt only for the segments incident to S, the target's only for those
-      // incident to T; every other segment treats both as obstacles, so a
-      // searched route can never clip its own endpoint node. Where that makes
-      // the edge unroutable the no-path fallback takes over.
-      const nextAtStart = nextXi === startXi && nextYi === startYi;
-      const nextAtEnd = nextXi === endXi && nextYi === endYi;
-      if (
-        scope.isBlocked(
-          (x + nextX) / 2,
-          (y + nextY) / 2,
-          labelAtStart || nextAtStart ? request.source : null,
-          labelAtEnd || nextAtEnd ? request.target : null,
-        )
-      ) {
+      // Stubs are checked separately. No searched segment is exempt from
+      // either endpoint's clearance, even the first/last grid segment.
+      if (scope.isBlocked((x + nextX) / 2, (y + nextY) / 2)) {
         continue;
       }
       const turned = dir !== label.dir;
@@ -814,38 +880,17 @@ const fallbackPoints = (
   return candidate;
 };
 
-/**
- * Self-loops are synthesized, not routed (`contracts/edge-routing.md`,
- * "Self-loops"): always on the node's right side, out of the bottom edge at 75 %
- * of the width, around a lane `selfLoopGap` clear of the node, and back into the
- * top edge at the same offset. The rect and both clearances are already
- * quantized, so the only fractional value the six points can contain is the
- * 75 %-of-width stub offset — three quarters of an integer width is fractional
- * unless that width is a multiple of 4 — and it is rounded here, where it is
- * formed. This is the one rounding that happens behind the input boundary.
- *
- * The lane and the vertical extent are floored at `MIN_CLEARANCE` against the
- * points they have to clear, which is what gives the loop a shape at a clearance
- * of `0`: without the first floor a `selfLoopGap` of `0` puts the lane on the
- * stub for any rect that quantizes to `w <= 2` (`round(0.75w) === w` there) and
- * the loop doubles back; without the second a `nodeMargin` of `0` on a rect of
- * no height collapses all six points onto one. Both are maxima, so a loop with
- * room to begin with is not moved.
- *
- * Consecutive duplicates are collapsed, the same way searched and fallback
- * routes are: `nodeMargin` is not floored — it is the caller's clearance around
- * the node, not room this shape needs — so a `nodeMargin` of `0` still makes the
- * stub ends coincide with the horizontal runs, and a coincident pair shares both
- * coordinates instead of exactly one, which would break orthogonality. A
- * self-loop therefore returns at most six points.
- */
+/** Preferred right-side shape. It is only returned after clearance validation. */
 const selfLoopPoints = (
   rect: RouteNodeRect,
   nodeMargin: number,
   selfLoopGap: number,
 ): Point[] => {
   const x = quantize(rect.x + rect.width * 0.75);
-  const lane = Math.max(rect.x + rect.width + selfLoopGap, x + MIN_CLEARANCE);
+  const lane = Math.max(
+    rect.x + rect.width + Math.max(selfLoopGap, nodeMargin),
+    x + MIN_CLEARANCE,
+  );
   const above = rect.y - nodeMargin;
   const below = Math.max(
     rect.y + rect.height + nodeMargin,
@@ -932,6 +977,18 @@ export const routeEdges = (
     isBlocked: buildObstacleIndex(inflated),
   };
 
+  // An exterior corridor must exist even when all existing lines are blocked.
+  if (inflated.length > 0) {
+    globalScope.gridXs.push(
+      Math.min(...globalScope.gridXs) - 1,
+      Math.max(...globalScope.gridXs) + 1,
+    );
+    globalScope.gridYs.push(
+      Math.min(...globalScope.gridYs) - 1,
+      Math.max(...globalScope.gridYs) + 1,
+    );
+  }
+
   const routes = new Map<string, Point[]>();
   for (const request of quantizedRequests) {
     const sourceRect = rectById.get(request.source);
@@ -943,64 +1000,72 @@ export const routeEdges = (
       continue;
     }
 
-    if (request.source === request.target) {
-      routes.set(
-        request.id,
-        selfLoopPoints(sourceRect, nodeMargin, selfLoopGap),
-      );
-      continue;
-    }
-
+    const attached = attachedRequest(request, sourceRect);
     const start = pushOutward(
-      request.sourcePoint,
-      request.sourceSide,
+      attached.sourcePoint,
+      attached.sourceSide,
       nodeMargin,
     );
     const end = pushOutward(
-      request.targetPoint,
-      request.targetSide,
+      attached.targetPoint,
+      attached.targetSide,
       nodeMargin,
     );
-    // Two rungs, in this order (`contracts/edge-routing.md`, "Per-edge
-    // regions"): this edge's own region, then the whole graph. The second is
-    // what keeps the region from making an edge less routable than it was —
-    // whatever had a path before still has one — so only input with no
-    // orthogonal path at all reaches the fallback below.
-    const region = regionOf([
-      request.sourcePoint,
-      request.targetPoint,
+    const region = routeRegionOf(request, options);
+    const stubsClear =
+      stubIsClear(attached.sourcePoint, start, sourceRect, inflated) &&
+      stubIsClear(end, attached.targetPoint, targetRect, inflated);
+
+    if (stubsClear && request.source === request.target) {
+      const preferred = selfLoopPoints(sourceRect, nodeMargin, selfLoopGap);
+      // Keep the shortcut local: otherwise a remote rect could select a different
+      // shape inside the region without invalidating the caller's cached route.
+      const clear =
+        preferred.every((point) => containsPoint(region, point)) &&
+        preferred.slice(1).every((point, i) => {
+          if (i === 0)
+            return stubIsClear(preferred[i], point, sourceRect, inflated);
+          if (i === preferred.length - 2)
+            return stubIsClear(preferred[i], point, targetRect, inflated);
+          return !inflated.some((rect) =>
+            segmentIntersects(preferred[i], point, rect),
+          );
+        });
+      if (clear) {
+        routes.set(request.id, preferred);
+        continue;
+      }
+    }
+
+    // Self-loop attachments may lie outside a region derived from the caller's
+    // handle positions. In that case only the whole-graph search can serve them.
+    const fitsRegion = [
+      attached.sourcePoint,
+      attached.targetPoint,
       start,
       end,
-    ]);
-    // (Identical to `routeRegionOf(request)` below, which is that rule made
-    // available to callers; both go through `regionOf`.)
-    const grid =
-      routeOnGrid(
-        request,
-        start,
-        end,
-        scopeOfRegion(inflated, region, globalScope.isBlocked),
-        bendPenalty,
-      ) ?? routeOnGrid(request, start, end, globalScope, bendPenalty);
-    const points = dropDuplicates(
-      grid !== null
-        ? [
-            clonePoint(request.sourcePoint),
-            ...grid,
-            clonePoint(request.targetPoint),
-          ]
-        : fallbackPoints(request, nodeMargin, selfLoopGap),
-    );
-    // A route can still collapse to a single point: with a `nodeMargin` of `0`,
-    // two request points that quantize to the same point leave the search
-    // nothing to return but that point. Returning it twice would share both
-    // coordinates instead of exactly one, so the fallback — whose steps out are
-    // floored at `MIN_CLEARANCE` — draws the loop around it instead.
+    ].every((point) => containsPoint(region, point));
+    const grid = stubsClear
+      ? ((fitsRegion
+          ? routeOnGrid(
+              attached,
+              start,
+              end,
+              scopeOfRegion(inflated, region, globalScope.isBlocked),
+              bendPenalty,
+            )
+          : null) ??
+        routeOnGrid(attached, start, end, globalScope, bendPenalty))
+      : null;
     routes.set(
       request.id,
-      points.length >= 2
-        ? points
-        : fallbackPoints(request, nodeMargin, selfLoopGap),
+      grid === null
+        ? fallbackPoints(attached, nodeMargin, selfLoopGap)
+        : dropDuplicates([
+            clonePoint(attached.sourcePoint),
+            ...grid,
+            clonePoint(attached.targetPoint),
+          ]),
     );
   }
   return routes;
@@ -1017,7 +1082,8 @@ export const routeEdges = (
  * is a function of the rects reaching this box, so if none of them moved,
  * re-routing would return the polyline the caller already has.
  *
- * Two conditions the caller owes, both stated in the contract under Locality:
+ * Callers also check `isRouteLocal`: final fallbacks must be retried even if
+ * they fit inside the region. Two further conditions from Locality:
  * a request whose own record changed is always affected (its region moved with
  * it), and a **previous route with a point outside this box** must always be
  * re-routed — leaving the region is exactly the signature of the whole-graph
@@ -1035,4 +1101,30 @@ export const routeRegionOf = (
     pushOutward(quantized.sourcePoint, quantized.sourceSide, nodeMargin),
     pushOutward(quantized.targetPoint, quantized.targetSide, nodeMargin),
   ]);
+};
+
+/**
+ * Conservative reuse proof for callers narrowing a pass. Final fallbacks can
+ * become routable when an enclosing obstacle far outside the region moves.
+ * Comparing the full deterministic shape may also classify a searched route
+ * as global; that only costs a recomputation, never leaves a stale result.
+ */
+export const isRouteLocal = (
+  request: RouteRequest,
+  points: Point[],
+  sourceRect: RouteNodeRect,
+  options: EdgeRouterOptions = {},
+): boolean => {
+  const region = routeRegionOf(request, options);
+  if (!points.every((point) => containsPoint(region, point))) return false;
+  const attached = attachedRequest(
+    quantizeRequest(request),
+    quantizeRect(sourceRect),
+  );
+  const fallback = fallbackPoints(
+    attached,
+    quantize(options.nodeMargin ?? DEFAULT_NODE_MARGIN),
+    quantize(options.selfLoopGap ?? DEFAULT_SELF_LOOP_GAP),
+  );
+  return comparePointSequences(points, fallback) !== 0;
 };

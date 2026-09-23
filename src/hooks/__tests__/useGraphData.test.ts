@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useGraphData } from "../useGraphData";
+import { departureHandleId } from "../../utils/nodePorts";
 import { llvmMode, selectionDAGMode, mermaidMode } from "../../irModes";
 import type { RoutedEdgeData } from "../../components/Graph/RoutedEdge";
 import type { GraphData } from "../../types/graph";
@@ -477,7 +478,7 @@ done:
     );
   });
   expect(result.current.edges.map((edge) => edge.sourceHandle)).toEqual(
-    edited.edges.map((edge) => edge.sourceHandle ?? "out"),
+    edited.edges.map((edge) => edge.sourceHandle ?? departureHandleId(edge.id)),
   );
   expect(
     result.current.edges.find((edge) => edge.source === edge.target)?.data
@@ -560,4 +561,47 @@ it("grows a fixed-size container when hidden arrivals become visible without cha
     216,
   );
   expect(new Set(result.current.edges.map((e) => e.targetHandle)).size).toBe(8);
+});
+
+it("keeps bundle identity through measurement, content edits, and reset layout", async () => {
+  const { result } = renderHook(() => useGraphData());
+  const graph = threeNodeGraph();
+  graph.edges[1].source = "n1";
+  const mode = {
+    ...llvmMode,
+    bundleOf: (edge: GraphData["edges"][number]) => edge.source,
+  };
+  await layoutGraph(result, graph, mode);
+  const positions = result.current.nodes.map((node) => node.position);
+  const verify = () => {
+    expect(result.current.edges.map((edge) => edge.data?.bundleId)).toEqual([
+      "n1",
+      "n1",
+    ]);
+    expect(
+      new Set(result.current.edges.map((edge) => edge.sourceHandle)).size,
+    ).toBe(1);
+    expect(
+      new Set(result.current.edges.map((edge) => edge.targetHandle)).size,
+    ).toBe(2);
+  };
+  verify();
+  const edited = {
+    ...graph,
+    nodes: graph.nodes.map((node) => ({ ...node, label: "edited" })),
+  };
+  act(() => result.current.updateGraph(edited, mode));
+  verify();
+  expect(result.current.nodes.map((node) => node.position)).toEqual(positions);
+  await act(async () => {
+    await result.current.applyLayout(sizesOf(edited));
+  });
+  verify();
+  act(() => result.current.updateGraph(edited, llvmMode));
+  expect(
+    result.current.edges.every((edge) => edge.data?.bundleId === undefined),
+  ).toBe(true);
+  expect(
+    new Set(result.current.edges.map((edge) => edge.sourceHandle)).size,
+  ).toBe(2);
 });

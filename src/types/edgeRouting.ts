@@ -30,6 +30,7 @@ export interface RouteRequest {
   targetPoint: Point;
   sourceSide: RouteSide;
   targetSide: RouteSide;
+  bundleId?: string;
 }
 
 export interface EdgeRouterOptions {
@@ -41,12 +42,19 @@ export interface EdgeRouterOptions {
 /**
  * The part of the plane one request is searched in — an axis-aligned box, bounds
  * inclusive (`contracts/edge-routing.md`, "Per-edge regions"). A route found
- * here is a function of the rects reaching this box and of nothing else, which
- * is what lets a caller decide that an edge cannot have changed.
+ * here depends on the rectangles and route reservations reaching this box.
+ * Reuse also checks the request and its endpoint rectangles.
  */
 export interface RouteRegion {
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
+}
+
+/** Inputs and output of a completed pass, for dependency-aware reuse. */
+export interface RoutePassState {
+  rects: ReadonlyMap<string, RouteNodeRect>;
+  requests: ReadonlyMap<string, RouteRequest>;
+  routes: ReadonlyMap<string, Point[]>;
 }

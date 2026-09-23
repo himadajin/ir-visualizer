@@ -3,7 +3,7 @@
  * (`specs/graph-view.md` §3–§4). ELK options and `routeEdges` defaults both
  * read from here, so the gap ELK reserves is the gap the router will use.
  *
- * Lane width for non-bundle separation is not here yet — it lands with #86.
+ * Parallel non-bundle lanes use EDGE_LANE_GAP.
  */
 
 /** Clearance the live router keeps around every node rect, px. */
@@ -47,3 +47,6 @@ export const EDGE_NODE_SPACING = NODE_MARGIN;
 
 /** ELK edge-edge spacing, px. Same clearance family as `EDGE_NODE_SPACING`. */
 export const EDGE_EDGE_SPACING = NODE_MARGIN;
+
+/** Minimum center-line distance between unrelated parallel route segments. */
+export const EDGE_LANE_GAP = 12;

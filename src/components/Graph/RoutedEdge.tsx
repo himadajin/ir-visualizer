@@ -12,6 +12,7 @@ import EdgeMarkerDefs from "./EdgeMarkerDefs";
  * not live here — it comes from `useEdgeRoutes`.
  */
 export interface RoutedEdgeData extends Record<string, unknown> {
+  bundleId?: string;
   isBackEdge?: boolean;
 }
 

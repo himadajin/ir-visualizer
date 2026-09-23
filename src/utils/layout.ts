@@ -74,6 +74,7 @@ export interface LayoutOptions {
   /** Per-mode ELK option overrides (contracts/ir-mode-registry.md). */
   layoutOptions?: Record<string, string>;
   nodePorts?: NodePortPreferences;
+  bundleOf?: (edge: GraphEdge) => string | undefined;
 }
 
 /** Measured (or test-supplied) box for one node, flow px. */
@@ -333,7 +334,12 @@ export const getLayoutedElements = async (
   const direction = options.direction || graph.direction || "TD";
   const elkDirection = toElkDirection(direction);
   const hierarchy = assertHierarchy(graph);
-  const prepared = prepareNodePorts(graph, edgeBuilder, options.nodePorts);
+  const prepared = prepareNodePorts(
+    graph,
+    edgeBuilder,
+    options.nodePorts,
+    options.bundleOf,
+  );
 
   const elkChildren = hierarchy.roots.map((node) =>
     buildElkNode(

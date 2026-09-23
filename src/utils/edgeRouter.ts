@@ -5,8 +5,19 @@ import type {
   RouteRegion,
   RouteRequest,
   RouteSide,
+  RoutePassState,
 } from "../types/edgeRouting";
 import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
+
+import {
+  conflictsWith,
+  reservationGrid,
+  reservationReaches,
+  reservationSignature,
+  sameBundle,
+  segmentsOf,
+  type ReservedSegment,
+} from "./routeReservations";
 
 /**
  * Self-contained orthogonal edge router (`contracts/edge-routing.md`,
@@ -18,10 +29,9 @@ import { NODE_MARGIN, SELF_LOOP_GAP } from "./spacing";
  * quantized handle positions, including self-loops. Bottom-to-top self-loops
  * prefer a validated right-side shape.
  *
- * The region is why this router is stable and not merely deterministic: a route
- * is a function of the rects near it, so an unrelated node moving cannot flip it
- * through a tie-break on a shared grid. That is a guarantee of the module, not
- * an optimization — see "Per-edge regions" and "Locality" in the contract.
+ * Region-local searches depend on nearby rects and directional reservations.
+ * Unchanged dependencies allow exact reuse; a changed earlier lane may propagate
+ * to later edges. Congested passes repair the allocation before falling back.
  */
 
 /** Clearance kept around every node rect, px (`NODE_MARGIN` in spacing.ts). */
@@ -36,9 +46,8 @@ export const DEFAULT_SELF_LOOP_GAP = SELF_LOOP_GAP;
  * (`contracts/edge-routing.md`, "Per-edge regions"). A request is searched on a
  * grid built from the rects intersecting its region — the bounding box of its
  * two request points and their two pushed points, inflated by this — which is
- * what the Locality guarantee is stated against: move a rect this region does
- * not reach and the route cannot change, because that rect was never in the
- * search.
+ * the scope of the direct dependencies. Changes outside it can affect a route
+ * only through changed reservations or a whole-graph/repair retry.
  *
  * It is a constant rather than an `EdgeRouterOptions` field on purpose. No
  * caller has a reason to vary it, and it is not a preference: it trades how far
@@ -362,6 +371,7 @@ interface SearchScope {
   gridYs: number[];
   isBlocked: IsBlocked;
   region?: RouteRegion;
+  reservations?: readonly ReservedSegment[];
 }
 
 /**
@@ -694,7 +704,11 @@ const routeOnGrid = (
       const nextY = ys[nextYi];
       // Stubs are checked separately. No searched segment is exempt from
       // either endpoint's clearance, even the first/last grid segment.
-      if (scope.isBlocked((x + nextX) / 2, (y + nextY) / 2)) {
+      if (
+        scope.isBlocked((x + nextX) / 2, (y + nextY) / 2) ||
+        (scope.reservations !== undefined &&
+          conflictsWith({ x, y }, { x: nextX, y: nextY }, scope.reservations))
+      ) {
         continue;
       }
       const turned = dir !== label.dir;
@@ -896,38 +910,84 @@ const selfLoopPoints = (
   ]);
 };
 
-/**
- * Routes every request against the live node rects. Pure: the same rects and
- * requests always produce byte-identical polylines, and no route depends on the
- * order of either input array (`contracts/edge-routing.md`, "Determinism").
- * Stronger, and the reason regions exist: a route found on its region depends
- * only on the rects that region reaches, so moving anything else leaves it
- * byte-identical (`contracts/edge-routing.md`, "Locality").
- *
- * Keyed by `RouteRequest.id`; a request naming a node absent from `nodes` gets
- * no entry at all (`contracts/edge-routing.md`, "Missing nodes").
- *
- * Every coordinate in the input is quantized here, before the obstacle set is
- * built and before any search runs, so every returned coordinate is an integer
- * (`contracts/edge-routing.md`, "Integer coordinates"). A routed polyline's
- * endpoints are exact on the quantized request points, not on the fractional
- * ones a caller passed.
- *
- * Every returned polyline — searched, self-loop and fallback alike — is
- * orthogonal, has at least 2 points, and contains **no immediate reversal**: at
- * no interior vertex do the arriving and leaving segments run along the same
- * axis in opposite directions (`contracts/edge-routing.md`, "No immediate
- * reversals"). That is the checkable form of "never a degenerate hook". The
- * search gets it by refusing to double back, the self-loop by construction, the
- * fallback via its lateral detour case. All three hold at any clearance,
- * including one that quantizes to `0`, because the room a synthesized shape is
- * built from is floored at `MIN_CLEARANCE`.
- */
-export const routeEdges = (
+/** Mandatory endpoint segments, reserved before any route is chosen. */
+const requestStubs = (
+  request: RouteRequest,
+  margin: number,
+): ReservedSegment[] => [
+  ...segmentsOf([
+    request.sourcePoint,
+    pushOutward(request.sourcePoint, request.sourceSide, margin),
+  ]),
+  ...segmentsOf([
+    request.targetPoint,
+    pushOutward(request.targetPoint, request.targetSide, margin),
+  ]),
+];
+
+const withReservations = (
+  scope: SearchScope,
+  reservations: readonly ReservedSegment[],
+): SearchScope => {
+  const { xs, ys } = reservationGrid(reservations);
+  return {
+    ...scope,
+    gridXs: [...scope.gridXs, ...xs],
+    gridYs: [...scope.gridYs, ...ys],
+    reservations,
+  };
+};
+
+const localSignature = (
+  request: RouteRequest,
+  rects: readonly RouteNodeRect[],
+  reservations: readonly ReservedSegment[],
+): string => {
+  const region = routeRegionOf(request);
+  const nearby = rects
+    .filter(
+      (r) =>
+        r.id === request.source ||
+        r.id === request.target ||
+        (r.obstacle !== false &&
+          intersectsRegion(
+            {
+              id: r.id,
+              minX: r.x - DEFAULT_NODE_MARGIN,
+              minY: r.y - DEFAULT_NODE_MARGIN,
+              maxX: r.x + r.width + DEFAULT_NODE_MARGIN,
+              maxY: r.y + r.height + DEFAULT_NODE_MARGIN,
+            },
+            region,
+          )),
+    )
+    .map((r) => JSON.stringify(r))
+    .sort();
+  return JSON.stringify([request, nearby, reservationSignature(reservations)]);
+};
+
+/** A repair depends on the failed allocations too, not only the final geometry. */
+class RouteMap extends Map<string, Point[]> {
+  readonly reusable: boolean;
+
+  constructor(entries?: Iterable<readonly [string, Point[]]>, reusable = true) {
+    super(entries);
+    this.reusable = reusable;
+  }
+}
+
+interface RouteAttempt {
+  routes: RouteMap;
+  blocked: { id: string; blockers: string[] }[];
+}
+
+const routeAll = (
   nodes: RouteNodeRect[],
   requests: RouteRequest[],
   options: EdgeRouterOptions = {},
-): Map<string, Point[]> => {
+  previous?: RoutePassState,
+  order?: readonly string[],
+): RouteAttempt => {
   // The quantization boundary: nothing below this point sees a coordinate the
   // caller passed, only its lattice-snapped image. `nodeMargin` and
   // `selfLoopGap` are distances that end up added to coordinates, so they are
@@ -940,7 +1000,9 @@ export const routeEdges = (
   const nodeMargin = quantize(options.nodeMargin ?? DEFAULT_NODE_MARGIN);
   const bendPenalty = options.bendPenalty ?? DEFAULT_BEND_PENALTY;
   const selfLoopGap = quantize(options.selfLoopGap ?? DEFAULT_SELF_LOOP_GAP);
-  const quantizedRequests = requests.map(quantizeRequest);
+  const quantizedRequests = [
+    ...new Map(requests.map((r) => [r.id, quantizeRequest(r)])).values(),
+  ].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   // Duplicate ids are invalid input; the documented rule is that the last one
   // wins. Deduping before the obstacle index is built matters: otherwise a
@@ -979,7 +1041,59 @@ export const routeEdges = (
     );
   }
 
-  const routes = new Map<string, Point[]>();
+  if (order !== undefined) {
+    const rank = new Map(order.map((id, index) => [id, index]));
+    quantizedRequests.sort(
+      (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
+    );
+  }
+  const validRequests = quantizedRequests.filter(
+    (r) => rectById.has(r.source) && rectById.has(r.target),
+  );
+  const stubs = new Map(
+    validRequests.map((r) => [r.id, requestStubs(r, nodeMargin)]),
+  );
+  const oldRequests =
+    previous === undefined
+      ? []
+      : [...previous.requests.values()]
+          .map(quantizeRequest)
+          .filter(
+            (r) => previous.rects.has(r.source) && previous.rects.has(r.target),
+          );
+  const oldStubs = new Map(
+    oldRequests.map((r) => [r.id, requestStubs(r, nodeMargin)]),
+  );
+  const reserved = new Map<string, ReservedSegment[]>();
+  const oldReserved = new Map(
+    oldRequests.map((r) => [
+      r.id,
+      segmentsOf(previous?.routes.get(r.id) ?? []),
+    ]),
+  );
+  const reservationsFor = (
+    request: RouteRequest,
+    all: RouteRequest[],
+    fixed: Map<string, ReservedSegment[]>,
+    paths: Map<string, ReservedSegment[]>,
+    old = false,
+  ) =>
+    all.flatMap((other) =>
+      other.id === request.id || sameBundle(request, other)
+        ? []
+        : [
+            ...(fixed.get(other.id) ?? []),
+            ...(old && other.id >= request.id
+              ? []
+              : (paths.get(other.id) ?? [])),
+          ],
+    );
+  const routes = new RouteMap();
+  const blocked: RouteAttempt["blocked"] = [];
+  const save = (request: RouteRequest, points: Point[]) => {
+    routes.set(request.id, points);
+    reserved.set(request.id, segmentsOf(points));
+  };
   for (const request of quantizedRequests) {
     const sourceRect = rectById.get(request.source);
     const targetRect = rectById.get(request.target);
@@ -1001,6 +1115,38 @@ export const routeEdges = (
       nodeMargin,
     );
     const region = routeRegionOf(request, options);
+    const reservations = reservationsFor(
+      request,
+      validRequests,
+      stubs,
+      reserved,
+    );
+    const localReservations = reservations.filter((s) =>
+      reservationReaches(s, region),
+    );
+    const oldRequest = previous?.requests.get(request.id);
+    const oldRoute = previous?.routes.get(request.id);
+    if (
+      previous !== undefined &&
+      oldRequest !== undefined &&
+      oldRoute !== undefined &&
+      isRouteLocal(oldRequest, oldRoute) &&
+      localSignature(request, [...rectById.values()], localReservations) ===
+        localSignature(
+          quantizeRequest(oldRequest),
+          [...previous.rects.values()].map(quantizeRect),
+          reservationsFor(
+            quantizeRequest(oldRequest),
+            oldRequests,
+            oldStubs,
+            oldReserved,
+            true,
+          ).filter((s) => reservationReaches(s, routeRegionOf(oldRequest))),
+        )
+    ) {
+      save(request, oldRoute);
+      continue;
+    }
     const stubsClear =
       stubIsClear(request.sourcePoint, start, sourceRect, inflated) &&
       stubIsClear(end, request.targetPoint, targetRect, inflated);
@@ -1018,6 +1164,8 @@ export const routeEdges = (
         preferred !== null &&
         preferred.every((point) => containsPoint(region, point)) &&
         preferred.slice(1).every((point, i) => {
+          if (conflictsWith(preferred[i], point, localReservations))
+            return false;
           if (i === 0)
             return stubIsClear(preferred[i], point, sourceRect, inflated);
           if (i === preferred.length - 2)
@@ -1027,7 +1175,7 @@ export const routeEdges = (
           );
         });
       if (clear && preferred !== null) {
-        routes.set(request.id, preferred);
+        save(request, preferred);
         continue;
       }
     }
@@ -1037,12 +1185,56 @@ export const routeEdges = (
           request,
           start,
           end,
-          scopeOfRegion(inflated, region, globalScope.isBlocked),
+          withReservations(
+            scopeOfRegion(inflated, region, globalScope.isBlocked),
+            localReservations,
+          ),
           bendPenalty,
-        ) ?? routeOnGrid(request, start, end, globalScope, bendPenalty))
+        ) ??
+        routeOnGrid(
+          request,
+          start,
+          end,
+          withReservations(globalScope, reservations),
+          bendPenalty,
+        ))
       : null;
-    routes.set(
-      request.id,
+    if (grid === null && stubsClear) {
+      const fixed = reservationsFor(request, validRequests, stubs, new Map());
+      const compatibleStubs =
+        !conflictsWith(request.sourcePoint, start, fixed) &&
+        !conflictsWith(end, request.targetPoint, fixed);
+      const independent = compatibleStubs
+        ? routeOnGrid(
+            request,
+            start,
+            end,
+            withReservations(globalScope, fixed),
+            bendPenalty,
+          )
+        : null;
+      if (independent !== null) {
+        const blockers = validRequests
+          .filter(
+            (other) =>
+              other.id !== request.id &&
+              !sameBundle(request, other) &&
+              independent
+                .slice(1)
+                .some((point, i) =>
+                  conflictsWith(
+                    independent[i],
+                    point,
+                    reserved.get(other.id) ?? [],
+                  ),
+                ),
+          )
+          .map((other) => other.id);
+        blocked.push({ id: request.id, blockers });
+      }
+    }
+    save(
+      request,
       grid === null
         ? fallbackPoints(request, nodeMargin, selfLoopGap)
         : dropDuplicates([
@@ -1052,26 +1244,89 @@ export const routeEdges = (
           ]),
     );
   }
-  return routes;
+  return { routes, blocked };
 };
+
+/** Repair greedy lane allocations before treating congestion as unroutable. */
+const routeWithRepair = (
+  nodes: RouteNodeRect[],
+  requests: RouteRequest[],
+  options: EdgeRouterOptions,
+  previous?: RoutePassState,
+): Map<string, Point[]> => {
+  const initialOrder = [...new Set(requests.map((r) => r.id))].sort();
+  const pending = [initialOrder];
+  const visited = new Set([JSON.stringify(initialOrder)]);
+  let best: RouteAttempt | undefined;
+  for (let index = 0; index < pending.length; index++) {
+    const order = pending[index];
+    const result = routeAll(
+      nodes,
+      requests,
+      options,
+      index === 0 ? previous : undefined,
+      order,
+    );
+    if (best === undefined || result.blocked.length < best.blocked.length)
+      best = result;
+    if (result.blocked.length === 0) {
+      // Insertion order is deterministic too, regardless of the repair order.
+      return new RouteMap(
+        [...result.routes].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        index === 0 && Object.keys(options).length === 0,
+      );
+    }
+    for (const failed of result.blocked) {
+      const position = order.indexOf(failed.id);
+      for (const blocker of failed.blockers) {
+        const before = order.indexOf(blocker);
+        const next = [...order];
+        next.splice(position, 1);
+        next.splice(before, 0, failed.id);
+        const key = JSON.stringify(next);
+        if (!visited.has(key)) {
+          visited.add(key);
+          pending.push(next);
+        }
+      }
+    }
+  }
+  return new RouteMap(
+    [...(best?.routes ?? [])].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    false,
+  );
+};
+
+/** A fresh, deterministic pass over the complete request set. */
+export const routeEdges = (
+  nodes: RouteNodeRect[],
+  requests: RouteRequest[],
+  options: EdgeRouterOptions = {},
+): Map<string, Point[]> => routeWithRepair(nodes, requests, options);
+
+/** Same pass with default options, reusing only proven-unchanged local searches. */
+export const routeEdgesWithReuse = (
+  nodes: RouteNodeRect[],
+  requests: RouteRequest[],
+  previous: RoutePassState,
+): Map<string, Point[]> =>
+  routeWithRepair(
+    nodes,
+    requests,
+    {},
+    previous.routes instanceof RouteMap && previous.routes.reusable
+      ? previous
+      : undefined,
+  );
 
 /**
  * The region one request is searched in (`contracts/edge-routing.md`, "Per-edge
  * regions"), on the quantized request — the same box `routeEdges` builds, from
  * the same `regionOf`.
  *
- * Exported so that a caller holding the previous pass's input and output can
- * work out which routes a change *cannot* have altered, and skip them. That is
- * a pure optimization and only because of Locality: a route found on its region
- * is a function of the rects reaching this box, so if none of them moved,
- * re-routing would return the polyline the caller already has.
- *
- * Callers also check `isRouteLocal`: final fallbacks must be retried even if
- * they fit inside the region. Two further conditions from Locality:
- * a request whose own record changed is always affected (its region moved with
- * it), and a **previous route with a point outside this box** must always be
- * re-routed — leaving the region is exactly the signature of the whole-graph
- * retry, and Locality is not claimed for those.
+ * Used with the nearby reservations and endpoint rectangles to determine
+ * whether the exact local search inputs have changed. The region alone is not
+ * sufficient for reuse: earlier lanes can move without any nearby node moving.
  */
 export const routeRegionOf = (
   request: RouteRequest,
@@ -1088,7 +1343,7 @@ export const routeRegionOf = (
 };
 
 /**
- * Conservative reuse proof for callers narrowing a pass. Final fallbacks can
+ * Conservative geometric part of the reuse proof. Final fallbacks can
  * become routable when an enclosing obstacle far outside the region moves.
  * Comparing the full deterministic shape may also classify a searched route
  * as global; that only costs a recomputation, never leaves a stale result.

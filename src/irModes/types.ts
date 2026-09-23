@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { NodeProps } from "@xyflow/react";
-import type { GraphData } from "../types/graph";
+import type { GraphData, GraphEdge } from "../types/graph";
 import type { IREdgeBuilder } from "../utils/layout";
 import type { NodePortPreferences } from "../types/nodePorts";
 import type { EditorLanguageId } from "./editorLanguages";
@@ -59,6 +59,8 @@ export interface IRModeDefinition {
   layoutOptions?: Record<string, string>;
   /** Preferred operand/definition positions; omitted for generic arrivals. */
   nodePorts?: NodePortPreferences;
+  /** Same-value fan-out identity; undefined means an independent edge. */
+  bundleOf?: (edge: GraphEdge) => string | undefined;
   /**
    * Optional alternative projections of the same text (e.g. LLVM's CFG vs
    * Use-Def). When present: >= 2 entries, views[0] is the default and must
@@ -82,6 +84,8 @@ export interface IRViewDefinition {
   layoutOptions?: Record<string, string>;
   /** Preferred operand/definition positions; omitted for generic arrivals. */
   nodePorts?: NodePortPreferences;
+  /** Same-value fan-out identity; undefined means an independent edge. */
+  bundleOf?: (edge: GraphEdge) => string | undefined;
 }
 
 /**
@@ -91,5 +95,5 @@ export interface IRViewDefinition {
  */
 export type IRLayoutBehavior = Pick<
   IRModeDefinition,
-  "edgeBuilder" | "layoutOptions" | "nodePorts"
+  "edgeBuilder" | "layoutOptions" | "nodePorts" | "bundleOf"
 >;

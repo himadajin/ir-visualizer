@@ -14,17 +14,15 @@ import {
   type InternalNode,
 } from "@xyflow/react";
 import {
-  DEFAULT_NODE_MARGIN,
-  isRouteLocal,
+  routeEdgesWithReuse,
   quantizeRect,
   quantizeRequest,
   routeEdges,
-  routeRegionOf,
 } from "../utils/edgeRouter";
 import type {
   Point,
   RouteNodeRect,
-  RouteRegion,
+  RoutePassState,
   RouteRequest,
   RouteSide,
 } from "../types/edgeRouting";
@@ -192,6 +190,9 @@ const collectRequests = (
       targetPoint: target.point,
       sourceSide: source.side,
       targetSide: target.side,
+      ...(typeof edge.data?.bundleId === "string"
+        ? { bundleId: edge.data.bundleId }
+        : {}),
     });
   }
   return requests;
@@ -215,140 +216,25 @@ const inputSignature = (
   rects: readonly RouteNodeRect[],
   requests: readonly RouteRequest[],
 ): string => {
-  const parts: string[] = [];
-  for (const rect of rects) {
-    parts.push(
-      `${rect.id}@${String(rect.x)},${String(rect.y)},${String(rect.width)},${String(rect.height)}`,
-    );
-  }
-  parts.push("|");
-  for (const request of requests) {
-    parts.push(
-      `${request.id}:${request.source}>${request.target}` +
-        `@${String(request.sourcePoint.x)},${String(request.sourcePoint.y)}` +
-        `>${String(request.targetPoint.x)},${String(request.targetPoint.y)}` +
-        `:${request.sourceSide}${request.targetSide}`,
-    );
-  }
-  return parts.join(";");
+  return JSON.stringify([rects, requests]);
 };
 
-/** The rect grown by `nodeMargin`, which is the shape a region is tested against. */
-const inflatedBox = (rect: RouteNodeRect): RouteRegion => ({
-  minX: rect.x - DEFAULT_NODE_MARGIN,
-  minY: rect.y - DEFAULT_NODE_MARGIN,
-  maxX: rect.x + rect.width + DEFAULT_NODE_MARGIN,
-  maxY: rect.y + rect.height + DEFAULT_NODE_MARGIN,
-});
-
-const boxesOverlap = (a: RouteRegion, b: RouteRegion): boolean =>
-  a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
-
-const sameRect = (a: RouteNodeRect, b: RouteNodeRect): boolean =>
-  a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-
-const sameRequest = (a: RouteRequest, b: RouteRequest): boolean =>
-  a.source === b.source &&
-  a.target === b.target &&
-  a.sourceSide === b.sourceSide &&
-  a.targetSide === b.targetSide &&
-  a.sourcePoint.x === b.sourcePoint.x &&
-  a.sourcePoint.y === b.sourcePoint.y &&
-  a.targetPoint.x === b.targetPoint.x &&
-  a.targetPoint.y === b.targetPoint.y;
-
-/** What one pass routed, kept so the next one can narrow (see `affectedRequests`). */
-interface PassState {
-  rects: Map<string, RouteNodeRect>;
-  requests: Map<string, RouteRequest>;
-  routes: EdgeRouteMap;
-}
-
-/**
- * The requests whose route may differ from the previous pass — a **superset**,
- * which is what makes routing only these and reusing the rest observationally
- * identical to a full pass.
- *
- * The router's Locality guarantee (`contracts/edge-routing.md`) is what this
- * rests on: a route found on its region is a function of the rects reaching that
- * region, so an edge no changed rect comes near returns exactly the polyline it
- * already has. Three things are therefore in the set, and the third is the one
- * that is easy to forget:
- *
- * 1. requests that are new, or whose own record moved — their region moved too;
- * 2. requests whose region a changed rect reaches, in **either** its old or its
- *    new position, since both the vacated space and the occupied one matter;
- * 3. requests whose previous route left its own region or equals the final
- *    fallback — neither has the Locality guarantee.
- */
-const affectedRequests = (
-  requests: readonly RouteRequest[],
-  rects: readonly RouteNodeRect[],
-  previous: PassState,
-): RouteRequest[] => {
-  const changedBoxes: RouteRegion[] = [];
-  const seen = new Set<string>();
-  for (const rect of rects) {
-    seen.add(rect.id);
-    const before = previous.rects.get(rect.id);
-    if (before === undefined) {
-      changedBoxes.push(inflatedBox(rect));
-    } else if (!sameRect(before, rect)) {
-      changedBoxes.push(inflatedBox(before), inflatedBox(rect));
-    }
-  }
-  for (const [id, rect] of previous.rects) {
-    if (!seen.has(id)) changedBoxes.push(inflatedBox(rect)); // removed
-  }
-
-  return requests.filter((request) => {
-    const before = previous.requests.get(request.id);
-    if (before === undefined || !sameRequest(before, request)) return true;
-    const points = previous.routes.get(request.id);
-    if (points === undefined) return true;
-    const region = routeRegionOf(request);
-    if (!isRouteLocal(request, points)) return true;
-    return changedBoxes.some((box) => boxesOverlap(box, region));
-  });
-};
-
-/**
- * One pass: the routes for `requests` against `rects`, reusing every polyline
- * the change cannot have altered.
- *
- * Pure, and **equal to `routeEdges(rects, requests)` entry for entry** — that
- * equality is the whole contract of this function, and it is what
- * `__tests__/useEdgeRoutes.test.ts` pins. `previous === null` (the first pass,
- * or after any doubt) simply routes everything.
- */
+/** Reuse is decided by the router against all current lane reservations. */
 export const routePass = (
-  previous: PassState | null,
+  previous: RoutePassState | null,
   rects: RouteNodeRect[],
   requests: RouteRequest[],
-): EdgeRouteMap => {
-  if (previous === null) return routeEdges(rects, requests);
-
-  const affected = affectedRequests(requests, rects, previous);
-  const affectedIds = new Set(affected.map((request) => request.id));
-  const routed = routeEdges(rects, affected);
-  const merged = new Map<string, Point[]>();
-  for (const request of requests) {
-    // An affected request takes the new answer, including "no entry" — the
-    // contract's missing-node rule, which a stale entry would paper over.
-    const points = affectedIds.has(request.id)
-      ? routed.get(request.id)
-      : previous.routes.get(request.id);
-    if (points !== undefined) merged.set(request.id, points);
-  }
-  return merged;
-};
+): EdgeRouteMap =>
+  previous === null
+    ? routeEdges(rects, requests)
+    : routeEdgesWithReuse(rects, requests, previous);
 
 /** The pass state to carry into the next `routePass`. */
 export const passStateOf = (
   rects: RouteNodeRect[],
   requests: RouteRequest[],
   routes: EdgeRouteMap,
-): PassState => ({
+): RoutePassState => ({
   rects: new Map(rects.map((rect) => [rect.id, rect])),
   requests: new Map(requests.map((request) => [request.id, request])),
   routes,
@@ -363,13 +249,9 @@ export const passStateOf = (
  * has already vacated, so nothing jumps when it is released — the visible defect
  * the old split produced.
  *
- * What a pass does skip is edges whose route cannot have changed, which the
- * router's Locality guarantee makes a pure optimization rather than a second
- * answer (`affectedRequests` above, and the contract's "Narrowing a pass").
- * Skipping is worth having: routing everything costs 15-25 ms at 180 nodes and
- * 35-50 ms at 400 (`specs/graph-view.md` §4), over the 16.7 ms frame budget,
- * while a drag genuinely affects a handful of edges. The `nodes` array stays
- * complete either way — a narrowed pass must still route around every obstacle.
+ * The router compares nearby obstacle and reservation dependencies before
+ * reusing local routes. Both arrays stay complete so occupied lanes are never
+ * omitted from a pass (contract: "Reusing a pass").
  */
 export const useEdgeRoutes = (): EdgeRouteMap => {
   const store = useStoreApi();
@@ -377,7 +259,7 @@ export const useEdgeRoutes = (): EdgeRouteMap => {
 
   const frameRef = useRef<number | null>(null);
   const signatureRef = useRef<string | null>(null);
-  const passRef = useRef<PassState | null>(null);
+  const passRef = useRef<RoutePassState | null>(null);
 
   useEffect(() => {
     const runPass = () => {

@@ -58,6 +58,7 @@ export function useIRWorkspace() {
             edgeBuilder: activeView?.edgeBuilder ?? mode.edgeBuilder,
             layoutOptions: activeView?.layoutOptions ?? mode.layoutOptions,
             nodePorts: activeView?.nodePorts ?? mode.nodePorts,
+            bundleOf: activeView?.bundleOf ?? mode.bundleOf,
           });
           setError(null);
           setDiagnostics(result.diagnostics ?? NO_DIAGNOSTICS);

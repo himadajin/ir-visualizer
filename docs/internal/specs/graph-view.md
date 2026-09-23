@@ -109,7 +109,7 @@ DOM. The hook owns the measure pass that produces that map (§5).
   `src/utils/spacing.ts`. `elk.spacing.edgeNode` / `edgeEdge` (and their between-layer
   counterparts) are derived from `NODE_MARGIN` so they cannot drift from the clearance
   the router actually keeps, even though ELK's own routes are discarded. Lane width for
-  non-bundle separation is not in that module yet — it lands with #86.
+  non-bundle separation is `EDGE_LANE_GAP` (12 flow px) in that module.
 - For an `UP` layered graph, fixed top arrivals/bottom departures must not make
   ELK interpret every node as feedback and invert the requested ranking. Its
   children are ordered topologically (stable id tie-break; break cycles at the
@@ -160,13 +160,20 @@ channel: `getLayoutedElements` stamps `bundleOf(edge)` onto the React Flow edge'
 `data.bundleId`, and `useEdgeRoutes` copies it into `RouteRequest.bundleId`
 (`contracts/edge-routing.md`). The router is never told what an IR is.
 
-**These rules are not yet held.** They are the target the router is being moved toward, and
-two things stand in the way: unrelated routes coincide by accident on the shared
-search grid (#86), and same-value fan-out is not drawn as a trunk at all (#88).
-CFG successors have separate departure ports (#67), including self-loops, and
-routed edges have separate arrivals (#87). These attachments do not guarantee
-separation further along a route. Until the remaining changes land, an overlap
-in the rendered graph means nothing.
+**Separation is implemented by #86.** Unrelated routes have no shared segments
+and keep 12 flow px between parallel runs with overlapping projections, subject
+to the contract's geometrically impossible input exception. A point crossing is
+allowed. Same-value distribution trees and junction marks remain #88.
+
+**Departure points.** Non-bundled visible routed edges receive distinct source
+ports in deterministic preferred-port/edge-id order. Each defined bundle retains
+one departure per source port. Generic departures are evenly spaced; preferred
+text positions are retained where possible, with at least 24 px between slots.
+Nodes grow to fit the slots. Hidden links reserve none. Bundle membership comes
+only from the active IR registry behavior (Use-Def: source instruction).
+
+Pinned by: `src/utils/__tests__/nodePorts.test.ts`,
+`src/utils/__tests__/edgeRouter.separation.test.ts`.
 
 **Arrival points.** Every visible `routed` edge has its own target handle on the
 node's top edge, including parallel edges, self-loops, and edges into containers.
@@ -194,7 +201,7 @@ Existing terminal marker kinds (including no marker) are preserved.
   change. Reset Layout uses the same assignment. Mode-specific preferences come
   from the IR mode registry; generic layout and rendering contain no IR cases.
 - Separation here concerns the target attachments and terminal markers. Shared
-  segments elsewhere remain the scope of #86; CFG departures follow `llvm-ir.md` §4.2.
+  segments elsewhere are separated by the router; CFG departures follow `llvm-ir.md` §4.2.
 
 > Pinned by: `src/utils/__tests__/nodePorts.test.ts`,
 > `src/utils/__tests__/layout.test.ts`, `src/hooks/__tests__/useGraphData.test.ts`,
@@ -229,37 +236,12 @@ Existing terminal marker kinds (including no marker) are preserved.
   rects it passes in; per the contract's missing-node rule their edges get no map entry and
   are **not drawn** for that frame, appearing once measurement lands. There is deliberately
   no placeholder shape — one would reintroduce a second geometry generator.
-- **During a drag**, routes recompute continuously, throttled to animation frames, through
-  **the same code path as at rest** — no incident-only mode and no catch-up pass at drag stop,
-  so no edge is ever drawn against a rect the dragged node has already left and nothing jumps
-  on drop. A pass does skip edges whose route cannot have changed, which is a pure
-  optimization and not a second answer: the router's Locality guarantee makes reusing them
-  identical to recomputing them, and `contracts/edge-routing.md` ("Narrowing a pass") states
-  the three clauses a caller owes. The narrowing is what keeps a drag inside the frame budget;
-  routing _everything_ every frame does not, which is why it is there.
-  Measured out of band, full pass, region grid vs. the graph-wide grid it replaces (bare Node,
-  warm, median of 9, 2026-08-11, this machine; ELK-layered-shaped graphs, 180×60 px nodes on a
-  260×160 px grid): 60 nodes / 117 edges **5–7 ms** vs 9–17 ms, 180 / 370 **14–23 ms** vs
-  48–104 ms, 400 / 840 **34–48 ms** vs 214–267 ms. Ranges are across repeated runs on a
-  loaded machine, so treat them as an order of magnitude, not a number. Two things follow: the
-  region grid is 2–5× cheaper than the graph-wide one at every size, and a full pass still
-  exceeds the 16.7 ms budget from roughly 180 nodes, which the Use-Def view can reach since it
-  emits one node per instruction. Cost depends on graph shape: on a fixture whose edges span
-  the whole graph rather than joining adjacent layers, every region grows to nearly the graph
-  and the advantage disappears (400 / 840: 1740 ms vs 1725 ms). Real IR graphs are layered.
-  The in-suite 300 ms timing test is a catastrophic-regression guard, not a check of this
-  budget.
-- **An edge changes only when something near it changed.** Dragging a node re-routes the
-  edges whose region it touches and leaves every other route byte-identical — the Locality
-  guarantee of `contracts/edge-routing.md`, and the reason a drag no longer perturbs edges
-  elsewhere in the graph. It holds for every edge except one that had to fall through to the
-  contract's whole-graph retry, which is the rare case of a region offering no path at all
-  (no edge in either default LLVM-IR example needs it). Measured on the Use-Def view of the
-  default example (2026-08-11, replayed through the router from the app's ELK layout): dragging
-  the `%0` argument node by 24 × 16 px changed 4 routes on the graph-wide grid — one of them an
-  edge not touching the dragged node at all — against 3 on the region grid, all of them
-  incident to it, and **no route outside the dragged node's reach changed at any drag
-  distance**.
+- **During a drag**, the same router runs once per changed animation frame.
+  Local routes are reused only if their nearby obstacle and route-reservation
+  dependencies are unchanged. Earlier-route changes may propagate to later routes;
+  unrelated components stay stable. A reused pass equals a fresh full pass, with
+  no catch-up pass on drop. See `contracts/edge-routing.md`, "Reusing a pass".
+  Pinned by: `src/hooks/__tests__/useEdgeRoutes.test.ts`.
 - **Rendering:** `RoutedEdge` draws the returned points as an orthogonal polyline with
   **rounded corners**; edge labels (phi) render at the polyline's arc-length midpoint.
 - **The bend radius is derived from the router's node margin, not chosen.** Two
@@ -336,18 +318,16 @@ Existing terminal marker kinds (including no marker) are preserved.
 > `src/utils/__tests__/converter.test.ts` (dashed chain/glue, markerStart/markerEnd,
 > Mermaid stroke/arrowhead mapping).
 >
-> Also pinned by: `src/hooks/__tests__/useEdgeRoutes.test.ts` (a narrowed pass equals the
+> Also pinned by: `src/hooks/__tests__/useEdgeRoutes.test.ts` (a reused pass equals the
 > full pass, including when a node stops obstructing an edge, when a far node reshapes a
 > route found on the whole graph, and when a handle moves under a rect that did not).
 >
 > _(observed, untested)_: live-rect tracking while dragging and after content edits, the
 > hook's context publication, the unmeasured-node omission, the midpoint label placement, the
-> accent color, and the animation-frame throttling. The frame-budget figures are measured out
-> of band, not by the test suite. Locality itself _is_ pinned, at the router boundary
-> (`src/utils/__tests__/edgeRouter.test.ts`): what the suite cannot observe is only that the
-> hook feeds the router the live rects. The overlap semantics are _specified, unimplemented_ —
-> a different marker from the two above: there is nothing to observe and nothing to pin until
-> #86–#88 land.
+> accent color, and the animation-frame throttling. Separation is pinned by
+> `src/utils/__tests__/edgeRouter.separation.test.ts`; route dependency reuse is
+> pinned by `src/hooks/__tests__/useEdgeRoutes.test.ts`. Distribution trees and
+> junction marks remain specified but unimplemented (#88).
 
 ## 5. Node sizing (measure, then lay out)
 

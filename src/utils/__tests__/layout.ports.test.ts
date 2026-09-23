@@ -4,7 +4,7 @@ import { getLayoutedElements } from "../layout";
 import { llvmMode } from "../../irModes/llvmMode";
 import { parseLLVM } from "../../parser/llvm";
 import type { GraphData } from "../../types/graph";
-import { arrivalHandleId, elkPortId } from "../nodePorts";
+import { arrivalHandleId, departureHandleId, elkPortId } from "../nodePorts";
 
 const { layout } = vi.hoisted(() => ({
   layout: vi.fn(async (graph: ElkNode) => graph),
@@ -50,13 +50,18 @@ done:
       { x: 120, y: 80 },
     ]);
     graph.edges.forEach((edge, index) => {
-      const source = elkPortId(edge.source, edge.sourceHandle ?? "out");
+      const source = elkPortId(
+        edge.source,
+        edge.sourceHandle ?? departureHandleId(edge.id),
+      );
       const target = elkPortId(edge.target, arrivalHandleId(edge.id));
       expect(elk.edges![index]).toMatchObject({
         sources: [source],
         targets: [target],
       });
-      expect(result.edges[index].sourceHandle).toBe(edge.sourceHandle ?? "out");
+      expect(result.edges[index].sourceHandle).toBe(
+        edge.sourceHandle ?? departureHandleId(edge.id),
+      );
       expect(result.edges[index].targetHandle).toBe(arrivalHandleId(edge.id));
       expect(
         elk.children!.find((node) => node.id === edge.source)!.ports,

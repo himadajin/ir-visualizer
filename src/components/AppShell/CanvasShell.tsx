@@ -1,7 +1,7 @@
-import { Box } from "@mui/material";
 import type { Node, Edge, OnNodesChange, OnEdgesChange } from "@xyflow/react";
 import { GraphViewer } from "../Graph/GraphViewer";
-import { SHELL_COLORS, type ShellFitViewInset } from "./shellTokens";
+import type { ShellFitViewInset } from "./shellTokens";
+import classes from "./CanvasShell.module.css";
 import type { NodeSizeMap } from "../../utils/layout";
 
 interface CanvasShellProps {
@@ -30,13 +30,7 @@ export function CanvasShell({
   fitViewInset,
 }: CanvasShellProps) {
   return (
-    <Box
-      sx={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: SHELL_COLORS.ground,
-      }}
-    >
+    <div className={classes.root}>
       <GraphViewer
         nodes={nodes}
         edges={edges}
@@ -46,6 +40,6 @@ export function CanvasShell({
         layoutPending={layoutPending}
         fitViewInset={fitViewInset}
       />
-    </Box>
+    </div>
   );
 }

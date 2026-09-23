@@ -142,7 +142,7 @@ Rules:
 - `useIRWorkspace` owns the active view key. Switching **views keeps the editor
   code** (that is the point of views); switching **modes resets** the view to the
   default and replaces the code with `defaultCode`.
-- The editor panel renders a view `ToggleButtonGroup` only when the active mode has
+- The editor panel renders a view `SegmentedControl` only when the active mode has
   `views`.
 - A mode's `nodeTypes` covers every view's node renderers (GraphViewer merges
   `nodeTypes` per mode, not per view).

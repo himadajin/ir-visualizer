@@ -9,6 +9,18 @@ async function selectMode(
 }
 
 /**
+ * The view toggle is a segmented control: its radio inputs are visually
+ * hidden, so a user (and Playwright) picks a view by clicking its label.
+ */
+async function selectView(page: Page, name: "CFG" | "Use-Def") {
+  await page
+    .getByRole("region", { name: "Editor panel" })
+    .getByText(name, { exact: true })
+    .click();
+  await expect(page.getByRole("radio", { name })).toBeChecked();
+}
+
+/**
  * Monaco renders its editable surface via the EditContext API: the focusable
  * element (`.native-edit-context`) has no visible size, so Playwright can't
  * click it directly. Clicking the visible code area (`.view-lines`) is what
@@ -154,7 +166,7 @@ test.describe("IR Visualizer smoke tests", () => {
     await page.goto("/");
     await expect(page.locator(".react-flow__node").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Use-Def" }).click();
+    await selectView(page, "Use-Def");
 
     // Instruction nodes render individually; "%5 = add i32 %0, 45" only
     // exists as its own node in the use-def projection, never in the CFG
@@ -167,7 +179,7 @@ test.describe("IR Visualizer smoke tests", () => {
     await expect(page.locator(".view-lines")).toContainText("define");
 
     // Toggling back restores the CFG (exit node is CFG-only).
-    await page.getByRole("button", { name: "CFG" }).click();
+    await selectView(page, "CFG");
     await expect(page.locator(".react-flow")).toContainText("exit", {
       timeout: 10_000,
     });
@@ -299,7 +311,7 @@ test.describe("IR Visualizer smoke tests", () => {
     // The status footer reports success, not an error (spec: §6.3): the 2.x
     // constructs above parsed rather than merely leaving the old graph up.
     const status = page.getByTestId("parse-status");
-    await expect(status).toContainText("✓ parsed", { timeout: 10_000 });
+    await expect(status).toContainText("parsed ·", { timeout: 10_000 });
     await expect(status).not.toContainText("error:");
   });
 });

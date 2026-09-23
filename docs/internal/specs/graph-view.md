@@ -264,8 +264,8 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   the loop accent color (muted purple `#8250df`). The accent **recolors** the stroke
   and whatever markers the edge already has; it does not replace an open, circle, or
   cross marker with a closed arrow. An edge that is not painted (Mermaid `invisible`)
-  does not take the accent. This accent is graph grammar, not shell chrome (§6.6 has
-  no accent token).
+  does not take the accent. This accent is graph grammar, not shell chrome (§6.6: the
+  chrome's only non-default colors are the parse-status ones).
 - **Hidden routed edges:** a routed edge with `hidden: true` is omitted from the routing
   pass and is not drawn. Mermaid invisible links use this (`specs/mermaid.md` §5); they
   remain in `GraphData` so ELK ranking still sees them.
@@ -376,7 +376,7 @@ that is not the canvas.
   the **mode selector**, the **view toggle**, a **Clear** action, and a **collapse** button.
 - **Mode selector** lists the registry modes in `IR_MODES` insertion order
   (LLVM-IR, SelectionDAG, Mermaid).
-- **View toggle**: when the active mode defines `views`, a `ToggleButtonGroup` next to the
+- **View toggle**: when the active mode defines `views`, a `SegmentedControl` next to the
   mode selector lists them in registry order (LLVM-IR: CFG, Use-Def) with the active view
   selected; it is absent for single-view modes. It lives in the panel header, not in the
   canvas control cluster: it selects what is projected, not how the viewport is framed.
@@ -390,8 +390,8 @@ that is not the canvas.
   handler on the panel root is an additional safety net.
 - **Resize**: right-edge drag via `usePaneResize` — min 280 px, max 60 vw, initial 420 px.
   Wide mode only.
-- **Collapse**: the panel collapses to a small floating pill styled as a plain small button
-  with a sans-serif `Code` label, giving the graph the full viewport. The state is a
+- **Collapse**: the panel collapses to a small floating pill, a default `Button` labeled
+  `Code`, giving the graph the full viewport. The state is a
   session-local `panelOpen: boolean` (no persistence); the same flag drives wide and narrow
   mode. The pill sits **top-left in wide mode** and **bottom-left in narrow mode**.
 
@@ -404,13 +404,13 @@ that is not the canvas.
 Monospace text at the bottom of the panel, styled as compiler output. It is the only place
 parse status is reported; there is no snackbar over the graph.
 
-- Success: `✓ parsed · N nodes · M edges` — the check glyph in `ok`, the text in `ink-muted`.
+- Success: a check icon in `ok`, then `parsed · N nodes · M edges`.
 - Failure: `error: <full message>` with a 2 px left rule in `error`. The message is **not
   truncated**; long messages wrap and scroll inside the footer, which caps at roughly 8
   lines. The error clears on the next successful parse (§1).
 - Success with diagnostics: the success line, then **one line per diagnostic**, each
-  `warning: line <N>: <message>` with the `warning:` prefix in `warn` and a 2 px left rule in
-  `warn`. The prefix is the only place severity is written — the parser's message carries no
+  `warning: line <N>: <message>` with a 2 px left rule in `warn`. The prefix is the only
+  place severity is written — the parser's message carries no
   severity word (`contracts/ir-mode-registry.md`). Diagnostics are listed in the order the
   parse returned them, none is dropped, and the footer's line cap makes a long list scroll
   rather than truncate.
@@ -418,11 +418,13 @@ parse status is reported; there is no snackbar over the graph.
   has no diagnostics (§1).
 
 The `warning:` prefix is deliberately not `error:`, so that "did this input parse?" stays
-answerable by looking for a single word.
+answerable by looking for a single word. Color only restates what the words say: all footer
+text, prefixes included, is in the default text color, and the status colors mark only the
+left rule and the check icon (§6.6).
 
 > Pinned by: `e2e/smoke.spec.ts` (a parse error reaches the footer),
 > `src/components/AppShell/__tests__/EditorPanel.test.tsx` (the three footer states and the
-> severity precedence). The exact success wording, the line cap, and the absence of
+> severity the left rule carries). The exact success wording, the line cap, and the absence of
 > truncation are _observed, untested_.
 
 ### 6.4 Canvas control cluster
@@ -449,45 +451,36 @@ The canvas stays full-screen. The editor panel becomes a **bottom sheet** coveri
 the viewport height, toggled by the pill (bottom-left). There is no Code/Graph toggle. The
 drag-resizer is wide-mode-only. _(observed, untested)_
 
-### 6.6 Visual grammar and design tokens
+### 6.6 Visual grammar
 
-Floating chrome — editor panel, collapsed pill, control cluster — uses a quiet gray
-language: neutral grays, sans-serif type, and light borders. Graph nodes keep their own
-grammar in `src/components/Graph/common/NodeShell.tsx` (`1px solid #777` border, `2px`
-radius, white surface, dense 12 px monospace, full-width header band); the shell chrome
-never borrows it — including the header band — because the editor panel is chrome around
-the canvas, not a node.
+The shell chrome — editor panel, collapsed pill, canvas control cluster — is built with
+Mantine and uses **Mantine's default theme**. The theme is created once in
+`src/theme.ts`; component-specific layout lives in `*.module.css` next to each component,
+and `src/components/AppShell/shellTokens.ts` holds only the numbers the layout computes
+with (panel margin and width bounds, the narrow-mode media query, the sheet ratio, the
+fit-view padding, the motion duration). The chrome carries no visual decisions of its own
+beyond the overrides below; its visual language is designed separately (#129).
 
-| Token          | Value                                                                  | Use                                                                                                                                                          |
-| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ground`       | `#FAFAFA`                                                              | Canvas background; `<Background />` dot color `#D7DBDF`                                                                                                      |
-| `paper`        | `#FFFFFF`                                                              | Panel / pill / control-cluster surface (same as nodes)                                                                                                       |
-| `control`      | `#d0d0d0` (hover `controlHover` `#999`, focused `controlFocus` `#777`) | Border on bordered interactive controls; `controlFocus` applies only to the select's focused field border — toggles and buttons signal focus via `focusRing` |
-| `line`         | `#999`                                                                 | Outer border of floating surfaces (panel, pill, control cluster)                                                                                             |
-| `ink`          | `#1F2328`                                                              | Primary text                                                                                                                                                 |
-| `ink-muted`    | `#57606A`                                                              | Secondary text (status footer)                                                                                                                               |
-| `ok`           | `#1A7F37`                                                              | Parse success only — never decorative                                                                                                                        |
-| `error`        | `#CF222E`                                                              | Parse failure only — never decorative                                                                                                                        |
-| `warn`         | `#9A6700`                                                              | Recoverable parse diagnostics only — never decorative                                                                                                        |
-| `selectedFill` | `#e8e8e8` (text `#222`, weight 600)                                    | Selected toggle-button state                                                                                                                                 |
-| `hoverFill`    | `#f0f0f0`                                                              | Hover fill for shell chrome buttons                                                                                                                          |
-| `focusRing`    | 2 px `#57606A`                                                         | Focus-visible ring on all interactive shell chrome (neutral, not accent)                                                                                     |
-| elevation      | `0 1px 2px rgba(31,35,40,.05), 0 4px 12px rgba(31,35,40,.06)`          | Floating chrome only; graph nodes stay flat (no shadow)                                                                                                      |
+- **Color scheme**: fixed to light (`defaultColorScheme="light"`). Monaco (`github-light`)
+  and the graph nodes assume a light ground; there is no dark mode.
+- **Parse-status colors**: `ok`, `warn` and `error` map to Mantine `green`, `yellow` and
+  `red`. They report parse status and are never decorative. They mark only non-text
+  elements — the footer's left rule and the success check icon — at shades that reach
+  3:1 against white (`green.8`, `yellow.9`, `red.8`); footer text stays in the default
+  text color, because no default `green` or `yellow` shade reaches the 4.5:1 that text
+  needs.
+- **Canvas ground**: the full-viewport canvas background is `gray.0` and the
+  `<Background />` dots are `gray.4`.
+- **Motion**: exactly one animation — the panel ⇄ pill morph, a Mantine `Transition`
+  (`pop`, 180 ms, ease-out, growing out of the corner the surface is anchored to) on
+  enter only, with an animated `fitView` recenter of the same duration. Both are disabled
+  under `prefers-reduced-motion` (`respectReducedMotion` in the theme).
+- **Accessibility floor**: keyboard operability of all interactive chrome, and WCAG AA
+  contrast for status-footer text.
 
-- There is no `accent` token: `ok` (green), `warn` (amber) and `error` (red) are the only
-  semantic, non-gray colors in the shell chrome, and all three report parse status. The muted
-  purple on back edges (§4) is graph grammar, not a shell token.
-- **No translucency and no backdrop blur**: every surface is fully opaque.
-- **Typography**: no webfonts. All shell chrome uses the app's system sans-serif stack
-  (`system-ui`). Monospace is reserved for the status footer (compiler-output feel) and
-  the canvas/graph nodes.
-- **Icon-only buttons are borderless**: the panel collapse button and the control cluster's
-  zoom / fit / reset buttons carry no `control` border of their own — their enclosing
-  surface already has one via `line` — and signal hover/focus with `hoverFill` and
-  `focusRing`.
-- **Motion**: exactly one animation — the panel ⇄ pill collapse/expand morph (~180 ms
-  ease-out) with an animated `fitView` recenter. Disabled under `prefers-reduced-motion`.
-- **Accessibility floor**: 2 px `focusRing` on all interactive chrome, keyboard
-  operability, WCAG AA contrast for status-footer text.
+Graph nodes keep their own grammar in `src/components/Graph/common/NodeShell.tsx`
+(`1px solid #777` border, `2px` radius, white surface, dense 12 px monospace, full-width
+header band); the shell chrome never borrows it — including the header band — because the
+editor panel is chrome around the canvas, not a node.
 
-_(§6.6 as a whole: observed, untested — the tokens are enforced by review, not by tests.)_
+_(§6.6 as a whole: observed, untested — enforced by review, not by tests.)_

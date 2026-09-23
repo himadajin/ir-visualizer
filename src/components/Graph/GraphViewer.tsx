@@ -20,7 +20,6 @@ import { EdgeRoutesProvider } from "../../hooks/useEdgeRoutes";
 import { CanvasControls, type FitViewPadding } from "./CanvasControls";
 import { IR_MODE_LIST } from "../../irModes";
 import {
-  SHELL_COLORS,
   buildFitViewPadding,
   type ShellFitViewInset,
 } from "../AppShell/shellTokens";
@@ -205,7 +204,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
       style={{
         width: "100%",
         height: "100%",
-        backgroundColor: SHELL_COLORS.ground,
+        backgroundColor: "var(--app-canvas-ground)",
       }}
     >
       {/* The routing pass (specs/graph-view.md §4) must wrap `<ReactFlow>`:
@@ -235,7 +234,7 @@ export const GraphViewer: React.FC<GraphViewerProps> = ({
             nodeIds={nodeIds}
             onApplyLayout={onApplyLayout}
           />
-          <Background color={SHELL_COLORS.groundDots} />
+          <Background color="var(--app-canvas-dots)" />
           <CanvasControls
             fitViewPadding={fitViewPadding}
             bottomInset={fitViewInset.bottom}

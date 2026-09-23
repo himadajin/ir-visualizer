@@ -1,6 +1,21 @@
+import "@mantine/core/styles.css";
+import { MantineProvider } from "@mantine/core";
 import type { Preview } from "@storybook/react-vite";
+import { cssVariablesResolver, theme } from "../src/theme";
 
 const preview: Preview = {
+  decorators: [
+    (Story) => (
+      <MantineProvider
+        theme={theme}
+        cssVariablesResolver={cssVariablesResolver}
+        defaultColorScheme="light"
+      >
+        <Story />
+      </MantineProvider>
+    ),
+  ],
+
   parameters: {
     controls: {
       matchers: {

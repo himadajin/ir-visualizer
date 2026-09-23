@@ -128,13 +128,17 @@ and fall back to a plain (solid, unlabeled) edge — _observed, untested_.
   declares the same offsets as ELK `FIXED_POS` ports so routed edges aim at the
   exact operand slot — a phi's incoming edges visibly land on their own
   `[ %v, %bb ]` operands. _(observed, untested — visual)_
-- Instruction nodes render as single-row code cards: a block badge chip showing
-  `blockLabel` sits inline to the **left** of the code line, tinted from an
-  8-color muted palette indexed by `blockIndex % 8`. The badge is what preserves
-  the CFG correspondence in the absence of containers.
+- Instruction nodes render as single-row code cards in the shared node frame
+  (`specs/graph-view.md` §7): a block badge chip showing
+  `blockLabel` sits inline to the **left** of the code line, tinted by
+  `blockIndex % 8` from eight hues in this order: `blue`, `green`, `orange`,
+  `violet`, `teal`, `pink`, `yellow`, `gray` (fill at shade 2, label in `ink`).
+  The badge is what preserves the CFG correspondence in the absence of
+  containers. A terminator card's border is `ink` instead of `node-line`.
   _(observed, untested — visual, covered by Storybook stories only)_
-- Value nodes render as pills; `argument` and `external` are styled differently
-  so a dangling reference is visibly not a parameter.
+- Value nodes render as pills, text in `ink`; `argument` is `blue` and
+  `external` is `orange` (fill at shade 0, border at shade 6), so a dangling
+  reference is visibly not a parameter.
   _(observed, untested — visual)_
 - `dashed` edges render with a dash pattern via the standard edge factory
   (`contracts/graph-data.md`).

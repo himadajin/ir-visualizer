@@ -17,15 +17,19 @@ export function classifySelectionDAGNode(
   return "default";
 }
 
-export const NODE_CATEGORY_COLORS: Record<SelectionDAGNodeCategory, string> = {
-  entryToken: "#c8e6c9",
-  targetSpecific: "#ffe0b2",
-  memory: "#bbdefb",
-  register: "#e1bee7",
-  tokenFactor: "#fff9c4",
-  default: "#f4f2ff",
+/**
+ * Mantine hue per category (`specs/selectiondag.md` §4), filled at shade 2
+ * (`specs/graph-view.md` §7).
+ */
+export const NODE_CATEGORY_HUES: Record<SelectionDAGNodeCategory, string> = {
+  entryToken: "green",
+  targetSpecific: "orange",
+  memory: "blue",
+  register: "grape",
+  tokenFactor: "yellow",
+  default: "gray",
 };
 
 export function getSelectionDAGNodeColor(opName: string): string {
-  return NODE_CATEGORY_COLORS[classifySelectionDAGNode(opName)];
+  return `var(--mantine-color-${NODE_CATEGORY_HUES[classifySelectionDAGNode(opName)]}-2)`;
 }

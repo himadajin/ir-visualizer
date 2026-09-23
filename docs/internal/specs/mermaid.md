@@ -121,21 +121,24 @@ back-fill follow FlowDB (a later labeled occurrence fills an unlabeled one).
 
 This mode maps upstream shape names onto **semantic families** and gives each
 family a distinct presentation inside the shared node frame
-(`specs/graph-view.md` §5–§6.6). It does not reproduce mermaid geometry
+(`specs/graph-view.md` §5, §7). It does not reproduce mermaid geometry
 (diamonds, cylinders, …). Keys are FlowDB `vertex.type` strings as stored on
 `MermaidASTNode.shape`: JISON bracket names (`square`, `lean_right`, …) and
 `@{ shape: ... }` catalog names and aliases (`rect`, `diam`, `lean-r`, …).
 FlowDB does not canonicalize aliases, so both spellings of the same mermaid
 shape are listed.
 
-| Family     | Presentation                                     |
-| ---------- | ------------------------------------------------ |
-| process    | 2px-radius, 1px solid `#777` (the default frame) |
-| decision   | 2px-radius, 2px dashed `#777`                    |
-| terminal   | 20px-radius (pill), 1px solid `#777`             |
-| data/IO    | 2px-radius, 1px dotted `#777`                    |
-| storage    | 2px-radius, 2px solid `#777`                     |
-| subroutine | 2px-radius, 3px double `#777`                    |
+| Family     | Presentation                              |
+| ---------- | ----------------------------------------- |
+| process    | 4px radius, 1px solid (the default frame) |
+| decision   | 4px radius, 2px dashed                    |
+| terminal   | 20px radius (pill), 1px solid             |
+| data/IO    | 4px radius, 1px dotted                    |
+| storage    | 4px radius, 2px solid                     |
+| subroutine | 4px radius, 3px double                    |
+
+Every border is `node-line` (`specs/graph-view.md` §7): families differ by
+border style and radius, never by color.
 
 | Family             | Upstream `shape` names                                                                                                                                                                                                                                |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

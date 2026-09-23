@@ -37,7 +37,7 @@ export const theme = createTheme({
 });
 
 /**
- * The chrome's tokens (`specs/graph-view.md` §6.6), as `--app-*` CSS
+ * The app's tokens (`specs/graph-view.md` §6.6, node tokens §7), as `--app-*` CSS
  * variables. Parse-status colors mark non-text elements only, at shades that
  * reach 3:1 against white. `line` is also Mantine's default border color, so
  * `withBorder` surfaces and the app's own rules draw the same line.
@@ -55,6 +55,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     "--app-status-error": "var(--mantine-color-red-8)",
     "--app-elevation": "var(--mantine-shadow-sm)",
     "--app-font-mono": "var(--mantine-font-family-monospace)",
+    "--app-node-line": "var(--mantine-color-gray-6)",
+    "--app-node-header": "var(--mantine-color-gray-0)",
   },
   light: {
     "--mantine-color-default-border": "var(--app-line)",

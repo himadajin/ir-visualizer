@@ -86,23 +86,29 @@ reassoc nofpexcept`.
 
 ## 4. Node rendering
 
-`SelectionDAGNode.tsx` renders a table-like box: a colored left column with the node id, an
+`SelectionDAGNode.tsx` renders a table-like box: a tinted left column with the node id, an
 operands row (one cell per operand, each `node` operand carrying its target Handle), an
 opName+details row, and a types row (one cell per result type, each carrying a source Handle).
 The node shrink-wraps that table; ELK places it from the measured box
 (`specs/graph-view.md` §5).
 
-The left-column color encodes an opName **category**
-(`src/components/Graph/SelectionDAG/selectionDAGNodeColor.ts`):
+The box is the shared node frame (`specs/graph-view.md` §7): its font, text size, border,
+and radius are the ones every node uses, and its cell rules are `node-line`. Handles are
+invisible and sit on the node's outer border, centered on their cell, so a bezier edge
+ends exactly at the border.
 
-| Category         | Rule                                        | Color     |
-| ---------------- | ------------------------------------------- | --------- |
-| `entryToken`     | opName === `EntryToken`                     | `#c8e6c9` |
-| `tokenFactor`    | opName === `TokenFactor`                    | `#fff9c4` |
-| `register`       | `CopyFromReg` / `CopyToReg`                 | `#e1bee7` |
-| `targetSpecific` | opName contains `::`                        | `#ffe0b2` |
-| `memory`         | opName is `load`/`store` (case-insensitive) | `#bbdefb` |
-| `default`        | everything else                             | `#f4f2ff` |
+The left-column tint encodes an opName **category**
+(`src/components/Graph/SelectionDAG/selectionDAGNodeColor.ts`) as a Mantine hue, filled at
+shade 2 (`specs/graph-view.md` §7):
+
+| Category         | Rule                                        | Hue      |
+| ---------------- | ------------------------------------------- | -------- |
+| `entryToken`     | opName === `EntryToken`                     | `green`  |
+| `tokenFactor`    | opName === `TokenFactor`                    | `yellow` |
+| `register`       | `CopyFromReg` / `CopyToReg`                 | `grape`  |
+| `targetSpecific` | opName contains `::`                        | `orange` |
+| `memory`         | opName is `load`/`store` (case-insensitive) | `blue`   |
+| `default`        | everything else                             | `gray`   |
 
 > Pinned by: `src/components/Graph/SelectionDAG/__tests__/selectionDAGNodeColor.test.ts`
 

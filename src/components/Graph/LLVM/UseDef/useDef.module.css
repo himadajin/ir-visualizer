@@ -1,0 +1,20 @@
+/* Paint of the Use-Def nodes (specs/llvm-use-def-view.md §4). */
+
+.terminator {
+  border-color: var(--app-ink);
+}
+
+.badge {
+  color: var(--app-ink);
+  font-weight: 600;
+}
+
+.argument {
+  border-color: var(--mantine-color-blue-6);
+  background-color: var(--mantine-color-blue-0);
+}
+
+.external {
+  border-color: var(--mantine-color-orange-6);
+  background-color: var(--mantine-color-orange-0);
+}

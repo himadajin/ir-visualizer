@@ -19,13 +19,3 @@ body,
 .react-flow__connectionline {
   cursor: default !important;
 }
-.code-node-wrapper pre {
-  margin: 0;
-  white-space: pre-wrap !important;
-  word-break: break-all !important;
-  font-family: inherit !important;
-}
-
-.code-node-wrapper code {
-  font-family: inherit !important;
-}

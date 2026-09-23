@@ -16,12 +16,13 @@ export type MermaidShapeFamily =
   | "storage"
   | "subroutine";
 
+/** Border geometry per family; the color is always `node-line`. */
 export interface MermaidFamilyPresentation {
   borderRadius: string;
-  border: string;
+  borderWidth: string;
+  borderStyle: "solid" | "dashed" | "dotted" | "double";
 }
 
-const NODE_BORDER_COLOR = "#777";
 const DECISION_BORDER_WIDTH = 2;
 const STORAGE_BORDER_WIDTH = 2;
 const SUBROUTINE_BORDER_WIDTH = 3;
@@ -117,32 +118,38 @@ export function mermaidFamilyPresentation(
     case "decision":
       return {
         borderRadius: `${NODE_BORDER_RADIUS}px`,
-        border: `${DECISION_BORDER_WIDTH}px dashed ${NODE_BORDER_COLOR}`,
+        borderWidth: `${DECISION_BORDER_WIDTH}px`,
+        borderStyle: "dashed",
       };
     case "terminal":
       return {
         borderRadius: `${NODE_BORDER_RADIUS_PILL}px`,
-        border: `${NODE_BORDER_WIDTH}px solid ${NODE_BORDER_COLOR}`,
+        borderWidth: `${NODE_BORDER_WIDTH}px`,
+        borderStyle: "solid",
       };
     case "data-io":
       return {
         borderRadius: `${NODE_BORDER_RADIUS}px`,
-        border: `${NODE_BORDER_WIDTH}px dotted ${NODE_BORDER_COLOR}`,
+        borderWidth: `${NODE_BORDER_WIDTH}px`,
+        borderStyle: "dotted",
       };
     case "storage":
       return {
         borderRadius: `${NODE_BORDER_RADIUS}px`,
-        border: `${STORAGE_BORDER_WIDTH}px solid ${NODE_BORDER_COLOR}`,
+        borderWidth: `${STORAGE_BORDER_WIDTH}px`,
+        borderStyle: "solid",
       };
     case "subroutine":
       return {
         borderRadius: `${NODE_BORDER_RADIUS}px`,
-        border: `${SUBROUTINE_BORDER_WIDTH}px double ${NODE_BORDER_COLOR}`,
+        borderWidth: `${SUBROUTINE_BORDER_WIDTH}px`,
+        borderStyle: "double",
       };
     case "process":
       return {
         borderRadius: `${NODE_BORDER_RADIUS}px`,
-        border: `${NODE_BORDER_WIDTH}px solid ${NODE_BORDER_COLOR}`,
+        borderWidth: `${NODE_BORDER_WIDTH}px`,
+        borderStyle: "solid",
       };
   }
 }

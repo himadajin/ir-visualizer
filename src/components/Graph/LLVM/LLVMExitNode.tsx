@@ -1,19 +1,13 @@
 import type { NodeProps } from "@xyflow/react";
 import NodeShell from "../common/NodeShell";
+import { NODE_BORDER_RADIUS_PILL } from "../common/nodeTextStyle";
+import classes from "./LLVMExitNode.module.css";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const LLVMExitNode = (_nodeProps: NodeProps) => {
   return (
-    <NodeShell borderRadius="20px">
-      <div
-        style={{
-          textAlign: "center",
-          fontWeight: "bold",
-          color: "#555",
-        }}
-      >
-        exit
-      </div>
+    <NodeShell borderRadius={`${NODE_BORDER_RADIUS_PILL}px`}>
+      <div className={classes.label}>exit</div>
     </NodeShell>
   );
 };

@@ -1,0 +1,9 @@
+/*
+ * Shiki's <pre>/<code> would take the user agent's generic `monospace`;
+ * inherit the node's `font-mono` instead, so the text is set in the font the
+ * Use-Def port offsets are measured in (specs/graph-view.md §5, §7).
+ */
+.code pre,
+.code code {
+  font-family: inherit;
+}

@@ -9,7 +9,7 @@ import { mermaidFamilyPresentation, mermaidShapeFamily } from "./shapeFamily";
 
 const MermaidNode = ({ data }: NodeProps) => {
   const node = data.astData as MermaidASTNode;
-  const { borderRadius, border } = mermaidFamilyPresentation(
+  const { borderRadius, borderWidth, borderStyle } = mermaidFamilyPresentation(
     mermaidShapeFamily(node.shape),
   );
 
@@ -21,7 +21,8 @@ const MermaidNode = ({ data }: NodeProps) => {
         maxChars: NODE_WRAP_MAX_CHARS_MERMAID,
       }}
       style={{
-        border,
+        borderWidth,
+        borderStyle,
         textAlign: "center",
       }}
     >

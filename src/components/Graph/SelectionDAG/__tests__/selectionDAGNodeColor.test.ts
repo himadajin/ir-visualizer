@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  NODE_CATEGORY_COLORS,
+  NODE_CATEGORY_HUES,
   classifySelectionDAGNode,
   getSelectionDAGNodeColor,
 } from "../selectionDAGNodeColor";
@@ -83,25 +83,33 @@ describe("classifySelectionDAGNode", () => {
   });
 });
 
+describe("NODE_CATEGORY_HUES", () => {
+  it("matches the spec table", () => {
+    expect(NODE_CATEGORY_HUES).toEqual({
+      entryToken: "green",
+      tokenFactor: "yellow",
+      register: "grape",
+      targetSpecific: "orange",
+      memory: "blue",
+      default: "gray",
+    });
+  });
+});
+
 describe("getSelectionDAGNodeColor", () => {
-  it("returns the entryToken color for EntryToken", () => {
+  it("fills the entryToken hue at shade 2 for EntryToken", () => {
     expect(getSelectionDAGNodeColor("EntryToken")).toBe(
-      NODE_CATEGORY_COLORS.entryToken,
+      "var(--mantine-color-green-2)",
     );
   });
 
-  it("returns the targetSpecific color for RISCVISD::RET_GLUE", () => {
+  it("fills the targetSpecific hue at shade 2 for RISCVISD::RET_GLUE", () => {
     expect(getSelectionDAGNodeColor("RISCVISD::RET_GLUE")).toBe(
-      NODE_CATEGORY_COLORS.targetSpecific,
+      "var(--mantine-color-orange-2)",
     );
   });
 
-  it("returns the default color for add", () => {
-    expect(getSelectionDAGNodeColor("add")).toBe(NODE_CATEGORY_COLORS.default);
-  });
-
-  it("returns a non-empty hex color string", () => {
-    const color = getSelectionDAGNodeColor("store");
-    expect(color).toMatch(/^#[0-9a-fA-F]{6}$/);
+  it("fills the default hue at shade 2 for add", () => {
+    expect(getSelectionDAGNodeColor("add")).toBe("var(--mantine-color-gray-2)");
   });
 });

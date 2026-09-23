@@ -5,6 +5,7 @@ import HighlightedCode from "../../common/HighlightedCode";
 import { getUseDefPorts } from "./useDefPorts";
 import {
   NODE_BORDER_WIDTH,
+  NODE_FONT_FAMILY,
   NODE_WRAP_MAX_CHARS_USE_DEF,
 } from "../../common/nodeTextStyle";
 import {
@@ -14,10 +15,9 @@ import {
   USE_DEF_BADGE_LINE_HEIGHT,
   USE_DEF_BADGE_PADDING_X,
   USE_DEF_BADGE_PADDING_Y,
-  USE_DEF_BADGE_PALETTE,
-  USE_DEF_INSTRUCTION_BORDER_COLOR,
-  USE_DEF_TERMINATOR_BORDER_COLOR,
+  USE_DEF_BADGE_HUES,
 } from "./useDefStyleConstants";
+import classes from "./useDef.module.css";
 
 /**
  * One instruction/terminator line of the Use-Def view
@@ -30,20 +30,16 @@ import {
 const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
   const instruction = data.astData as LLVMUseDefInstructionData;
   const ports = getUseDefPorts(instruction);
-  const tint =
-    USE_DEF_BADGE_PALETTE[
-      ((instruction.blockIndex % USE_DEF_BADGE_PALETTE.length) +
-        USE_DEF_BADGE_PALETTE.length) %
-        USE_DEF_BADGE_PALETTE.length
+  const hue =
+    USE_DEF_BADGE_HUES[
+      ((instruction.blockIndex % USE_DEF_BADGE_HUES.length) +
+        USE_DEF_BADGE_HUES.length) %
+        USE_DEF_BADGE_HUES.length
     ];
 
   return (
     <NodeShell
-      borderColor={
-        instruction.isTerminator
-          ? USE_DEF_TERMINATOR_BORDER_COLOR
-          : USE_DEF_INSTRUCTION_BORDER_COLOR
-      }
+      className={instruction.isTerminator ? classes.terminator : undefined}
       wrap={false}
       style={{ whiteSpace: "pre" }}
     >
@@ -55,16 +51,15 @@ const LLVMUseDefInstructionNode = ({ data }: NodeProps) => {
         }}
       >
         <span
+          className={classes.badge}
           style={{
             flexShrink: 0,
             padding: `${USE_DEF_BADGE_PADDING_Y}px ${USE_DEF_BADGE_PADDING_X}px`,
             borderRadius: `${USE_DEF_BADGE_BORDER_RADIUS}px`,
-            fontFamily: "monospace",
+            fontFamily: NODE_FONT_FAMILY,
             fontSize: `${USE_DEF_BADGE_FONT_SIZE}px`,
             lineHeight: `${USE_DEF_BADGE_LINE_HEIGHT}px`,
-            fontWeight: 600,
-            backgroundColor: tint.bg,
-            color: tint.fg,
+            backgroundColor: `var(--mantine-color-${hue}-2)`,
           }}
         >
           {instruction.blockLabel}

@@ -15,6 +15,7 @@ import {
 } from "@xyflow/react";
 import {
   DEFAULT_NODE_MARGIN,
+  isRouteLocal,
   quantizeRect,
   quantizeRequest,
   routeEdges,
@@ -277,8 +278,8 @@ interface PassState {
  * 1. requests that are new, or whose own record moved — their region moved too;
  * 2. requests whose region a changed rect reaches, in **either** its old or its
  *    new position, since both the vacated space and the occupied one matter;
- * 3. requests whose previous route left its own region — the signature of the
- *    contract's whole-graph retry, for which Locality is explicitly not claimed.
+ * 3. requests whose previous route left its own region or equals the final
+ *    fallback — neither has the Locality guarantee.
  */
 const affectedRequests = (
   requests: readonly RouteRequest[],
@@ -306,16 +307,9 @@ const affectedRequests = (
     const points = previous.routes.get(request.id);
     if (points === undefined) return true;
     const region = routeRegionOf(request);
-    for (const point of points) {
-      if (
-        point.x < region.minX ||
-        point.x > region.maxX ||
-        point.y < region.minY ||
-        point.y > region.maxY
-      ) {
-        return true; // left its region: possibly the whole-graph rung
-      }
-    }
+    const sourceRect = previous.rects.get(request.source);
+    if (sourceRect === undefined || !isRouteLocal(request, points, sourceRect))
+      return true;
     return changedBoxes.some((box) => boxesOverlap(box, region));
   });
 };

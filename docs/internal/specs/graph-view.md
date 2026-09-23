@@ -270,12 +270,13 @@ all (#88). Until those land, an overlap in the rendered graph means nothing.
   pass and is not drawn. Mermaid invisible links use this (`specs/mermaid.md` §5); they
   remain in `GraphData` so ELK ranking still sees them.
 - **Known limitations,** both accepted since the alternatives are a stale route or a second
-  geometry generator: the no-path fallback does no obstacle avoidance
+  geometry generator: the final fallback for geometrically unroutable input does no obstacle avoidance
   (`contracts/edge-routing.md`), so dragging one node onto or nearly onto another can make
   a fallback edge visibly thread between the two boxes; and a content-only edit that grows
   a node can close a corridor that the last full layout had reserved, forcing a third edge
   to the fallback until the next full layout re-asserts the spacing promise (§3).
-  _(observed, untested)_
+  _(Pinned by: `edgeRouter.clearance.test.ts`, `useEdgeRoutes.test.ts`; content-growth
+  presentation remains observed, untested.)_
 - **Reset layout** (§2) re-runs ELK placement and nothing else. It has no role in edge
   rendering: edge geometry is always current, dragged or not.
 - **SelectionDAG**: unaffected by routing — its edges connect per-operand/type Handles and

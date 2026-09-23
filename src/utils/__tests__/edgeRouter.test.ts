@@ -650,7 +650,7 @@ describe("routeEdges — tie-breaking (contract: 'A fixed tie-break total order'
   });
 });
 
-describe("routeEdges — self-loops hug the node's right side (contract: 'Self-loops (right side, six points)')", () => {
+describe("routeEdges — unobstructed self-loops (contract: 'Self-loops (right-side preference)')", () => {
   it("produces the documented six-point right-side loop shape, derived from the rect and not from sourcePoint/targetPoint", () => {
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 100, height: 50 };
     const nodeMargin = 12; // contract default
@@ -1232,7 +1232,7 @@ describe("routeEdges — a straight run is returned as its end points (contract:
   });
 });
 
-describe("routeEdges — own-node clearance is a searched-route property (the per-endpoint obstacle exemption in `edgeRouter.ts`)", () => {
+describe("routeEdges — own-node clearance and impossible overlapping configurations", () => {
   // The no-clipping rule binds *searched* routes only. The no-path fallback
   // is exempt by design — its skeleton mandates a second outward step past S
   // to P1, which can land inside the *other* node's rect when the two nodes
@@ -2691,7 +2691,7 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
       id: "loop-A",
       source: "A",
       target: "A",
-      // Ignored — a self-loop is synthesized from the rect alone — but a real
+      // Attachments come from the rect; these points define the region. A real
       // caller passes the live handle positions, so this one does too.
       sourcePoint: { x: rect.x + rect.width / 2, y: rect.y + rect.height },
       targetPoint: { x: rect.x + rect.width / 2, y: rect.y },
@@ -2742,10 +2742,10 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
     expect(failures).toEqual([]);
   });
 
-  it("floors the lane against the stub: a selfLoopGap of 0 on a narrow rect still leaves room to run", () => {
+  it("keeps nodeMargin clearance even when selfLoopGap is zero", () => {
     // w = 2 is the boundary case — `round(0.75 * 2) = 2 = w`, so the unfloored
     // lane would land exactly on the stub and the loop would run down, back up
-    // and down again. `laneX = max(0 + 2 + 0, 2 + 1) = 3`.
+    // and down again. The nodeMargin now also floors the lane: right + 12 = 14.
     const rect: RouteNodeRect = { id: "A", x: 0, y: 0, width: 2, height: 20 };
     const points = routeEdges([rect], [loopRequest(rect)], {
       nodeMargin: 12,
@@ -2755,8 +2755,8 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
     expect(points).toEqual([
       { x: 2, y: 20 },
       { x: 2, y: 32 },
-      { x: 3, y: 32 },
-      { x: 3, y: -12 },
+      { x: 14, y: 32 },
+      { x: 14, y: -12 },
       { x: 2, y: -12 },
       { x: 2, y: 0 },
     ]);
@@ -2807,7 +2807,7 @@ describe("routeEdges — the one-pixel floor (contract 'A clearance of zero is f
   it("returns a loop around the point, not the point twice, when both request points quantize together at a nodeMargin of 0", () => {
     // The other shape with nowhere to go: the search collapses to a single
     // point, and returning it twice would share both coordinates instead of
-    // exactly one. The fallback's floored steps out draw a loop around it.
+    // exactly one. The search must instead find a non-empty cycle.
     const nodes: RouteNodeRect[] = [
       { id: "A", x: 0, y: 0, width: 10, height: 10 },
       { id: "B", x: 0, y: 0, width: 10, height: 10 },

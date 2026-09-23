@@ -91,6 +91,11 @@ UI-free pipeline to its React components.
 - Unit/integration: Vitest (`src/**/__tests__`, `src/__tests__/integration.test.ts`;
   `environment: "node"` by default, `// @vitest-environment jsdom` per file where DOM is needed).
 - E2E: Playwright smoke suite (`e2e/smoke.spec.ts`) — boots the real app for all three modes.
+- Type checking: the root `tsconfig.json` references separate app, Node tooling,
+  and E2E projects. `tsconfig.node.json` checks Vite/Playwright configuration with
+  Node types; `tsconfig.e2e.json` adds DOM types for Playwright's browser-evaluated
+  callbacks. Each project has its own build-info file, and `npm run build` checks
+  all three before bundling.
 - Storybook (`.storybook/`, stories colocated with node components) — visual catalog only.
 - CI (`.github/workflows/ci.yml`): lint → format:check → test → build → bundle budget →
   build-storybook → E2E. The budget step is `npm run check:bundle`

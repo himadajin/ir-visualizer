@@ -19,6 +19,12 @@ import {
   quantizeRequest,
   routeEdges,
 } from "../utils/edgeRouter";
+import {
+  placeEdgeLabels,
+  type EdgeLabelMap,
+  type LabelRequest,
+} from "../utils/edgeLabelPlacement";
+import { measureEdgeLabel } from "../utils/edgeLabelText";
 import type {
   Point,
   RouteNodeRect,
@@ -34,21 +40,32 @@ import type {
  * `routeEdges` takes every node and every request in a single call, so it
  * cannot be driven from a per-edge component. This hook reads React Flow's
  * store — **measured** rects and live handle positions — calls the router once
- * per animation frame in which something geometric changed, and publishes the
- * resulting `Map<edgeId, points>` through a React context. `RoutedEdge` looks
- * up its own entry by edge id; an edge with no entry is not drawn that frame.
+ * per animation frame in which something geometric changed, places the edge
+ * labels on the finished polylines, and publishes both through a React
+ * context. `RoutedEdge` looks up its own entries by edge id; an edge with no
+ * route is not drawn that frame.
  */
 
 /** Routes keyed by React Flow edge id. */
 export type EdgeRouteMap = ReadonlyMap<string, Point[]>;
 
-const EMPTY_ROUTES: EdgeRouteMap = new Map<string, Point[]>();
+/** Everything one pass publishes: polylines and label centers. */
+export interface EdgeGeometry {
+  routes: EdgeRouteMap;
+  labels: EdgeLabelMap;
+}
 
-const EdgeRoutesContext = createContext<EdgeRouteMap>(EMPTY_ROUTES);
+const EMPTY_GEOMETRY: EdgeGeometry = { routes: new Map(), labels: new Map() };
+
+const EdgeRoutesContext = createContext<EdgeGeometry>(EMPTY_GEOMETRY);
 
 /** The current polyline for one edge, or `undefined` when it has none. */
 export const useEdgeRoute = (edgeId: string): Point[] | undefined =>
-  useContext(EdgeRoutesContext).get(edgeId);
+  useContext(EdgeRoutesContext).routes.get(edgeId);
+
+/** Where one edge's label is drawn, or `undefined` when it has none. */
+export const useEdgeLabelPoint = (edgeId: string): Point | undefined =>
+  useContext(EdgeRoutesContext).labels.get(edgeId);
 
 const SIDE_BY_POSITION: Record<Position, RouteSide> = {
   [Position.Top]: "top",
@@ -199,8 +216,43 @@ const collectRequests = (
 };
 
 /**
- * Cheap fingerprint of everything the router reads, over **quantized** rects and
- * requests. React Flow's store also notifies on viewport changes (panning,
+ * The text of every labelled routed edge, keyed by edge id, in edge order —
+ * the tie-break order of label placement.
+ */
+const collectLabelTexts = (
+  edges: readonly Edge[],
+): ReadonlyMap<string, string> => {
+  const texts = new Map<string, string>();
+  for (const edge of edges) {
+    if (edge.type !== "routed" || edge.hidden === true) continue;
+    if (typeof edge.label === "string" && edge.label !== "") {
+      texts.set(edge.id, edge.label);
+    }
+  }
+  return texts;
+};
+
+/**
+ * Label requests for the edges that have both a label and a route this pass,
+ * in edge order (`specs/graph-view.md` §4, "Edge labels never overlap one
+ * another").
+ */
+const labelRequests = (
+  texts: ReadonlyMap<string, string>,
+  routes: EdgeRouteMap,
+): LabelRequest[] => {
+  const requests: LabelRequest[] = [];
+  for (const [id, text] of texts) {
+    const points = routes.get(id);
+    if (points === undefined) continue;
+    requests.push({ id, points, size: measureEdgeLabel(text) });
+  }
+  return requests;
+};
+
+/**
+ * Cheap fingerprint of everything the pass reads — **quantized** rects and
+ * requests, plus the label texts label placement measures. React Flow's store also notifies on viewport changes (panning,
  * zooming), which move no rect and no handle; comparing this string keeps those
  * frames from re-routing anything.
  *
@@ -215,8 +267,9 @@ const collectRequests = (
 const inputSignature = (
   rects: readonly RouteNodeRect[],
   requests: readonly RouteRequest[],
+  labelTexts: ReadonlyMap<string, string>,
 ): string => {
-  return JSON.stringify([rects, requests]);
+  return JSON.stringify([rects, requests, [...labelTexts]]);
 };
 
 /** Reuse is decided by the router against all current lane reservations. */
@@ -241,7 +294,7 @@ export const passStateOf = (
 });
 
 /**
- * Runs the routing pass and returns the current route map.
+ * Runs the routing pass, places the labels, and returns both.
  *
  * Throttled to animation frames. **There is one routing path**, during a drag
  * exactly as at rest (`specs/graph-view.md` §4): no incident-only mode, and no
@@ -253,9 +306,9 @@ export const passStateOf = (
  * reusing local routes. Both arrays stay complete so occupied lanes are never
  * omitted from a pass (contract: "Reusing a pass").
  */
-export const useEdgeRoutes = (): EdgeRouteMap => {
+export const useEdgeRoutes = (): EdgeGeometry => {
   const store = useStoreApi();
-  const [routes, setRoutes] = useState<EdgeRouteMap>(EMPTY_ROUTES);
+  const [geometry, setGeometry] = useState<EdgeGeometry>(EMPTY_GEOMETRY);
 
   const frameRef = useRef<number | null>(null);
   const signatureRef = useRef<string | null>(null);
@@ -271,14 +324,18 @@ export const useEdgeRoutes = (): EdgeRouteMap => {
       // integers is the identity, so the router sees exactly these values.
       const rects = collectRects(nodeLookup).map(quantizeRect);
       const requests = collectRequests(edges, nodeLookup).map(quantizeRequest);
+      const labelTexts = collectLabelTexts(edges);
 
-      const signature = inputSignature(rects, requests);
+      const signature = inputSignature(rects, requests, labelTexts);
       if (signature === signatureRef.current) return;
       signatureRef.current = signature;
 
       const next = routePass(passRef.current, rects, requests);
       passRef.current = passStateOf(rects, requests, next);
-      setRoutes(next);
+      setGeometry({
+        routes: next,
+        labels: placeEdgeLabels(labelRequests(labelTexts, next)),
+      });
     };
 
     const schedule = () => {
@@ -295,7 +352,7 @@ export const useEdgeRoutes = (): EdgeRouteMap => {
     };
   }, [store]);
 
-  return routes;
+  return geometry;
 };
 
 /**
@@ -305,6 +362,10 @@ export const useEdgeRoutes = (): EdgeRouteMap => {
  * store the pass reads.
  */
 export const EdgeRoutesProvider = ({ children }: { children: ReactNode }) => {
-  const routes = useEdgeRoutes();
-  return createElement(EdgeRoutesContext.Provider, { value: routes }, children);
+  const geometry = useEdgeRoutes();
+  return createElement(
+    EdgeRoutesContext.Provider,
+    { value: geometry },
+    children,
+  );
 };

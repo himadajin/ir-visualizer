@@ -243,7 +243,29 @@ Existing terminal marker kinds (including no marker) are preserved.
   no catch-up pass on drop. See `contracts/edge-routing.md`, "Reusing a pass".
   Pinned by: `src/hooks/__tests__/useEdgeRoutes.test.ts`.
 - **Rendering:** `RoutedEdge` draws the returned points as an orthogonal polyline with
-  **rounded corners**; edge labels (phi) render at the polyline's arc-length midpoint.
+  **rounded corners**, and its label (CFG branch values, Use-Def phi incomings, Mermaid
+  edge text) at the point the label placement below chose for it.
+- **Edge labels never overlap one another.** Label placement is its own step, run in the
+  same pass as routing and on its finished polylines; it does not feed back into the
+  router, which keeps excluding labels from its obstacles (`contracts/edge-routing.md`).
+  - Each label's box is its text measured in the label font plus the background padding,
+    both taken from one definition that the drawn label also uses, so the box placement
+    reasons about is the box that is painted.
+  - Labels are placed one at a time, **shortest polyline first**, edge order breaking
+    ties: a short route has the fewest positions to offer, so it claims its place before
+    a long route's label can land across it. A label goes at its polyline's
+    arc-length midpoint when that box keeps a small gap from every label already placed;
+    otherwise it slides along its **own** polyline, trying positions alternately after and
+    before the midpoint, nearest first, and takes the first that is clear. Candidate
+    centers stay at least `nodeMargin` of arc length away from either end, so a label
+    never sits on its end nodes' attachment segments.
+  - When no position along the polyline is clear, the label falls back to the midpoint
+    and the overlap is accepted. A label never leaves its own polyline and never changes
+    the route's shape.
+  - Placement is recomputed on every pass, so it holds at initial layout, during a drag,
+    and after Reset layout alike; a label may change position while a node is dragged.
+  - Only label-to-label overlap is avoided. A label may still sit over another edge's
+    stroke or near a node.
 - **The bend radius is derived from the router's node margin, not chosen.** Two
   inequalities relate it to the spacing constants around it:
 
@@ -322,9 +344,12 @@ Existing terminal marker kinds (including no marker) are preserved.
 > full pass, including when a node stops obstructing an edge, when a far node reshapes a
 > route found on the whole graph, and when a handle moves under a rect that did not).
 >
+> Label placement is pinned by `src/utils/__tests__/edgeLabelPlacement.test.ts`
+> (including the Use-Def default example's colliding pair recorded in #74).
+>
 > _(observed, untested)_: live-rect tracking while dragging and after content edits, the
-> hook's context publication, the unmeasured-node omission, the midpoint label placement, the
-> accent color, and the animation-frame throttling. Separation is pinned by
+> hook's context publication, the unmeasured-node omission, label text measurement in the
+> browser, the accent color, and the animation-frame throttling. Separation is pinned by
 > `src/utils/__tests__/edgeRouter.separation.test.ts`; route dependency reuse is
 > pinned by `src/hooks/__tests__/useEdgeRoutes.test.ts`. Distribution trees and
 > junction marks remain specified but unimplemented (#88).
